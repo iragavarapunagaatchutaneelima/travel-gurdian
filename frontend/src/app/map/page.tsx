@@ -8,8 +8,10 @@ import { CITIES, generateRoutes, RouteOption, POI } from "@/data/routeData";
 import { 
   CheckCircle2, CloudRain, Sun, Moon, Loader, MapPin, 
   Navigation, Crosshair, Layers, ShieldCheck, Fuel, Coffee, 
-  BedDouble, PlusSquare, AlertCircle, Sparkles, Clock, Compass
+  BedDouble, PlusSquare, AlertCircle, Sparkles, Clock, Compass,
+  Download, WifiOff, FileText, Check
 } from "lucide-react";
+import jsPDF from "jspdf";
 
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -48,6 +50,35 @@ function LivingMapContent() {
   // Selected POI card
   const [activePOI, setActivePOI] = useState<POI | null>(null);
   const [weatherCondition, setWeatherCondition] = useState<"sunny" | "rainy" | "cloudy">("sunny");
+
+  // Offline Pack State
+  const [isOffline, setIsOffline] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [offlinePackInfo, setOfflinePackInfo] = useState<{ savedAt: string; routeId: string; route: RouteOption; origin: typeof CITIES[string]; dest: typeof CITIES[string] } | null>(null);
+
+  useEffect(() => {
+    setIsOffline(!navigator.onLine);
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    try {
+      const stored = localStorage.getItem("offline_travel_pack");
+      if (stored) {
+        setOfflinePackInfo(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Failed to load offline pack", e);
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const orig = CITIES[fromLoc] || CITIES["chennai"];
@@ -90,7 +121,8 @@ function LivingMapContent() {
         (origin.longitude + dest.longitude) / 2, 
         (origin.latitude + dest.latitude) / 2
       ],
-      zoom: 6
+      zoom: 6,
+      preserveDrawingBuffer: true // Required for PDF map snapshot
     });
 
     newMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
@@ -215,6 +247,134 @@ function LivingMapContent() {
     map.current.fitBounds(bounds, { padding: 60 });
   };
 
+  // Generate PDF and save to localStorage
+  const handleDownloadOfflinePack = async () => {
+    if (!selectedRoute || !origin || !dest) return;
+    setIsDownloading(true);
+    setDownloadSuccess(false);
+
+    try {
+      // 1. Save to local storage
+      const packData = {
+        savedAt: new Date().toISOString(),
+        routeId: selectedRoute.id,
+        route: selectedRoute,
+        origin,
+        dest
+      };
+      localStorage.setItem("offline_travel_pack", JSON.stringify(packData));
+      setOfflinePackInfo(packData);
+
+      // 2. Generate PDF
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // Header
+      doc.setFillColor(24, 24, 27); // dark zinc
+      doc.rect(0, 0, pageWidth, 40, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.text("TRAVEL GUARDIAN", 15, 20);
+      doc.setFontSize(12);
+      doc.setTextColor(161, 161, 170); // muted
+      doc.text("OFFLINE TRAVEL PACK", 15, 30);
+
+      // Route Info
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(16);
+      doc.text("ROUTE", 15, 55);
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${origin.name} to ${dest.name}`, 15, 65);
+      doc.setFontSize(12);
+      doc.text(`Travel Mode: ${travelMode}`, 15, 72);
+      doc.text(`Route: ${selectedRoute.name}`, 15, 79);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Recommendation: ${selectedRoute.recommendation}`, 15, 86);
+      
+      // Try to capture map image
+      let mapY = 100;
+      try {
+        if (map.current) {
+          const canvas = map.current.getCanvas();
+          const imgData = canvas.toDataURL("image/jpeg", 0.7);
+          doc.addImage(imgData, "JPEG", 15, 95, pageWidth - 30, 80);
+          mapY = 185;
+        }
+      } catch (err) {
+        doc.setFont("helvetica", "italic");
+        doc.text("Map Snapshot Unavailable", 15, 100);
+        mapY = 115;
+      }
+
+      // Summary
+      doc.setFont("helvetica", "bold");
+      doc.text("ROUTE SUMMARY", 15, mapY);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Distance: ${selectedRoute.distance}`, 15, mapY + 10);
+      doc.text(`Est. Travel Time: ${selectedRoute.time}`, 15, mapY + 16);
+      doc.text(`Safety Score: ${selectedRoute.safetyScore}/100`, 15, mapY + 22);
+      doc.text(`Traffic: ${selectedRoute.trafficScore}`, 15, mapY + 28);
+      doc.text(`Road Condition: ${selectedRoute.roadScore}`, 15, mapY + 34);
+      doc.text(`Night Safety: ${selectedRoute.nightSafety}`, 15, mapY + 40);
+      
+      doc.text(`Weather Risk: Low`, pageWidth / 2, mapY + 10);
+      doc.text(`Emergency Access: ${selectedRoute.emergencyAccessScore}/100`, pageWidth / 2, mapY + 16);
+      doc.text(`Rest Stops: ${selectedRoute.restStops}`, pageWidth / 2, mapY + 22);
+      doc.text(`Fuel Stops: ${selectedRoute.fuelStops}`, pageWidth / 2, mapY + 28);
+      
+      doc.addPage();
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("IMPORTANT STOPS & POIS", 15, 20);
+      
+      let poiY = 30;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      
+      if (selectedRoute.pois && selectedRoute.pois.length > 0) {
+        selectedRoute.pois.forEach((poi) => {
+          if (poiY > 270) {
+            doc.addPage();
+            poiY = 20;
+          }
+          doc.setFont("helvetica", "bold");
+          doc.text(poi.name, 15, poiY);
+          doc.setFont("helvetica", "normal");
+          doc.text(`Type: ${poi.type.toUpperCase()} | Distance: ${poi.distanceAhead} | Status: ${poi.status}`, 15, poiY + 6);
+          poiY += 15;
+        });
+      } else {
+        doc.text("No POIs recorded for this route.", 15, 30);
+        poiY += 10;
+      }
+
+      poiY += 10;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("ROUTE WARNINGS & GUIDANCE", 15, poiY);
+      poiY += 10;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      
+      const splitNotes = doc.splitTextToSize(`Notes: ${selectedRoute.notes}`, pageWidth - 30);
+      doc.text(splitNotes, 15, poiY);
+      
+      doc.save(`Travel_Guardian_Offline_Pack_${selectedRoute.name.replace(/\s+/g, '_')}.pdf`);
+      
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 5000);
+    } catch (error) {
+      console.error("PDF generation failed:", error);
+      alert("Failed to generate offline pack. Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   // GPS Geolocation Handler
   const handleShowMyLocation = () => {
     setGpsLoading(true);
@@ -273,6 +433,13 @@ function LivingMapContent() {
     <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
       <Header />
 
+      {isOffline && (
+        <div className="w-full bg-danger text-white py-2 px-4 text-center text-xs font-black flex items-center justify-center gap-2 shadow-md">
+          <WifiOff className="h-4 w-4" />
+          OFFLINE MODE — USING SAVED TRAVEL PACK
+        </div>
+      )}
+
       <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6">
         
         {/* Header Breadcrumb */}
@@ -296,6 +463,27 @@ function LivingMapContent() {
           
           {/* Controls: Map/Satellite + GPS Button */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Offline Pack Button */}
+            <button
+              onClick={handleDownloadOfflinePack}
+              disabled={isDownloading}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm ${
+                downloadSuccess 
+                  ? "bg-success/20 text-success border border-success/30" 
+                  : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
+              }`}
+              title="Download Offline Travel Pack PDF"
+            >
+              {isDownloading ? (
+                <Loader className="h-4 w-4 animate-spin" />
+              ) : downloadSuccess ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">{isDownloading ? "Preparing Pack..." : downloadSuccess ? "Pack Ready" : "Download Offline Pack"}</span>
+              <span className="sm:hidden">{isDownloading ? "..." : downloadSuccess ? "Ready" : "Offline Pack"}</span>
+            </button>
             {/* Style Selector */}
             <div className="flex items-center rounded-2xl bg-surface border border-border p-1 shadow-sm">
               <button
@@ -481,6 +669,26 @@ function LivingMapContent() {
               </div>
             )}
 
+            {/* Offline Suggestions (Only when offline) */}
+            {isOffline && offlinePackInfo && (
+              <div className="rounded-3xl border border-warning/40 bg-warning/5 p-5 text-left space-y-3 shadow-md animate-fadeIn">
+                <div className="flex items-center gap-2 mb-2">
+                  <WifiOff className="h-4 w-4 text-warning" />
+                  <span className="text-[10px] font-black text-warning uppercase tracking-wider block">
+                    Offline Safety Information
+                  </span>
+                </div>
+                <div className="space-y-2 text-xs font-semibold text-muted">
+                  <p>Next Rest Stop: {offlinePackInfo.route.restStops}</p>
+                  <p>Next Fuel Stop: {offlinePackInfo.route.fuelStops}</p>
+                  <p>Emergency Services: {offlinePackInfo.route.emergencyAccessScore}/100</p>
+                </div>
+                <div className="text-[10px] text-muted italic mt-2">
+                  Last updated: {new Date(offlinePackInfo.savedAt).toLocaleString()}
+                </div>
+              </div>
+            )}
+
           </div>
 
           {/* Right Column: Mapbox GL JS Container */}
@@ -510,7 +718,7 @@ function LivingMapContent() {
             </div>
 
             {/* Route Selector Switcher */}
-            <div className="rounded-2xl border border-border bg-surface p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+            <div className={`rounded-2xl border border-border bg-surface p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm ${isOffline ? "opacity-50 pointer-events-none" : ""}`}>
               <span className="text-xs font-black text-muted uppercase tracking-wider">
                 Select Alternative Route Profile:
               </span>
