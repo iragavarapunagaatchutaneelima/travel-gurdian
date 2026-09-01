@@ -120,7 +120,7 @@ const MOCK_DESTINATIONS: DestinationResponse[] = [
     name: "New York City",
     country: "United States",
     latitude: 40.7128,
-    longitude:-74.0060,
+    longitude: -74.0060,
     base_safety_score: 83,
     emergency_contacts_json: JSON.stringify({
       police: "911",
@@ -232,7 +232,7 @@ export const TravelGuardianAPI = {
         }
       });
       clearTimeout(id);
-      
+
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -281,7 +281,7 @@ export const TravelGuardianAPI = {
         transit: Math.max(30, base - (request.transport_mode.includes("Public") ? 8 : 4)),
         hazard: base
       };
-      
+
       const parsedTips = JSON.parse(matchingDest.cultural_tips_json || "[]") as string[];
       const parsedLaws = JSON.parse(matchingDest.local_laws_json || "[]") as string[];
       mockReport.recommendations = [
@@ -321,7 +321,7 @@ export const TravelGuardianAPI = {
   async getDestinationDetails(name: string): Promise<any> {
     const cleanName = name.trim();
     const mockMatch = MOCK_DESTINATIONS.find(d => d.name.toLowerCase() === cleanName.toLowerCase());
-    
+
     const fallbackDetails = mockMatch ? {
       id: mockMatch.id,
       name: mockMatch.name,

@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
-import { Calendar, Clock, Navigation } from "lucide-react";
+import { Calendar, Clock, Navigation, History, MapPin, ArrowRight } from "lucide-react";
 
 export default function MyJourneysScreen() {
   const router = useRouter();
@@ -12,70 +12,90 @@ export default function MyJourneysScreen() {
 
   const journeys = [
     {
-      from: "Kakinada, Andhra Pradesh",
-      to: "Rajahmundry, Andhra Pradesh",
-      date: "25 Aug 2026 - 10:30 AM",
-      stats: "65 km • 1h 45m",
+      from: "Chennai, Tamil Nadu",
+      to: "Bangalore, Karnataka",
+      fromKey: "chennai",
+      toKey: "bangalore",
+      date: "28 Aug 2026 - 08:30 AM",
+      stats: "350 km • 5h 20m",
       status: "Completed",
-      badgeColor: "bg-emerald-50 border border-emerald-250 text-emerald-600"
+      routeProfile: "Safe Corridor (NH 48)",
+      safetyScore: 94,
+      badgeColor: "bg-success/10 border border-success/30 text-success"
     },
     {
       from: "Mumbai, Maharashtra",
-      to: "Pune, Maharashtra",
-      date: "8 May 2024 - 10:30 AM",
-      stats: "165 km • 3h 15m",
+      to: "Hyderabad, Telangana",
+      fromKey: "mumbai",
+      toKey: "hyderabad",
+      date: "14 Aug 2026 - 06:15 AM",
+      stats: "710 km • 10h 30m",
       status: "Completed",
-      badgeColor: "bg-emerald-50 border border-emerald-250 text-emerald-600"
+      routeProfile: "Highway Express (NH 65)",
+      safetyScore: 86,
+      badgeColor: "bg-success/10 border border-success/30 text-success"
     },
     {
-      from: "Mumbai, Maharashtra",
-      to: "Lonavala, Maharashtra",
-      date: "2 May 2024 - 9:20 AM",
-      stats: "83 km • 2h 05m",
-      status: "Completed",
-      badgeColor: "bg-emerald-50 border border-emerald-250 text-emerald-600"
+      from: "Delhi, Delhi NCR",
+      to: "Hyderabad, Telangana",
+      fromKey: "delhi",
+      toKey: "hyderabad",
+      date: "05 Sep 2026 - 06:00 AM",
+      stats: "1550 km • 22h 10m",
+      status: "Upcoming",
+      routeProfile: "National Corridor (NH 44)",
+      safetyScore: 91,
+      badgeColor: "bg-info/10 border border-info/30 text-info"
     },
     {
-      from: "Pune, Maharashtra",
-      to: "Mumbai, Maharashtra",
-      date: "28 Apr 2024 - 6:45 PM",
-      stats: "165 km • 3h 20m",
+      from: "Chennai, Tamil Nadu",
+      to: "Visakhapatnam, Andhra Pradesh",
+      fromKey: "chennai",
+      toKey: "vizag",
+      date: "20 Jul 2026 - 09:45 PM",
+      stats: "800 km • 13h 15m",
       status: "Cancelled",
-      badgeColor: "bg-zinc-100 border border-zinc-250 text-zinc-500"
+      routeProfile: "East Coast Highway (NH 16)",
+      safetyScore: 78,
+      badgeColor: "bg-elevated-surface border border-border text-muted"
     }
   ];
 
   const filteredJourneys = journeys.filter(j => j.status === activeTab);
 
   return (
-    <div className="min-h-screen bg-zinc-50 pb-20 md:pb-8 flex flex-col items-center">
+    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
       
       {/* Header */}
       <Header />
 
       {/* Main Container */}
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 flex flex-col items-center">
+      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
         
         <div className="text-center max-w-xl space-y-2">
-          <span className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-widest block">History Database</span>
-          <h2 className="text-2xl font-black text-zinc-900 tracking-tight">My Journeys</h2>
-          <p className="text-xs text-zinc-500 font-semibold leading-relaxed">
-            Access previous risk calculations, offline packages compilation logs, and travel vectors history details.
+          <span className="text-[10px] text-primary-accent font-extrabold uppercase tracking-widest block">
+            SAVED VECTORS & LOGS
+          </span>
+          <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
+            My Journeys
+          </h2>
+          <p className="text-xs text-muted font-semibold leading-relaxed">
+            Access previous safety calculations, logged travel vectors across Indian metro corridors, and telemetry reports.
           </p>
         </div>
 
         {/* Tab Selection */}
-        <div className="w-full max-w-md bg-white border border-zinc-200 rounded-2xl flex justify-around text-xs font-black text-zinc-500 overflow-hidden shadow-sm">
+        <div className="w-full max-w-md bg-surface border border-border rounded-2xl flex justify-around text-xs font-black text-muted overflow-hidden shadow-sm p-1">
           {["Upcoming", "Completed", "Cancelled"].map((tab) => {
             const isActive = activeTab === tab;
             return (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-3 flex-1 text-center transition-all ${
+                className={`py-2.5 flex-1 text-center rounded-xl transition-all ${
                   isActive
-                    ? "text-indigo-600 bg-indigo-50/40 font-black border-b-2 border-indigo-650"
-                    : "hover:text-zinc-800"
+                    ? "text-white bg-primary-accent shadow-sm"
+                    : "hover:text-foreground text-muted"
                 }`}
               >
                 {tab}
@@ -85,34 +105,38 @@ export default function MyJourneysScreen() {
         </div>
 
         {/* List of Journeys Cards */}
-        <div className="w-full max-w-md space-y-4">
+        <div className="w-full max-w-lg space-y-4">
           {filteredJourneys.length === 0 ? (
-            <div className="text-center text-xs text-zinc-400 py-12 font-bold bg-white border border-zinc-200 rounded-3xl shadow-sm">
+            <div className="text-center text-xs text-muted py-12 font-bold bg-surface border border-border rounded-3xl shadow-sm">
               No logged journeys in this category.
             </div>
           ) : (
             filteredJourneys.map((j, idx) => (
               <div
                 key={idx}
-                className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm space-y-4 text-left flex flex-col justify-between"
+                className="rounded-3xl border border-border bg-surface p-5 shadow-sm space-y-4 text-left flex flex-col justify-between transition-colors hover:border-primary-accent/40"
               >
                 <div className="flex items-start justify-between">
                   
                   {/* Route Label */}
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-black text-zinc-900">
-                      <Navigation className="h-3.5 w-3.5 text-indigo-600 rotate-45" />
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs font-black text-foreground">
+                      <Navigation className="h-3.5 w-3.5 text-primary-accent rotate-45" />
                       <span>{j.from.split(",")[0]} ➔ {j.to.split(",")[0]}</span>
                     </div>
                     
+                    <p className="text-[10px] font-bold text-primary-accent">
+                      {j.routeProfile} • Safety: {j.safetyScore}/100
+                    </p>
+
                     {/* Date details */}
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted">
                       <Calendar className="h-3.5 w-3.5" />
                       <span>{j.date}</span>
                     </div>
                     
                     {/* Stats details */}
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-400">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted">
                       <Clock className="h-3.5 w-3.5" />
                       <span>{j.stats}</span>
                     </div>
@@ -126,12 +150,13 @@ export default function MyJourneysScreen() {
                 </div>
 
                 {/* Details actions */}
-                <div className="border-t border-zinc-150 pt-3">
+                <div className="border-t border-border pt-3">
                   <button
-                    onClick={() => router.push(`/map?from=${encodeURIComponent(j.from)}&dest=${encodeURIComponent(j.to)}&route=safer`)}
-                    className="w-full rounded-xl bg-zinc-50 border border-zinc-200 hover:bg-zinc-100 py-2.5 text-[10px] font-black text-zinc-700 transition-colors"
+                    onClick={() => router.push(`/map?from=${j.fromKey}&dest=${j.toKey}&mode=Car&routeId=A`)}
+                    className="w-full rounded-xl bg-elevated-surface border border-border hover:bg-border py-2.5 text-xs font-black text-foreground transition-colors flex items-center justify-center gap-1.5"
                   >
-                    View Route Information
+                    <span>View Living Map & Route Details</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-primary-accent" />
                   </button>
                 </div>
 

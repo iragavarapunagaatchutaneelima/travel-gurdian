@@ -4,7 +4,7 @@ import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
-import { Check, Loader } from "lucide-react";
+import { Check, Loader, Download, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,11 @@ function OfflineGuardianContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const fromLoc = searchParams.get("from") || "Mumbai, Maharashtra";
-  const toLoc = searchParams.get("dest") || "Pune, Maharashtra";
+  const fromLoc = searchParams.get("from") || "Chennai, Tamil Nadu";
+  const toLoc = searchParams.get("dest") || "Bangalore, Karnataka";
 
   const [saving, setSaving] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState("Last Updated: 27 Aug 2026, 08:30 AM");
+  const [lastUpdated, setLastUpdated] = useState("Last Updated: 28 Aug 2026, 08:30 AM");
 
   const handleSavePack = () => {
     setSaving(true);
@@ -34,48 +34,52 @@ function OfflineGuardianContent() {
       }));
 
       router.push(`/offline-mode?from=${encodeURIComponent(fromLoc)}&dest=${encodeURIComponent(toLoc)}`);
-    }, 1500);
+    }, 1200);
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 pb-20 md:pb-8 flex flex-col items-center">
+    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
       
       {/* Top Header */}
       <Header />
 
       {/* Main Container */}
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 flex flex-col items-center">
+      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
         
         <div className="text-center max-w-xl space-y-2">
-          <span className="text-[10px] text-indigo-600 font-extrabold uppercase tracking-widest block">Offline Protection</span>
-          <h2 className="text-2xl font-black text-zinc-900 tracking-tight">Prepare Journey Pack</h2>
-          <p className="text-xs text-zinc-500 font-semibold leading-relaxed">
-            Download local navigation files, safe-haven networks, and weather warning registries to stay safe without cell signals.
+          <span className="text-[10px] text-primary-accent font-extrabold uppercase tracking-widest block">
+            OFFLINE GUARDIAN
+          </span>
+          <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
+            Prepare Offline Journey Pack
+          </h2>
+          <p className="text-xs text-muted font-semibold leading-relaxed">
+            Download local navigation coordinates, safety corridor checklists, and emergency numbers to stay protected without cellular signals.
           </p>
         </div>
 
         {/* Box */}
         <div className="w-full max-w-md">
-          <div className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-sm text-left space-y-6">
+          <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm text-left space-y-6 transition-colors">
             
             <div className="space-y-1">
-              <h3 className="text-sm font-black text-zinc-800">Caching Safety Matrix</h3>
-              <p className="text-[11px] text-zinc-500 font-semibold">
-                Cached items will match active search query parameters for <span className="text-indigo-600 font-black">{fromLoc.split(",")[0]} ➔ {toLoc.split(",")[0]}</span>.
+              <h3 className="text-sm font-black text-foreground">Caching Safety Matrix</h3>
+              <p className="text-xs text-muted font-semibold">
+                Cached items will match active search query parameters for <span className="text-primary-accent font-black">{fromLoc.split(",")[0]} ➔ {toLoc.split(",")[0]}</span>.
               </p>
             </div>
 
             {/* List of features with checkmarks */}
-            <div className="space-y-3.5">
+            <div className="space-y-3">
               {[
-                "Route Information",
-                "Nearby Places (Hospitals, Police, Gas)",
-                "Emergency Contacts Details",
-                "Offline Map Telemetry",
-                "Culture & Guidelines"
+                "6-City Route Intelligence Coordinates",
+                "Nearby POIs (Hospitals, Police, Gas Plazas)",
+                "Emergency Contacts Telemetry Protocol",
+                "Offline Map Bounds Cache",
+                "Highway Safety & Guidelines Dossier"
               ].map((item, idx) => (
-                <div key={idx} className="flex items-center gap-3 text-xs font-bold text-zinc-700">
-                  <div className="rounded-full bg-emerald-50 border border-emerald-250 p-1 text-emerald-600 flex items-center justify-center">
+                <div key={idx} className="flex items-center gap-3 text-xs font-bold text-foreground">
+                  <div className="rounded-full bg-success/10 border border-success/30 p-1 text-success flex items-center justify-center">
                     <Check className="h-3.5 w-3.5 stroke-[3]" />
                   </div>
                   <span>{item}</span>
@@ -87,20 +91,23 @@ function OfflineGuardianContent() {
             <button
               onClick={handleSavePack}
               disabled={saving}
-              className="w-full rounded-xl bg-indigo-600 py-3.5 text-xs font-black text-white hover:bg-indigo-500 transition-colors shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2"
+              className="w-full rounded-2xl bg-primary-accent hover:bg-primary-accent-hover py-3.5 text-xs font-black text-white transition-colors shadow-md flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>
                   <Loader className="h-4.5 w-4.5 animate-spin" />
-                  <span>Downloading Maps & Assets...</span>
+                  <span>Downloading Maps & Intelligence Assets...</span>
                 </>
               ) : (
-                <span>💾 Save Journey Pack</span>
+                <>
+                  <Download className="h-4.5 w-4.5" />
+                  <span>Save Offline Journey Pack</span>
+                </>
               )}
             </button>
 
             {/* Timestamp footer */}
-            <div className="text-center text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider pt-2 border-t border-zinc-150">
+            <div className="text-center text-[10px] text-muted font-extrabold uppercase tracking-wider pt-2 border-t border-border">
               {lastUpdated}
             </div>
 
@@ -121,8 +128,8 @@ function OfflineGuardianContent() {
 export default function OfflineGuardian() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-zinc-50 text-zinc-500 flex flex-col items-center justify-center gap-3 text-xs font-bold">
-        <div className="h-6 w-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-background text-muted flex flex-col items-center justify-center gap-3 text-xs font-bold">
+        <div className="h-6 w-6 border-2 border-primary-accent border-t-transparent rounded-full animate-spin" />
         <span>Resolving Offline Packages...</span>
       </div>
     }>
