@@ -1,34 +1,70 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
+
+/* ============================================================
+   TRAVEL GUARDIAN — LIGHT TRAVEL DESIGN SYSTEM
+   Primary: #2563FF Royal Blue | Background: #F8FAFC White-Gray
+   LIGHT-FIRST design — no dark mode toggle required
+   ============================================================ */
 
 @layer base {
   :root {
-    --background: #f8fafc;
-    --foreground: #0f172a;
-    --surface: #ffffff;
-    --elevated-surface: #f1f5f9;
-    --border: #e2e8f0;
-    --primary-accent: #4f46e5;
-    --primary-accent-hover: #4338ca;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --info: #3b82f6;
-    --muted: #64748b;
+    /* === Core Palette === */
+    --tg-primary: #2563FF;
+    --tg-primary-dark: #1E40AF;
+    --tg-primary-hover: #1D4ED8;
+    --tg-navy: #0F172A;
+    --tg-background: #F8FAFC;
+    --tg-surface: #FFFFFF;
+    --tg-surface-soft: #EFF6FF;
+    --tg-surface-muted: #F1F5F9;
+    --tg-accent: #00D4FF;
+    --tg-success: #22C55E;
+    --tg-success-light: #DCFCE7;
+    --tg-warning: #F59E0B;
+    --tg-warning-light: #FEF3C7;
+    --tg-danger: #EF4444;
+    --tg-danger-light: #FEE2E2;
+    --tg-info: #2563FF;
+    --tg-muted: #64748B;
+    --tg-border: rgba(15, 23, 42, 0.08);
+    --tg-border-solid: #E2E8F0;
+
+    /* === Tailwind-mapped semantic tokens === */
+    --background: var(--tg-background);
+    --foreground: var(--tg-navy);
+    --surface: var(--tg-surface);
+    --elevated-surface: var(--tg-surface-muted);
+    --soft-blue: var(--tg-surface-soft);
+    --border: var(--tg-border-solid);
+    --primary-accent: var(--tg-primary);
+    --primary-accent-hover: var(--tg-primary-hover);
+    --secondary-blue: var(--tg-primary-dark);
+    --accent-cyan: var(--tg-accent);
+    --success: var(--tg-success);
+    --warning: var(--tg-warning);
+    --danger: var(--tg-danger);
+    --info: var(--tg-info);
+    --muted: var(--tg-muted);
   }
 
+  /* Keep .dark class but make it the same as light — prevents any dark flash */
   .dark {
-    --background: #09090b;
-    --foreground: #f8fafc;
-    --surface: #18181b;
-    --elevated-surface: #27272a;
-    --border: #3f3f46;
-    --primary-accent: #6366f1;
-    --primary-accent-hover: #818cf8;
-    --success: #34d399;
-    --warning: #fbbf24;
-    --danger: #f87171;
-    --info: #60a5fa;
-    --muted: #a1a1aa;
+    --background: var(--tg-background);
+    --foreground: var(--tg-navy);
+    --surface: var(--tg-surface);
+    --elevated-surface: var(--tg-surface-muted);
+    --soft-blue: var(--tg-surface-soft);
+    --border: var(--tg-border-solid);
+    --primary-accent: var(--tg-primary);
+    --primary-accent-hover: var(--tg-primary-hover);
+    --secondary-blue: var(--tg-primary-dark);
+    --accent-cyan: var(--tg-accent);
+    --success: var(--tg-success);
+    --warning: var(--tg-warning);
+    --danger: var(--tg-danger);
+    --info: var(--tg-info);
+    --muted: var(--tg-muted);
   }
 }
 
@@ -37,21 +73,268 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-elevated-surface: var(--elevated-surface);
+  --color-soft-blue: var(--soft-blue);
   --color-border: var(--border);
   --color-primary-accent: var(--primary-accent);
   --color-primary-accent-hover: var(--primary-accent-hover);
+  --color-secondary-blue: var(--secondary-blue);
+  --color-accent-cyan: var(--accent-cyan);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
   --color-info: var(--info);
   --color-muted: var(--muted);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: 'Poppins', system-ui, -apple-system, Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
+/* ============================================================
+   GLOBAL BASE STYLES
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  background-color: var(--tg-background);
+  color: var(--tg-navy);
+  font-family: 'Poppins', system-ui, -apple-system, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   TRAVEL GUARDIAN SHADOW SYSTEM
+   ============================================================ */
+.tg-shadow-xs {
+  box-shadow: 0 1px 3px rgba(37, 99, 255, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.tg-shadow-sm {
+  box-shadow: 0 2px 8px rgba(37, 99, 255, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.tg-shadow-md {
+  box-shadow: 0 4px 16px rgba(37, 99, 255, 0.12), 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+.tg-shadow-lg {
+  box-shadow: 0 8px 32px rgba(37, 99, 255, 0.16), 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+.tg-shadow-xl {
+  box-shadow: 0 12px 48px rgba(37, 99, 255, 0.18), 0 6px 20px rgba(15, 23, 42, 0.10);
+}
+
+/* Card base utility */
+.tg-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(37, 99, 255, 0.08), 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+/* ============================================================
+   CUSTOM SCROLLBARS — light blue tinted
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.88; transform: scale(1.015); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-fadeIn   { animation: fadeIn 0.3s ease-out forwards; }
+.animate-slideUp  { animation: slideUp 0.35s ease-out forwards; }
+.animate-slideDown { animation: slideDown 0.3s ease-out forwards; }
+.animate-pulse-subtle { animation: pulseSubtle 3s ease-in-out infinite; }
+.animate-float    { animation: float 4s ease-in-out infinite; }
+.animate-spin     { animation: spin 1s linear infinite; }
+
+/* ============================================================
+   POPPINS FONT WEIGHT UTILITIES
+   ============================================================ */
+.font-display  { font-family: 'Poppins', sans-serif; font-weight: 800; }
+.font-heading  { font-family: 'Poppins', sans-serif; font-weight: 700; }
+.font-subheading { font-family: 'Poppins', sans-serif; font-weight: 600; }
+.font-label    { font-family: 'Poppins', sans-serif; font-weight: 500; }
+.font-body     { font-family: 'Poppins', sans-serif; font-weight: 400; }
+
+/* ============================================================
+   TRAVEL GUARDIAN COMPONENT STYLES
+   ============================================================ */
+
+/* Primary Button */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #2563FF 0%, #1E40AF 100%);
+  color: #FFFFFF;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(37, 99, 255, 0.25);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #1D4ED8 0%, #1E3A8A 100%);
+  box-shadow: 0 6px 20px rgba(37, 99, 255, 0.35);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(37, 99, 255, 0.20);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #FFFFFF;
+  color: #2563FF;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 11px 24px;
+  border-radius: 12px;
+  border: 1.5px solid #2563FF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-secondary:hover {
+  background: #EFF6FF;
+  transform: translateY(-1px);
+}
+
+/* Emergency Button */
+.btn-emergency {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #EF4444;
+  color: #FFFFFF;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 16px 32px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.30);
+}
+.btn-emergency:hover {
+  background: #DC2626;
+  box-shadow: 0 8px 28px rgba(239, 68, 68, 0.40);
+  transform: translateY(-1px);
+}
+
+/* Input field */
+.tg-input {
+  width: 100%;
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #0F172A;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.tg-input:focus {
+  border-color: #2563FF;
+  box-shadow: 0 0 0 3px rgba(37, 99, 255, 0.12);
+}
+.tg-input::placeholder {
+  color: #94A3B8;
+  font-weight: 400;
+}
+
+/* Status badge */
+.tg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/* Section label */
+.tg-label {
+  font-family: 'Poppins', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--tg-primary);
+}
+
+/* Gradient hero bg */
+.tg-hero-gradient {
+  background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 40%, #F0F9FF 70%, #F8FAFC 100%);
+}
+
+/* Blue gradient text */
+.tg-gradient-text {
+  background: linear-gradient(135deg, #2563FF 0%, #00D4FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

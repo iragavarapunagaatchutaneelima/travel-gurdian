@@ -169,77 +169,100 @@ export default function EmergencyScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
       
       {/* Header */}
       <Header />
 
       {/* Main Container */}
-      <div className="w-full max-w-5xl px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
+      <div className="w-full max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
         
         {/* Title Header */}
         <div className="text-center max-w-xl space-y-2">
-          <span className="text-[10px] text-danger font-extrabold uppercase tracking-widest block">
-            SAFETY & EMERGENCY READINESS
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
+            Safety &amp; Emergency Readiness
           </span>
-          <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
-            Emergency Portal & Trusted Contacts
+          <h2 style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", color: "#0F172A" }}>
+            Emergency Portal &amp; Trusted Contacts
           </h2>
-          <p className="text-xs text-muted font-semibold leading-relaxed">
-            Configure up to 5 trusted guardians, check notification gateway telemetry, or directly initiate public emergency services (112).
+          <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, lineHeight: 1.6 }}>
+            Configure up to 5 trusted guardians, check GPS telemetry, or directly call emergency services.
           </p>
         </div>
 
         {/* Global Feedback Banner */}
         {alertMessage && (
-          <div className={`w-full max-w-2xl p-4 rounded-2xl border text-xs font-bold flex items-center justify-between shadow-md ${
-            alertMessage.type === "success" 
-              ? "bg-success/10 border-success/30 text-success" 
-              : alertMessage.type === "danger"
-              ? "bg-danger/10 border-danger/30 text-danger"
-              : "bg-warning/10 border-warning/30 text-warning"
-          }`}>
+          <div
+            className="w-full max-w-2xl p-4 rounded-2xl flex items-center justify-between"
+            style={{
+              backgroundColor: alertMessage.type === "success" ? "#F0FDF4" : alertMessage.type === "danger" ? "#FEF2F2" : "#FFFBEB",
+              border: `1px solid ${alertMessage.type === "success" ? "rgba(34,197,94,0.25)" : alertMessage.type === "danger" ? "rgba(239,68,68,0.25)" : "rgba(245,158,11,0.25)"}`,
+              color: alertMessage.type === "success" ? "#16A34A" : alertMessage.type === "danger" ? "#DC2626" : "#D97706",
+              fontSize: "13px",
+              fontWeight: 600,
+            }}
+          >
             <div className="flex items-center gap-2">
-              {alertMessage.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
+              {alertMessage.type === "success" ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" /> : <AlertTriangle className="h-4 w-4 flex-shrink-0" />}
               <span>{alertMessage.text}</span>
             </div>
-            <button onClick={() => setAlertMessage(null)} className="text-xs font-black hover:underline p-1">✕</button>
+            <button onClick={() => setAlertMessage(null)} className="p-1">✕</button>
           </div>
         )}
 
         <div className="w-full max-w-2xl space-y-6">
 
           {/* 1. PRIMARY EMERGENCY DIAL (112) */}
-          <div className="rounded-3xl border border-danger/40 bg-surface p-6 shadow-lg text-center space-y-3">
-            <div className="flex items-center justify-center gap-2 text-danger font-black text-xs uppercase tracking-widest">
+          <div
+            className="rounded-3xl p-6 text-center space-y-4"
+            style={{ backgroundColor: "#FFFFFF", border: "1.5px solid rgba(239,68,68,0.25)", boxShadow: "0 4px 20px rgba(239,68,68,0.10)" }}
+          >
+            <div className="flex items-center justify-center gap-2" style={{ fontSize: "11px", fontWeight: 700, color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.1em" }}>
               <ShieldAlert className="h-5 w-5 animate-pulse" />
               <span>National Public Emergency Line (India)</span>
             </div>
-            <p className="text-xs text-muted font-semibold">
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400 }}>
               Tap below to initiate a phone call to national emergency dispatch (Police, Fire, Ambulance).
             </p>
             <a
               href="tel:112"
-              className="w-full py-4 rounded-2xl bg-danger hover:opacity-90 text-white font-black text-base tracking-wide flex items-center justify-center gap-3 shadow-xl shadow-danger/25 transition-transform active:scale-98"
+              className="w-full py-4 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-3 transition-all active:scale-95"
+              style={{
+                background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+                boxShadow: "0 6px 24px rgba(239,68,68,0.30)",
+                fontFamily: "'Poppins',sans-serif",
+                fontWeight: 700,
+                fontSize: "16px",
+                letterSpacing: "0.04em",
+              }}
             >
               <PhoneCall className="h-6 w-6" />
               <span>CALL 112 NOW</span>
             </a>
           </div>
 
-          {/* 2. TRUSTED CONTACTS SECTION (1 to 5 contacts) */}
-          <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          {/* 2. TRUSTED CONTACTS SECTION */}
+          <div
+            className="rounded-3xl p-6 space-y-4"
+            style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}
+          >
+            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
               <div>
-                <h3 className="font-black text-sm text-foreground">Trusted Guardian Contacts</h3>
-                <span className="text-[10px] text-muted font-bold block mt-0.5">
+                <h3 style={{ fontWeight: 700, fontSize: "15px", color: "#0F172A" }}>Trusted Guardian Contacts</h3>
+                <span style={{ fontSize: "11px", color: "#64748B", fontWeight: 500, display: "block", marginTop: "2px" }}>
                   {contacts.length} of {MAX_TRUSTED_CONTACTS} contacts configured (Min: {MIN_TRUSTED_CONTACTS})
                 </span>
               </div>
               <button
                 onClick={handleOpenAddContact}
                 disabled={contacts.length >= MAX_TRUSTED_CONTACTS}
-                className="py-2 px-3 rounded-xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="py-2 px-4 rounded-xl text-white text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                  background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+                  fontWeight: 600,
+                  fontSize: "12px",
+                  fontFamily: "'Poppins',sans-serif",
+                }}
               >
                 <UserPlus className="h-3.5 w-3.5" />
                 <span>Add Contact</span>
@@ -251,41 +274,44 @@ export default function EmergencyScreen() {
               {contacts.map((contact) => (
                 <div
                   key={contact.id}
-                  className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
-                    contact.enabled 
-                      ? "bg-elevated-surface border-border" 
-                      : "bg-elevated-surface/50 border-border/60 opacity-60"
-                  }`}
+                  className="p-3.5 rounded-2xl flex items-center justify-between transition-all"
+                  style={{
+                    backgroundColor: contact.enabled ? "#F8FAFC" : "#F1F5F9",
+                    border: `1px solid ${contact.enabled ? "rgba(15,23,42,0.07)" : "rgba(15,23,42,0.04)"}`,
+                    opacity: contact.enabled ? 1 : 0.65,
+                  }}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <button
                       onClick={() => handleToggleContact(contact.id)}
                       title={contact.enabled ? "Disable contact" : "Enable contact"}
-                      className={`p-2 rounded-xl border transition-colors ${
-                        contact.enabled 
-                          ? "bg-success/15 border-success/30 text-success" 
-                          : "bg-muted/15 border-border text-muted"
-                      }`}
+                      className="p-2 rounded-xl border transition-colors"
+                      style={{
+                        backgroundColor: contact.enabled ? "#DCFCE7" : "#F1F5F9",
+                        borderColor: contact.enabled ? "rgba(34,197,94,0.25)" : "rgba(15,23,42,0.08)",
+                        color: contact.enabled ? "#16A34A" : "#94A3B8",
+                      }}
                     >
                       <Power className="h-4 w-4" />
                     </button>
                     <div className="truncate">
                       <div className="flex items-center gap-2">
-                        <h4 className="font-black text-xs text-foreground truncate">{contact.name}</h4>
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-surface border border-border text-muted">
+                        <h4 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }} className="truncate">{contact.name}</h4>
+                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "9999px", backgroundColor: "#EFF6FF", color: "#2563FF" }}>
                           {contact.relationship || "Contact"}
                         </span>
                       </div>
-                      <span className="text-[11px] font-mono font-semibold text-muted block mt-0.5">
+                      <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#64748B", display: "block", marginTop: "2px" }}>
                         {contact.phone}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
                     <button
                       onClick={() => handleOpenEditContact(contact)}
-                      className="p-2 rounded-xl bg-surface hover:bg-border text-muted hover:text-foreground border border-border transition-colors"
+                      className="p-2 rounded-xl transition-colors"
+                      style={{ backgroundColor: "#F1F5F9", color: "#64748B" }}
                       title="Edit Contact"
                     >
                       <Edit3 className="h-3.5 w-3.5" />
@@ -293,7 +319,8 @@ export default function EmergencyScreen() {
                     <button
                       onClick={() => handleDeleteContact(contact.id, contact.name)}
                       disabled={contacts.length <= MIN_TRUSTED_CONTACTS}
-                      className="p-2 rounded-xl bg-surface hover:bg-danger/20 text-muted hover:text-danger border border-border transition-colors disabled:opacity-40 disabled:hover:bg-surface disabled:hover:text-muted"
+                      className="p-2 rounded-xl transition-colors disabled:opacity-40"
+                      style={{ backgroundColor: "#FEF2F2", color: "#EF4444" }}
                       title={contacts.length <= MIN_TRUSTED_CONTACTS ? "At least 1 contact required" : "Delete Contact"}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -304,37 +331,46 @@ export default function EmergencyScreen() {
             </div>
 
             {/* Quick Test Alert Button */}
-            <div className="pt-2 border-t border-border">
+            <div className="pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)" }}>
               <button
                 onClick={handleAlertContacts}
-                className="w-full py-3 rounded-2xl bg-elevated-surface hover:bg-border text-foreground font-black text-xs border border-border transition-all flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-2xl flex items-center justify-center gap-2 transition-all"
+                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.08)", fontSize: "12px", fontWeight: 600, color: "#374151", fontFamily: "'Poppins',sans-serif" }}
+                onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"}
+                onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#F8FAFC"}
               >
-                <Phone className="h-3.5 w-3.5 text-primary-accent" />
+                <Phone className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
                 <span>Test Alert Notification to Active Guardians</span>
               </button>
             </div>
           </div>
 
           {/* 3. LAST KNOWN LOCATION TELEMETRY */}
-          <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+          <div
+            className="rounded-3xl p-6 space-y-3"
+            style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}
+          >
+            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary-accent" />
-                <h3 className="font-black text-sm text-foreground">Current / Last Known Location</h3>
+                <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
+                <h3 style={{ fontWeight: 700, fontSize: "15px", color: "#0F172A" }}>Current / Last Known Location</h3>
               </div>
               <button
                 onClick={fetchCurrentLocation}
-                className="text-[11px] font-black text-primary-accent hover:underline"
+                style={{ fontSize: "12px", fontWeight: 600, color: "#2563FF" }}
               >
                 Refresh GPS
               </button>
             </div>
 
             {locationSnapshot ? (
-              <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border space-y-2 text-xs">
-                <div className="flex items-center justify-between font-mono font-bold">
+              <div
+                className="p-3.5 rounded-2xl space-y-2"
+                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}
+              >
+                <div className="flex items-center justify-between" style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 600, color: "#0F172A" }}>
                   <span>{locationSnapshot.formattedText}</span>
-                  <span className="text-[10px] text-muted font-sans font-semibold">
+                  <span style={{ fontSize: "10px", color: "#94A3B8" }}>
                     Recorded {new Date(locationSnapshot.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                   </span>
                 </div>
@@ -343,7 +379,8 @@ export default function EmergencyScreen() {
                     href={locationSnapshot.googleMapsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-black text-primary-accent hover:underline"
+                    className="inline-flex items-center gap-1.5"
+                    style={{ fontSize: "12px", fontWeight: 600, color: "#2563FF" }}
                   >
                     <span>View Coordinates on Google Maps</span>
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -351,20 +388,23 @@ export default function EmergencyScreen() {
                 )}
               </div>
             ) : (
-              <div className="text-xs text-muted font-semibold">
+              <div style={{ fontSize: "13px", color: "#94A3B8", fontWeight: 400 }}>
                 {locationLoading ? "Acquiring GPS coordinates..." : "Location snapshot unavailable. Tap refresh to acquire."}
               </div>
             )}
           </div>
 
-          {/* 4. TRUTHFUL NOTIFICATION STATUS NOTICE */}
-          <div className="p-4 rounded-3xl bg-elevated-surface border border-border space-y-2 text-xs text-muted">
-            <div className="flex items-center gap-2 font-black text-foreground">
-              <Info className="h-4 w-4 text-info shrink-0" />
-              <span>Notification Truthfulness Notice (Phase 5 Standard)</span>
+          {/* 4. NOTIFICATION STATUS NOTICE */}
+          <div
+            className="p-4 rounded-3xl space-y-2"
+            style={{ backgroundColor: "#FFFBEB", border: "1px solid rgba(245,158,11,0.2)" }}
+          >
+            <div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>
+              <Info className="h-4 w-4 flex-shrink-0" style={{ color: "#F59E0B" }} />
+              <span>Notification Truthfulness Notice</span>
             </div>
-            <p className="text-[11px] leading-relaxed">
-              Travel Guardian operates with strict anti-fabrication standards. External SMS delivery requires configured provider credentials (Twilio or AWS SNS). In this demo environment, notification status is truthfully labelled as <strong className="text-warning font-black">NOT_CONFIGURED / DEV_SIMULATED</strong>.
+            <p style={{ fontSize: "12px", color: "#64748B", lineHeight: 1.6 }}>
+              Travel Guardian operates with strict anti-fabrication standards. External SMS delivery requires configured provider credentials (Twilio or AWS SNS). In this environment, notification status is truthfully labelled as <strong style={{ color: "#D97706" }}>NOT_CONFIGURED / DEV_SIMULATED</strong>.
             </p>
           </div>
 
@@ -374,65 +414,58 @@ export default function EmergencyScreen() {
 
       {/* ADD / EDIT CONTACT MODAL */}
       {showContactModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-surface border border-border rounded-3xl p-6 text-left space-y-4 shadow-2xl animate-slideUp">
-            
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-black text-base text-foreground">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn" style={{ backgroundColor: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)" }}>
+          <div
+            className="w-full max-w-md rounded-3xl p-6 text-left space-y-4 animate-slideUp"
+            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 24px 64px rgba(15,23,42,0.20)" }}
+          >
+
+            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
+              <h3 style={{ fontWeight: 700, fontSize: "16px", color: "#0F172A" }}>
                 {editingContactId ? "Edit Trusted Contact" : "Add Trusted Guardian"}
               </h3>
               <button
                 onClick={() => setShowContactModal(false)}
-                className="p-1 rounded-lg hover:bg-elevated-surface text-muted"
+                className="p-1.5 rounded-xl"
+                style={{ backgroundColor: "#F1F5F9", color: "#64748B" }}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {contactFormError && (
-              <div className="p-3 rounded-xl bg-danger/10 border border-danger/30 text-danger text-xs font-bold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
+              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: "#FEF2F2", color: "#DC2626", fontSize: "13px", fontWeight: 600 }}>
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                 <span>{contactFormError}</span>
               </div>
             )}
 
             <form onSubmit={handleSaveContact} className="space-y-3.5">
-              <div className="space-y-1">
-                <label className="text-xs font-black text-muted uppercase tracking-wider block">
-                  Contact Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Mother / John Doe"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  className="w-full rounded-xl bg-elevated-surface border border-border px-3 py-2.5 text-xs font-bold text-foreground focus:outline-none focus:border-primary-accent"
-                />
-              </div>
+              {[
+                { id: "name", label: "Contact Name", placeholder: "e.g. Mother / John Doe", type: "text", value: contactName, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setContactName(e.target.value) },
+                { id: "phone", label: "Phone Number", placeholder: "e.g. +91 98765 43210", type: "tel", value: contactPhone, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setContactPhone(e.target.value) },
+              ].map((field) => (
+                <div key={field.id} className="space-y-1">
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>{field.label}</label>
+                  <input
+                    type={field.type}
+                    required
+                    placeholder={field.placeholder}
+                    value={field.value}
+                    onChange={field.onChange}
+                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#2563FF"; (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(37,99,255,0.12)"; }}
+                    onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#E2E8F0"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
+                    style={{ width: "100%", borderRadius: "12px", backgroundColor: "#F8FAFC", border: "1.5px solid #E2E8F0", padding: "11px 14px", fontSize: "13px", fontWeight: 500, color: "#0F172A", fontFamily: "'Poppins',sans-serif", outline: "none", transition: "border-color 0.2s, box-shadow 0.2s" }}
+                  />
+                </div>
+              ))}
 
               <div className="space-y-1">
-                <label className="text-xs font-black text-muted uppercase tracking-wider block">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="e.g. +91 98765 43210"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  className="w-full rounded-xl bg-elevated-surface border border-border px-3 py-2.5 text-xs font-bold text-foreground focus:outline-none focus:border-primary-accent"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-black text-muted uppercase tracking-wider block">
-                  Relationship / Label
-                </label>
+                <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Relationship / Label</label>
                 <select
                   value={contactRel}
                   onChange={(e) => setContactRel(e.target.value)}
-                  className="w-full rounded-xl bg-elevated-surface border border-border px-3 py-2.5 text-xs font-bold text-foreground focus:outline-none focus:border-primary-accent"
+                  style={{ width: "100%", borderRadius: "12px", backgroundColor: "#F8FAFC", border: "1.5px solid #E2E8F0", padding: "11px 14px", fontSize: "13px", fontWeight: 500, color: "#0F172A", fontFamily: "'Poppins',sans-serif", outline: "none" }}
                 >
                   <option value="Family">Family</option>
                   <option value="Friend">Friend</option>
@@ -446,13 +479,15 @@ export default function EmergencyScreen() {
                 <button
                   type="button"
                   onClick={() => setShowContactModal(false)}
-                  className="flex-1 py-3 rounded-2xl bg-elevated-surface hover:bg-border text-muted font-black text-xs transition-all"
+                  className="flex-1 py-3 rounded-2xl transition-all"
+                  style={{ backgroundColor: "#F1F5F9", color: "#64748B", fontSize: "13px", fontWeight: 600, fontFamily: "'Poppins',sans-serif" }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs transition-all shadow-md"
+                  className="flex-1 py-3 rounded-2xl text-white transition-all"
+                  style={{ background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)", fontSize: "13px", fontWeight: 600, fontFamily: "'Poppins',sans-serif", boxShadow: "0 4px 12px rgba(37,99,255,0.25)" }}
                 >
                   Save Contact
                 </button>

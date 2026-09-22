@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import { 
-  Settings, Moon, Sun, Shield, Bell, Wifi, 
+  Settings, Sun, Shield, Bell, Wifi, 
   MapPin, Eye, Smartphone, Database, Check, RefreshCw 
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -34,28 +34,28 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
       <Header />
 
       <div className="w-full max-w-4xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
         
         {/* Header */}
-        <div className="border-b border-border pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
           <div>
-            <span className="text-[10px] font-black text-primary-accent uppercase tracking-widest block">
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
               SYSTEM CONFIGURATION
             </span>
-            <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-1">
+            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "#0F172A", marginTop: "4px" }}>
               Application Settings
             </h1>
-            <p className="text-xs text-muted font-semibold mt-0.5">
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "2px" }}>
               Configure appearance themes, telemetry feeds, and safety preferences.
             </p>
           </div>
         </div>
 
         {clearedDataMessage && (
-          <div className="p-4 rounded-2xl bg-success/10 border border-success/30 text-success text-xs font-bold flex items-center gap-2 shadow-sm">
+          <div className="p-4 rounded-2xl flex items-center gap-2 shadow-sm" style={{ backgroundColor: "#DCFCE7", border: "1px solid #86EFAC", color: "#16A34A", fontSize: "13px", fontWeight: 600 }}>
             <Check className="h-4 w-4" />
             <span>Local demo cache and route history reset successfully!</span>
           </div>
@@ -64,138 +64,122 @@ export default function SettingsPage() {
         <div className="space-y-6">
           
           {/* Appearance / Theme Settings */}
-          <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 transition-colors">
-            <div className="flex items-center gap-2 border-b border-border pb-3">
-              <div className="p-2 rounded-xl bg-primary-accent/10 text-primary-accent">
-                {theme === "dark" ? <Moon className="h-4.5 w-4.5" /> : <Sun className="h-4.5 w-4.5 text-amber-500" />}
+          <div className="rounded-3xl p-6 space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+            <div className="flex items-center gap-2.5 pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="p-2 rounded-xl" style={{ backgroundColor: "#EFF6FF", color: "#2563FF" }}>
+                <Sun className="h-4.5 w-4.5 text-amber-500" />
               </div>
               <div>
-                <h3 className="text-xs font-black text-foreground uppercase tracking-wider">
-                  Theme & Appearance (Default: Dark Mode)
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Theme &amp; Appearance (Light Mode Active)
                 </h3>
-                <p className="text-[9px] text-muted font-bold">Switch between high-contrast Dark and Light themes</p>
+                <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>High-clarity Travel Guardian Light design system</p>
               </div>
             </div>
 
             {mounted && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                <button
-                  onClick={() => setTheme("dark")}
-                  className={`p-4 rounded-2xl border flex items-center gap-3 text-left transition-all ${
-                    theme === "dark" 
-                      ? "border-primary-accent bg-primary-accent/10 ring-1 ring-primary-accent text-foreground shadow-sm" 
-                      : "border-border bg-elevated-surface text-muted hover:border-border"
-                  }`}
+              <div className="grid grid-cols-1 gap-4 pt-1">
+                <div
+                  className="p-4 rounded-2xl border flex items-center gap-3 text-left transition-all"
+                  style={{
+                    backgroundColor: "#EFF6FF",
+                    border: "2px solid #2563FF",
+                    boxShadow: "0 2px 8px rgba(37,99,255,0.15)",
+                  }}
                 >
-                  <div className="p-2.5 rounded-xl bg-zinc-900 text-white border border-zinc-700">
-                    <Moon className="h-5 w-5 text-indigo-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black text-foreground">Dark Mode (Default)</h4>
-                    <p className="text-[10px] text-muted font-bold">Optimized for night travel & OLED displays</p>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => setTheme("light")}
-                  className={`p-4 rounded-2xl border flex items-center gap-3 text-left transition-all ${
-                    theme === "light" 
-                      ? "border-primary-accent bg-primary-accent/10 ring-1 ring-primary-accent text-foreground shadow-sm" 
-                      : "border-border bg-elevated-surface text-muted hover:border-border"
-                  }`}
-                >
-                  <div className="p-2.5 rounded-xl bg-white text-zinc-900 border border-zinc-300 shadow-sm">
+                  <div className="p-2.5 rounded-xl bg-white text-zinc-900 shadow-sm" style={{ border: "1px solid rgba(15,23,42,0.1)" }}>
                     <Sun className="h-5 w-5 text-amber-500" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-foreground">Light Mode</h4>
-                    <p className="text-[10px] text-muted font-bold">High visibility daytime readability</p>
+                    <h4 style={{ fontSize: "13px", fontWeight: 800, color: "#0F172A" }}>Travel Guardian Light Theme (Active)</h4>
+                    <p style={{ fontSize: "11px", color: "#2563FF", fontWeight: 600 }}>Curated daylight travel design (#2563FF Primary • #F8FAFC Clean Canvas)</p>
                   </div>
-                </button>
+                </div>
               </div>
             )}
           </div>
 
           {/* Safety & Protocol Preferences */}
-          <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 transition-colors">
-            <div className="flex items-center gap-2 border-b border-border pb-3">
-              <div className="p-2 rounded-xl bg-danger/10 text-danger">
+          <div className="rounded-3xl p-6 space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+            <div className="flex items-center gap-2.5 pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="p-2 rounded-xl" style={{ backgroundColor: "#FEF2F2", color: "#EF4444" }}>
                 <Shield className="h-4.5 w-4.5" />
               </div>
               <div>
-                <h3 className="text-xs font-black text-foreground uppercase tracking-wider">
-                  Safety Defaults & Route Prioritization
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Safety Defaults &amp; Route Prioritization
                 </h3>
-                <p className="text-[9px] text-muted font-bold">Global rules applied to journey planning</p>
+                <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>Global rules applied to journey planning</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-elevated-surface border border-border">
+              <div className="flex items-center justify-between p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
                 <div>
-                  <h4 className="text-xs font-black text-foreground">Prioritize Women Safety Corridors</h4>
-                  <p className="text-[10px] text-muted font-bold">Filter routes favoring 24/7 lit tollways and highway police booths</p>
+                  <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>Prioritize Women Safety Corridors</h4>
+                  <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 400 }}>Filter routes favoring 24/7 lit tollways and highway police booths</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={womenSafetyDefault}
                   onChange={(e) => setWomenSafetyDefault(e.target.checked)}
-                  className="rounded h-4 w-4 text-primary-accent"
+                  className="rounded h-4.5 w-4.5 accent-blue-600"
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-elevated-surface border border-border">
+              <div className="flex items-center justify-between p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
                 <div>
-                  <h4 className="text-xs font-black text-foreground">Live Telemetry Sharing in SOS</h4>
-                  <p className="text-[10px] text-muted font-bold">Automatically attach GPS coordinates to emergency SMS dispatches</p>
+                  <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>Live Telemetry Sharing in SOS</h4>
+                  <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 400 }}>Automatically attach GPS coordinates to emergency SMS dispatches</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={liveGpsTelemetry}
                   onChange={(e) => setLiveGpsTelemetry(e.target.checked)}
-                  className="rounded h-4 w-4 text-primary-accent"
+                  className="rounded h-4.5 w-4.5 accent-blue-600"
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-elevated-surface border border-border">
+              <div className="flex items-center justify-between p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
                 <div>
-                  <h4 className="text-xs font-black text-foreground">Auto-Cache 6-City Offline Pack</h4>
-                  <p className="text-[10px] text-muted font-bold">Pre-cache coordinates for Chennai, Mumbai, Delhi, Hyderabad, Bangalore, Vizag</p>
+                  <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>Auto-Cache 6-City Offline Pack</h4>
+                  <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 400 }}>Pre-cache coordinates for Chennai, Mumbai, Delhi, Hyderabad, Bangalore, Vizag</p>
                 </div>
                 <input
                   type="checkbox"
                   checked={offlinePackSync}
                   onChange={(e) => setOfflinePackSync(e.target.checked)}
-                  className="rounded h-4 w-4 text-primary-accent"
+                  className="rounded h-4.5 w-4.5 accent-blue-600"
                 />
               </div>
             </div>
           </div>
 
           {/* Cache & Diagnostics */}
-          <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 transition-colors">
-            <div className="flex items-center gap-2 border-b border-border pb-3">
-              <div className="p-2 rounded-xl bg-muted/10 text-muted">
+          <div className="rounded-3xl p-6 space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+            <div className="flex items-center gap-2.5 pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="p-2 rounded-xl" style={{ backgroundColor: "#EFF6FF", color: "#2563FF" }}>
                 <Database className="h-4.5 w-4.5" />
               </div>
               <div>
-                <h3 className="text-xs font-black text-foreground uppercase tracking-wider">
-                  Storage & Diagnostics
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Storage &amp; Diagnostics
                 </h3>
-                <p className="text-[9px] text-muted font-bold">Manage offline cache and local testing state</p>
+                <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>Manage offline cache and local testing state</p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3.5 rounded-2xl bg-elevated-surface border border-border">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
               <div>
-                <h4 className="text-xs font-black text-foreground">Reset Local Demo Storage</h4>
-                <p className="text-[10px] text-muted font-bold">Clears cached checklists and assessment history</p>
+                <h4 style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>Reset Local Demo Storage</h4>
+                <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 400 }}>Clears cached checklists and assessment history</p>
               </div>
               <button
                 onClick={handleResetCache}
-                className="px-4 py-2 rounded-xl bg-surface border border-border hover:bg-border text-foreground text-xs font-black transition-colors flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5"
+                style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.12)", color: "#0F172A", fontSize: "12px", fontWeight: 700 }}
               >
-                <RefreshCw className="h-3.5 w-3.5 text-muted" />
+                <RefreshCw className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
                 <span>Reset Demo Cache</span>
               </button>
             </div>

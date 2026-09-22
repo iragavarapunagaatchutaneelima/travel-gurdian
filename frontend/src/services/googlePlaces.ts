@@ -4,10 +4,48 @@ declare global {
   interface Window {
     google?: any;
     __googleMapsLoadingPromise?: Promise<void>;
+    __googleMapsAuthFailed?: boolean;
+    gm_authFailure?: () => void;
   }
 }
 
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+/**
+ * Normalized user-facing map and routing error formatter.
+ * Strictly adheres to Phase 12 requirements.
+ */
+export function formatMapErrorMessage(error: any): string {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return "You're offline. Cached map/navigation information is available where supported.";
+  }
+
+  const msg = typeof error === "string" ? error : error?.message || "";
+
+  if (msg.includes("MISSING_API_KEY") || msg.includes("API key not configured") || msg.includes("not configured")) {
+    return "Google Maps API key is not configured.";
+  }
+
+  if (
+    msg.includes("RESTRICTED_KEY") || 
+    msg.includes("AUTH_FAILURE") || 
+    msg.includes("RefererNotAllowedMapError") || 
+    msg.includes("REQUEST_DENIED") ||
+    (typeof window !== "undefined" && window.__googleMapsAuthFailed)
+  ) {
+    return "The Google Maps API key is restricted and the current website origin may not be authorized. Please verify HTTP referrer restrictions in Google Cloud Console.";
+  }
+
+  if (msg.includes("OFFLINE")) {
+    return "You're offline. Cached map/navigation information is available where supported.";
+  }
+
+  if (msg.includes("LOAD_ERROR") || msg.includes("SERVICE_UNAVAILABLE")) {
+    return "Map service is temporarily unavailable.";
+  }
+
+  return msg || "Map service is temporarily unavailable.";
+}
 
 /**
  * Dynamically loads the Google Maps JavaScript API with Places library.
@@ -22,6 +60,10 @@ export function loadGoogleMapsScript(): Promise<void> {
     return Promise.resolve();
   }
 
+  if (window.__googleMapsAuthFailed) {
+    return Promise.reject(new Error("RESTRICTED_KEY_FAILURE"));
+  }
+
   if (window.__googleMapsLoadingPromise) {
     return window.__googleMapsLoadingPromise;
   }
@@ -30,6 +72,16 @@ export function loadGoogleMapsScript(): Promise<void> {
   if (!apiKey || apiKey === "your_google_maps_api_key_here") {
     return Promise.reject(new Error("MISSING_API_KEY"));
   }
+
+  // Hook gm_authFailure to catch invalid/restricted key errors from Google Maps script
+  const prevAuthFailure = window.gm_authFailure;
+  window.gm_authFailure = () => {
+    window.__googleMapsAuthFailed = true;
+    console.warn("Google Maps API authentication failed: restricted key or unauthorized referrer origin.");
+    if (typeof prevAuthFailure === "function") {
+      prevAuthFailure();
+    }
+  };
 
   window.__googleMapsLoadingPromise = new Promise((resolve, reject) => {
     // Check if script element already exists
@@ -258,7 +310,7 @@ export async function reverseGeocodeCoordinates(latitude: number, longitude: num
     throw new Error("GEOCODER_UNAVAILABLE");
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     geocoder.geocode(
       { location: { lat: latitude, lng: longitude } },
       (results: any[], status: any) => {

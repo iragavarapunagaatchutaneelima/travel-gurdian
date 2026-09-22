@@ -68,29 +68,35 @@ export default function AssistHub() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
       
       <Header />
 
       <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
         
         {/* Page Title Header */}
-        <div className="border-b border-border pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div 
+          className="pb-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
+          style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}
+        >
           <div>
-            <span className="text-[10px] font-black text-primary-accent uppercase tracking-widest block">
-              PHASE 6 — AI GUARDIAN ASSISTANT
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
+              AI GUARDIAN ASSISTANT
             </span>
-            <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-1">
-              Travel Assistant & Controlled Tool Calling
+            <h1 style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", color: "#0F172A", marginTop: "4px", letterSpacing: "-0.01em" }}>
+              Travel Assistant &amp; Tool Calling
             </h1>
-            <p className="text-xs text-muted font-semibold mt-0.5">
-              Ask contextual journey questions, inspect safety scores, and review user-confirmed action proposals.
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "4px" }}>
+              Ask contextual journey questions. Inspect safety scores. Confirm action proposals.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase px-3 py-1.5 rounded-full border bg-success/10 border-success/30 text-success">
-              AI BOUNDARY: OBSERVER & ASSISTANT (USER CONTROLLED)
+            <span 
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+              style={{ fontSize: "11px", fontWeight: 700, backgroundColor: "#F0FDF4", color: "#16A34A", border: "1px solid rgba(34,197,94,0.2)" }}
+            >
+              AI: OBSERVER &amp; ASSISTANT
             </span>
           </div>
         </div>
@@ -129,59 +135,60 @@ export default function AssistHub() {
             />
 
             {/* AI Safety Boundary Card */}
-            <div className="p-5 rounded-3xl bg-surface border border-border shadow-sm space-y-3">
+            <div 
+              className="p-5 rounded-3xl space-y-3"
+              style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}
+            >
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-2xl bg-info/15 text-info">
-                  <ShieldCheck className="h-5 w-5" />
+                <div className="p-2 rounded-2xl" style={{ backgroundColor: "#EFF6FF" }}>
+                  <ShieldCheck className="h-5 w-5" style={{ color: "#2563FF" }} />
                 </div>
                 <div>
-                  <h3 className="font-black text-xs text-foreground uppercase tracking-wider">
-                    AI Safety Rules & Governance
-                  </h3>
-                  <span className="text-[10px] text-muted font-bold">Strict Ethical Boundaries</span>
+                  <h3 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>AI Safety Rules &amp; Governance</h3>
+                  <span style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>Strict Ethical Boundaries</span>
                 </div>
               </div>
 
-              <div className="space-y-2 text-xs text-muted font-semibold leading-relaxed">
-                <div className="flex items-start gap-2">
-                  <span className="text-primary-accent font-black">•</span>
-                  <span><strong>AI Observes & Explains:</strong> Uses deterministic tools to read live telemetry without inventing scores.</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-primary-accent font-black">•</span>
-                  <span><strong>No Autonomous Emergency Actions:</strong> The AI cannot independently call 112 or fire SOS.</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-primary-accent font-black">•</span>
-                  <span><strong>Explicit Confirmation:</strong> Any safety proposal requires direct user button confirmation.</span>
-                </div>
+              <div className="space-y-2">
+                {[
+                  { bold: "AI Observes & Explains:", rest: "Uses deterministic tools to read live telemetry without inventing scores." },
+                  { bold: "No Autonomous Emergency Actions:", rest: "The AI cannot independently call 112 or fire SOS." },
+                  { bold: "Explicit Confirmation:", rest: "Any safety proposal requires direct user button confirmation." },
+                ].map((rule, i) => (
+                  <div key={i} className="flex items-start gap-2" style={{ fontSize: "12px", color: "#374151" }}>
+                    <span style={{ color: "#2563FF", fontWeight: 700, flexShrink: 0 }}>•</span>
+                    <span><strong>{rule.bold}</strong> {rule.rest}</span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Quick Links to Live Map & Emergency */}
+            {/* Quick Links */}
             <div className="grid grid-cols-2 gap-3">
               <Link
                 href="/map"
-                className="p-4 rounded-3xl bg-surface border border-border hover:border-primary-accent transition-all shadow-sm group text-left space-y-1"
+                className="p-4 rounded-3xl text-left space-y-1 transition-all group"
+                style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.05)" }}
               >
                 <div className="flex items-center justify-between">
-                  <MapPin className="h-4 w-4 text-primary-accent" />
-                  <ChevronRight className="h-4 w-4 text-muted group-hover:text-primary-accent transition-colors" />
+                  <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
+                  <ChevronRight className="h-4 w-4 opacity-30 group-hover:opacity-70 transition-opacity" style={{ color: "#2563FF" }} />
                 </div>
-                <h4 className="font-black text-xs text-foreground">Live Map & Nav</h4>
-                <p className="text-[10px] text-muted font-semibold">Track GPS corridor</p>
+                <h4 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>Live Map &amp; Nav</h4>
+                <p style={{ fontSize: "11px", color: "#94A3B8", fontWeight: 400 }}>Track GPS corridor</p>
               </Link>
 
               <Link
                 href="/emergency"
-                className="p-4 rounded-3xl bg-surface border border-border hover:border-danger transition-all shadow-sm group text-left space-y-1"
+                className="p-4 rounded-3xl text-left space-y-1 transition-all group"
+                style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.05)" }}
               >
                 <div className="flex items-center justify-between">
-                  <LifeBuoy className="h-4 w-4 text-danger" />
-                  <ChevronRight className="h-4 w-4 text-muted group-hover:text-danger transition-colors" />
+                  <LifeBuoy className="h-4 w-4" style={{ color: "#EF4444" }} />
+                  <ChevronRight className="h-4 w-4 opacity-30 group-hover:opacity-70 transition-opacity" style={{ color: "#EF4444" }} />
                 </div>
-                <h4 className="font-black text-xs text-foreground">Emergency Hub</h4>
-                <p className="text-[10px] text-muted font-semibold">112 dial & contacts</p>
+                <h4 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>Emergency Hub</h4>
+                <p style={{ fontSize: "11px", color: "#94A3B8", fontWeight: 400 }}>112 dial &amp; contacts</p>
               </Link>
             </div>
 

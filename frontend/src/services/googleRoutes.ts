@@ -119,13 +119,19 @@ export async function calculateGoogleRoutes(
     googleTravelMode = window.google.maps.TravelMode.DRIVING;
   }
 
-  const originLocation = origin.placeId
-    ? { placeId: origin.placeId }
-    : { lat: origin.latitude, lng: origin.longitude };
+  const originLocation =
+    origin.latitude != null && origin.longitude != null && !isNaN(Number(origin.latitude)) && !isNaN(Number(origin.longitude))
+      ? { lat: Number(origin.latitude), lng: Number(origin.longitude) }
+      : origin.placeId
+        ? { placeId: origin.placeId }
+        : origin.formattedAddress || origin.name;
 
-  const destLocation = destination.placeId
-    ? { placeId: destination.placeId }
-    : { lat: destination.latitude, lng: destination.longitude };
+  const destLocation =
+    destination.latitude != null && destination.longitude != null && !isNaN(Number(destination.latitude)) && !isNaN(Number(destination.longitude))
+      ? { lat: Number(destination.latitude), lng: Number(destination.longitude) }
+      : destination.placeId
+        ? { placeId: destination.placeId }
+        : destination.formattedAddress || destination.name;
 
   const activeIncidents = getActiveIncidents();
 

@@ -155,7 +155,7 @@ function OfflinePacksManagerContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
       
       {/* Header */}
       <Header />
@@ -164,27 +164,34 @@ function OfflinePacksManagerContent() {
       <div className="w-full max-w-6xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
         
         {/* Title & Connectivity Banner */}
-        <div className="border-b border-border pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
           <div>
-            <span className="text-[10px] font-black text-primary-accent uppercase tracking-widest block">
-              OFFLINE GUARDIAN & VECTOR CORRIDOR SUITE (PHASE 9)
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
+              OFFLINE GUARDIAN &amp; VECTOR CORRIDOR SUITE
             </span>
-            <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-1">
-              Offline Vector Corridors & Map Storage
+            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "#0F172A", marginTop: "4px" }}>
+              Offline Vector Corridors &amp; Map Storage
             </h1>
-            <p className="text-xs text-muted font-semibold mt-0.5">
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "2px" }}>
               Download bounded vector map corridors, route geometry, and safe haven emergency intelligence.
             </p>
           </div>
 
           {/* Connectivity Pill */}
           <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-full border flex items-center gap-1.5 ${
-              isOnline 
-                ? "bg-success/10 border-success/30 text-success" 
-                : "bg-warning/10 border-warning/30 text-warning"
-            }`}>
-              {isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            <span
+              className="rounded-full flex items-center gap-1.5"
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                padding: "6px 14px",
+                backgroundColor: isOnline ? "#DCFCE7" : "#FEF3C7",
+                border: isOnline ? "1px solid #86EFAC" : "1px solid #FDE68A",
+                color: isOnline ? "#16A34A" : "#D97706",
+              }}
+            >
+              {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
               <span>STATUS: {networkStatus}</span>
             </span>
           </div>
@@ -192,34 +199,34 @@ function OfflinePacksManagerContent() {
 
         {/* Global Feedback Alert */}
         {successMessage && (
-          <div className="p-4 rounded-2xl bg-success/15 border border-success/30 text-success text-xs font-bold flex items-center justify-between shadow-md animate-fadeIn">
+          <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "#DCFCE7", border: "1px solid #86EFAC", color: "#16A34A", fontSize: "13px", fontWeight: 600 }}>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMessage}</span>
             </div>
-            <button onClick={() => setSuccessMessage(null)} className="font-black hover:underline p-1">✕</button>
+            <button onClick={() => setSuccessMessage(null)} className="font-bold hover:underline p-1">✕</button>
           </div>
         )}
 
         {/* Download Progress Card (Real Phases) */}
         {downloading && downloadProgress && (
-          <div className="p-5 rounded-3xl bg-slate-900 border border-primary-accent text-white shadow-xl space-y-3 animate-fadeIn">
+          <div className="p-5 rounded-3xl shadow-md space-y-3 animate-fadeIn" style={{ backgroundColor: "#FFFFFF", border: "2px solid #2563FF" }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Loader className="w-4 h-4 text-primary-accent animate-spin" />
-                <span className="text-xs font-black uppercase tracking-wider text-primary-accent">
+                <Loader className="w-4 h-4 animate-spin" style={{ color: "#2563FF" }} />
+                <span style={{ fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#2563FF" }}>
                   {downloadProgress.phase}
                 </span>
               </div>
-              <span className="text-xs font-bold text-slate-300">{downloadProgress.percent}%</span>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{downloadProgress.percent}%</span>
             </div>
 
-            <p className="text-xs text-slate-200 font-semibold">{downloadProgress.message}</p>
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 500 }}>{downloadProgress.message}</p>
 
-            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ backgroundColor: "#EFF6FF" }}>
               <div
-                className="bg-primary-accent h-2 transition-all duration-300 rounded-full"
-                style={{ width: `${downloadProgress.percent}%` }}
+                className="h-2.5 transition-all duration-300 rounded-full"
+                style={{ width: `${downloadProgress.percent}%`, backgroundColor: "#2563FF" }}
               ></div>
             </div>
           </div>
@@ -230,8 +237,8 @@ function OfflinePacksManagerContent() {
           {/* Left Column: Offline Packs List */}
           <div className="lg:col-span-8 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-black text-sm text-foreground">Downloaded Vector Corridors</h3>
-              <span className="text-[11px] font-bold text-muted">
+              <h3 style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A" }}>Downloaded Vector Corridors</h3>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748B" }}>
                 {allPacks.length} Pack(s) in Storage
               </span>
             </div>
@@ -246,26 +253,27 @@ function OfflinePacksManagerContent() {
                 return (
                   <div
                     key={pack.packId}
-                    className={`p-5 rounded-3xl border transition-all space-y-3 ${
-                      isActive 
-                        ? "bg-surface border-primary-accent shadow-md shadow-primary-accent/10" 
-                        : "bg-surface border-border hover:border-border/80"
-                    }`}
+                    className="p-5 rounded-3xl transition-all space-y-3"
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      border: isActive ? "2px solid #2563FF" : "1px solid rgba(15,23,42,0.08)",
+                      boxShadow: isActive ? "0 4px 12px rgba(37,99,255,0.12)" : "0 2px 8px rgba(37,99,255,0.04)",
+                    }}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="font-black text-sm text-foreground">{pack.packName}</h4>
+                          <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#0F172A" }}>{pack.packName}</h4>
                           {isActive && (
-                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-primary-accent text-white">
+                            <span style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#2563FF", color: "#FFFFFF" }}>
                               ACTIVE CORRIDOR
                             </span>
                           )}
-                          <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                          <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#EFF6FF", color: "#2563FF", border: "1px solid rgba(37,99,255,0.2)" }}>
                             VECTOR MAP: {mapStatus}
                           </span>
                         </div>
-                        <p className="text-[11px] text-muted font-semibold mt-0.5">
+                        <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 500, marginTop: "2px" }}>
                           {pack.route.distance} • est. {pack.route.time} • Safety Fit: {pack.route.safetyScore}/100
                         </p>
                       </div>
@@ -273,14 +281,16 @@ function OfflinePacksManagerContent() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => generateSurvivalKitPDF(pack)}
-                          className="p-2 rounded-xl bg-elevated-surface hover:bg-border text-muted hover:text-foreground border border-border transition-colors text-xs font-bold"
+                          className="p-2.5 rounded-xl transition-all"
+                          style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.08)", color: "#64748B" }}
                           title="Download Survival PDF"
                         >
-                          <FileText className="h-4 w-4" />
+                          <FileText className="h-4 w-4" style={{ color: "#2563FF" }} />
                         </button>
                         <button
                           onClick={() => handleDelete(pack.packId, pack.packName)}
-                          className="p-2 rounded-xl bg-elevated-surface hover:bg-danger/20 text-muted hover:text-danger border border-border transition-colors text-xs font-bold"
+                          className="p-2.5 rounded-xl transition-all"
+                          style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444" }}
                           title="Delete Pack & Tiles"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -288,31 +298,34 @@ function OfflinePacksManagerContent() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-muted font-semibold pt-2 border-t border-border">
-                      <div>Turns: <strong className="text-foreground">{pack.turnInstructions.length}</strong></div>
-                      <div>Safe Havens: <strong className="text-foreground">{pack.safeHavens.length}</strong></div>
-                      <div>Vector Tiles: <strong className="text-foreground">{tileCount} (Z10-13)</strong></div>
-                      <div>Updated: <strong className="text-foreground">{cachedDate}</strong></div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)", fontSize: "11px", color: "#64748B", fontWeight: 500 }}>
+                      <div>Turns: <strong style={{ color: "#0F172A" }}>{pack.turnInstructions.length}</strong></div>
+                      <div>Safe Havens: <strong style={{ color: "#0F172A" }}>{pack.safeHavens.length}</strong></div>
+                      <div>Vector Tiles: <strong style={{ color: "#0F172A" }}>{tileCount} (Z10-13)</strong></div>
+                      <div>Updated: <strong style={{ color: "#0F172A" }}>{cachedDate}</strong></div>
                     </div>
 
                     <div className="flex gap-2 pt-2">
                       {!isActive && (
                         <button
                           onClick={() => switchActivePack(pack.packId)}
-                          className="flex-1 py-2.5 rounded-xl bg-elevated-surface hover:bg-border text-foreground font-black text-xs transition-colors border border-border"
+                          className="flex-1 py-2.5 rounded-xl transition-colors font-bold text-xs"
+                          style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.1)", color: "#0F172A", fontFamily: "'Poppins',sans-serif" }}
                         >
                           Set as Active Corridor
                         </button>
                       )}
                       <Link
                         href={`/offline-mode?from=${pack.origin.name.toLowerCase()}&dest=${pack.destination.name.toLowerCase()}`}
-                        className="flex-1 py-2.5 rounded-xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs transition-all shadow-sm text-center"
+                        className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs transition-all shadow-sm text-center"
+                        style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
                       >
                         View Offline Survival Card
                       </Link>
                       <Link
                         href={`/map?from=${pack.origin.name.toLowerCase()}&dest=${pack.destination.name.toLowerCase()}&offlineMode=true`}
-                        className="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs transition-all text-center flex items-center gap-1.5"
+                        className="py-2.5 px-4 rounded-xl font-bold text-xs transition-all text-center flex items-center gap-1.5"
+                        style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", color: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
                       >
                         <Compass className="w-3.5 h-3.5" />
                         Map
@@ -328,18 +341,19 @@ function OfflinePacksManagerContent() {
           <div className="lg:col-span-4 space-y-5">
             
             {/* Download New Corridor Card */}
-            <div className="p-6 rounded-3xl bg-surface border border-border shadow-sm text-left space-y-4">
+            <div className="p-6 rounded-3xl shadow-sm text-left space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
               <div className="space-y-1">
-                <h3 className="font-black text-sm text-foreground">Cache Vector Corridor</h3>
-                <p className="text-xs text-muted font-semibold leading-relaxed">
-                  Prepare bounded vector map tiles & safety intelligence for <strong className="text-foreground">{fromParam} ➔ {destParam}</strong>.
+                <h3 style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A" }}>Cache Vector Corridor</h3>
+                <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>
+                  Prepare bounded vector map tiles &amp; safety intelligence for <strong style={{ color: "#0F172A" }}>{fromParam} ➔ {destParam}</strong>.
                 </p>
               </div>
 
               <button
                 onClick={handleDownloadNewPack}
                 disabled={downloading}
-                className="w-full py-3.5 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-50"
+                className="w-full py-3.5 rounded-2xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+                style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
               >
                 {downloading ? (
                   <>
@@ -354,47 +368,47 @@ function OfflinePacksManagerContent() {
                 )}
               </button>
 
-              <div className="p-3 bg-elevated-surface rounded-2xl border border-border text-[11px] text-muted space-y-1">
-                <div className="flex justify-between font-bold">
+              <div className="p-3.5 rounded-2xl space-y-1.5" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)", fontSize: "11px", color: "#64748B" }}>
+                <div className="flex justify-between font-medium">
                   <span>Zoom Coverage:</span>
-                  <span className="text-foreground">Z10 - Z13 (Bounded)</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>Z10 - Z13 (Bounded)</span>
                 </div>
-                <div className="flex justify-between font-bold">
+                <div className="flex justify-between font-medium">
                   <span>Corridor Buffer:</span>
-                  <span className="text-foreground">±8 km along route</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>±8 km along route</span>
                 </div>
-                <div className="flex justify-between font-bold">
+                <div className="flex justify-between font-medium">
                   <span>Est. Tile Footprint:</span>
-                  <span className="text-foreground">~400 - 1,200 tiles</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>~400 - 1,200 tiles</span>
                 </div>
               </div>
             </div>
 
             {/* Storage Quota Telemetry */}
-            <div className="p-6 rounded-3xl bg-surface border border-border shadow-sm text-left space-y-3">
-              <h4 className="font-black text-xs text-foreground uppercase tracking-wider flex items-center gap-2">
-                <Database className="h-4 w-4 text-primary-accent" />
+            <div className="p-6 rounded-3xl shadow-sm text-left space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
+              <h4 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Database className="h-4 w-4" style={{ color: "#2563FF" }} />
                 <span>Device Storage Allocation</span>
               </h4>
 
-              <div className="space-y-2 text-xs">
-                <div className="flex justify-between text-muted font-semibold">
+              <div className="space-y-2" style={{ fontSize: "12px" }}>
+                <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
                   <span>Corridor Packs:</span>
-                  <strong className="text-foreground">{storageUsage.totalPacks}</strong>
+                  <strong style={{ color: "#0F172A" }}>{storageUsage.totalPacks}</strong>
                 </div>
-                <div className="flex justify-between text-muted font-semibold">
+                <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
                   <span>Stored Vector Tiles:</span>
-                  <strong className="text-foreground">{storageUsage.totalTilesCount || 420}</strong>
+                  <strong style={{ color: "#0F172A" }}>{storageUsage.totalTilesCount || 420}</strong>
                 </div>
-                <div className="flex justify-between text-muted font-semibold">
+                <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
                   <span>IndexedDB Footprint:</span>
-                  <strong className="text-foreground">~{storageUsage.estimatedSizeKb || 1100} KB</strong>
+                  <strong style={{ color: "#0F172A" }}>~{storageUsage.estimatedSizeKb || 1100} KB</strong>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-border">
-                <span className="text-[10px] text-muted font-bold block">
-                  Storage engine: IndexedDB (Store: <code>offline_map_tiles</code>)
+              <div className="pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)" }}>
+                <span style={{ fontSize: "10px", color: "#94A3B8", fontWeight: 500, display: "block" }}>
+                  Storage engine: IndexedDB (Store: <code style={{ color: "#2563FF" }}>offline_map_tiles</code>)
                 </span>
               </div>
             </div>
@@ -412,7 +426,7 @@ function OfflinePacksManagerContent() {
 
 export default function OfflinePacksManagerPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center font-bold text-xs text-muted">Loading Offline Vector Hub...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xs" style={{ backgroundColor: "#F8FAFC", color: "#64748B" }}>Loading Offline Vector Hub...</div>}>
       <OfflinePacksManagerContent />
     </Suspense>
   );

@@ -4,10 +4,15 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
-import { 
-  Calculator, Shield, Clock, Download, History, AlertTriangle, 
-  MapPin, CloudSun, Wind, Car, Wifi, Send, ChevronRight, Loader, Bot, Navigation
+import {
+  Shield, Clock, Download, History, AlertTriangle,
+  MapPin, CloudSun, Wind, Car, Wifi, Bot, Navigation,
+  ChevronRight, CheckCircle2, ArrowRight, Sparkles
 } from "lucide-react";
+
+const S = {
+  fontFamily: "'Poppins', system-ui, sans-serif",
+};
 
 export default function HomeDashboard() {
   const router = useRouter();
@@ -15,66 +20,47 @@ export default function HomeDashboard() {
   // Slideshow state
   const [currentSlide, setCurrentSlide] = useState(0);
   const slides = [
-    { src: "/hero1.png", title: "Plan Safer Routes", subtitle: "Real-time threat diagnostics & municipal safety mapping coordinates across 6 primary Indian city hubs." },
-    { src: "/hero2.png", title: "Offline Safety Packs", subtitle: "Preserve navigation coordinates, emergency numbers and guides without network coverage." },
-    { src: "/hero3.png", title: "Fail-Safe Dead-man Timers", subtitle: "Automatic GPS coordinates sharing with active dispatch telemetry." }
+    { title: "Travel Safely Everywhere", subtitle: "Real-time threat diagnostics & municipal safety mapping across 6 primary Indian city hubs.", accent: "#2563FF" },
+    { title: "Offline Safety Packs", subtitle: "Preserve navigation coordinates, emergency numbers and guides without network coverage.", accent: "#22C55E" },
+    { title: "Fail-Safe Check-In Timers", subtitle: "Automatic GPS coordinates sharing with active dispatch telemetry to trusted guardians.", accent: "#F59E0B" },
   ];
 
-  // Auto-play slideshow every 3.5 seconds
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(timer);
   }, [slides.length]);
 
-  // Quick Action Buttons
+  // Quick Actions
   const actions = [
-    { name: "Plan Journey", href: "/plan", icon: Navigation, desc: "6-City Route Intelligence", color: "bg-primary-accent/10 text-primary-accent" },
-    { name: "Live Maps", href: "/map", icon: MapPin, desc: "Interactive Map & POIs", color: "bg-primary-accent/10 text-primary-accent" },
-    { name: "AI Guardian", href: "/assist", icon: Bot, desc: "Gemini Safety Advisory", color: "bg-primary-accent/10 text-primary-accent" },
-    { name: "Safety Timer", href: "#timer", icon: Clock, desc: "Fail-safe Check-in", color: "bg-primary-accent/10 text-primary-accent" },
-    { name: "My Journeys", href: "/history", icon: History, desc: "Trip History & Logs", color: "bg-primary-accent/10 text-primary-accent" },
-    { name: "Emergency SOS", href: "/emergency", icon: AlertTriangle, desc: "SOS & 112 Dispatch", color: "bg-danger/10 text-danger" }
+    { name: "Plan Journey", href: "/plan", icon: Navigation, desc: "6-City Route Intelligence", color: "#2563FF", bg: "#EFF6FF" },
+    { name: "Live Maps", href: "/map", icon: MapPin, desc: "Interactive Map & POIs", color: "#2563FF", bg: "#EFF6FF" },
+    { name: "AI Guardian", href: "/assist", icon: Bot, desc: "Gemini Safety Advisory", color: "#2563FF", bg: "#EFF6FF" },
+    { name: "Safety Check-In", href: "#timer", icon: Clock, desc: "Fail-safe Timer", color: "#22C55E", bg: "#F0FDF4" },
+    { name: "My Journeys", href: "/history", icon: History, desc: "Trip History & Logs", color: "#64748B", bg: "#F8FAFC" },
+    { name: "Emergency SOS", href: "/emergency", icon: AlertTriangle, desc: "SOS & 112 Dispatch", color: "#EF4444", bg: "#FEF2F2" },
   ];
 
-  // Active sub-states
   const [userName, setUserName] = useState("Traveler");
   const [greeting, setGreeting] = useState("Good Morning");
   const [showSafetyTimer, setShowSafetyTimer] = useState(false);
-  const [timerDuration, setTimerDuration] = useState("3"); // mins
+  const [timerDuration, setTimerDuration] = useState("3");
   const [timerRemaining, setTimerRemaining] = useState<number | null>(null);
   const [timerId, setTimerId] = useState<any>(null);
 
-  // AI Assistant overlay chat state
-  const [showAIChat, setShowAIChat] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<{ sender: "user" | "bot"; text: string }[]>([
-    { sender: "bot", text: "Namaste! AI Guardian safety advisor online. Ask me about travel safety, routes (e.g. Chennai to Bangalore, Mumbai to Hyderabad), safe stops, or SOS protocols." }
-  ]);
-  const [chatLoading, setChatLoading] = useState(false);
-
   useEffect(() => {
     const hours = new Date().getHours();
-    if (hours >= 5 && hours < 12) {
-      setGreeting("Good Morning");
-    } else if (hours >= 12 && hours < 17) {
-      setGreeting("Good Afternoon");
-    } else if (hours >= 17 && hours < 21) {
-      setGreeting("Good Evening");
-    } else {
-      setGreeting("Good Night");
-    }
+    if (hours >= 5 && hours < 12) setGreeting("Good Morning");
+    else if (hours >= 12 && hours < 17) setGreeting("Good Afternoon");
+    else if (hours >= 17 && hours < 21) setGreeting("Good Evening");
+    else setGreeting("Good Night");
 
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("user_identity");
       if (stored) {
-        if (stored.includes("@")) {
-          const parts = stored.split("@")[0];
-          setUserName(parts.charAt(0).toUpperCase() + parts.slice(1));
-        } else {
-          setUserName(stored.charAt(0).toUpperCase() + stored.slice(1));
-        }
+        const parts = stored.includes("@") ? stored.split("@")[0] : stored;
+        setUserName(parts.charAt(0).toUpperCase() + parts.slice(1));
       }
     }
   }, []);
@@ -82,15 +68,13 @@ export default function HomeDashboard() {
   const handleStartTimer = (e: React.FormEvent) => {
     e.preventDefault();
     if (timerId) clearInterval(timerId);
-
     let remaining = parseInt(timerDuration) * 60;
     setTimerRemaining(remaining);
-
     const id = setInterval(() => {
       remaining -= 1;
       setTimerRemaining(remaining);
       if (remaining <= 0) {
-        alert("Safety mode timer expired! Fail-safe location telemetry broadcast simulated to registered emergency contacts.");
+        alert("Safety timer expired! Fail-safe location telemetry broadcast simulated to emergency contacts.");
         clearInterval(id);
         setTimerRemaining(null);
       }
@@ -104,126 +88,136 @@ export default function HomeDashboard() {
     alert("Check-in confirmed! You are safe.");
   };
 
-  const handleSendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    const query = chatInput.trim();
-    setChatMessages(prev => [...prev, { sender: "user", text: query }]);
-    setChatInput("");
-    setChatLoading(true);
-
-    try {
-      // Call AI endpoint
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: query })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setChatMessages(prev => [...prev, { sender: "bot", text: data.reply }]);
-      } else {
-        throw new Error("AI API unreachable");
-      }
-    } catch {
-      let reply = "AI Guardian Diagnostic: Safety corridor protocols active. Maintain scheduled check-ins, keep emergency numbers (112) accessible, and prioritize National Highways for night travel.";
-      const lower = query.toLowerCase();
-      if (lower.includes("chennai") || lower.includes("bangalore")) {
-        reply = "AI Route Diagnostic (Chennai ➔ Bangalore): Distance is ~350 km via NH 48. Well-maintained 6-lane tollway. High density of 24/7 fuel stations (HP, IndianOil) and highway food plazas at 45km intervals. Safety Score: 92/100 (Highly Recommended).";
-      } else if (lower.includes("mumbai") || lower.includes("hyderabad")) {
-        reply = "AI Route Diagnostic (Mumbai ➔ Hyderabad): Distance is ~710 km via NH 65. Pune-Solapur expressway segment is fast and well-lit. Solapur-Hyderabad has moderate traffic. Night travel safety score: 86/100.";
-      } else if (lower.includes("delhi")) {
-        reply = "AI Route Diagnostic (Delhi Hub): Delhi to Bangalore/Hyderabad long-haul corridors. Recommended departure: 06:00 AM. Emergency hospital links and highway patrol active along NH 44.";
-      }
-      setChatMessages(prev => [...prev, { sender: "bot", text: reply }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
-      
-      {/* Sticky header navigation */}
+    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", ...S }}>
       <Header />
 
-      {/* Main Container */}
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6">
-        
-        {/* Top welcome banner */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface border border-border rounded-3xl p-6 shadow-sm transition-colors">
-          <div className="text-left space-y-1">
-            <span className="text-[10px] text-primary-accent font-extrabold uppercase tracking-widest block">
-              Travel Safety Suite
-            </span>
-            <h2 className="text-2xl font-black text-foreground tracking-tight">{greeting}, {userName}</h2>
-            <p className="text-xs text-muted flex items-center gap-1.5 font-bold">
-              <MapPin className="h-4 w-4 text-primary-accent" /> 
-              <span>Active GPS Node • Cross-Compatible Multi-City Engine</span>
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/plan")}
-              className="rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white px-5 py-2.5 text-xs font-black transition-all shadow-md flex items-center gap-2"
-            >
-              <Navigation className="h-4 w-4" />
-              <span>Plan Journey</span>
-            </button>
-            <div className="flex items-center gap-2 rounded-2xl bg-elevated-surface border border-border px-4 py-2.5 text-xs text-success font-black">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-              <span>Telemetry: Active</span>
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6">
+
+        {/* ============================================================
+            WELCOME HERO CARD
+            ============================================================ */}
+        <div
+          className="rounded-3xl p-6 md:p-8 relative overflow-hidden"
+          style={{
+            background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+            boxShadow: "0 8px 32px rgba(37,99,255,0.25)",
+          }}
+        >
+          {/* Decorative circles */}
+          <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full opacity-10" style={{ backgroundColor: "#FFFFFF" }} />
+          <div className="absolute bottom-0 right-16 w-20 h-20 rounded-full opacity-10" style={{ backgroundColor: "#00D4FF" }} />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-blue-200 font-semibold" style={{ fontSize: "12px" }}>
+                  Travel Safety Suite
+                </span>
+              </div>
+              <h2 className="text-white" style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", letterSpacing: "-0.01em" }}>
+                {greeting}, {userName}! 👋
+              </h2>
+              <p className="text-blue-100 flex items-center gap-1.5" style={{ fontSize: "13px", fontWeight: 500 }}>
+                <MapPin className="h-4 w-4" />
+                <span>Active GPS • Multi-City Safety Engine Online</span>
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push("/plan")}
+                className="flex items-center gap-2 px-5 py-3 rounded-2xl text-sm font-semibold transition-all hover:scale-105 active:scale-95"
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  color: "#2563FF",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.10)",
+                }}
+              >
+                <Navigation className="h-4 w-4" />
+                <span>Plan Journey</span>
+              </button>
+              <div
+                className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.15)",
+                  color: "#FFFFFF",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                }}
+              >
+                <span className="h-2 w-2 rounded-full bg-green-300 animate-pulse" />
+                <span>Telemetry: Active</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Dynamic Slideshow Banner */}
-        <div className="relative w-full h-[260px] md:h-[320px] rounded-3xl overflow-hidden shadow-md bg-black border border-border">
-          {slides.map((slide, idx) => (
-            <div
-              key={idx}
-              className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${
-                idx === currentSlide ? "opacity-60 scale-100" : "opacity-0 scale-105"
-              }`}
-              style={{ backgroundImage: `url(${slide.src})` }}
-            />
-          ))}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent z-10" />
-          
-          <div className="absolute inset-y-0 left-6 md:left-12 z-20 flex flex-col justify-center text-left text-white max-w-xl space-y-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-primary-accent-hover">
-              Core Guardian Feature
-            </span>
-            <h3 className="font-extrabold text-xl md:text-3xl tracking-tight leading-tight">{slides[currentSlide].title}</h3>
-            <p className="text-xs md:text-sm text-zinc-300 font-semibold leading-relaxed">{slides[currentSlide].subtitle}</p>
-          </div>
-
-          {/* Dots */}
-          <div className="absolute bottom-5 right-6 z-20 flex gap-2">
-            {slides.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentSlide(i)}
-                className={`h-2 rounded-full transition-all ${
-                  i === currentSlide ? "w-6 bg-primary-accent" : "w-2 bg-white/40"
-                }`}
-                aria-label={`Slide ${i + 1}`}
-              />
-            ))}
+        {/* ============================================================
+            CAROUSEL BANNER
+            ============================================================ */}
+        <div
+          className="rounded-3xl overflow-hidden relative"
+          style={{
+            background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
+            border: "1px solid rgba(37,99,255,0.12)",
+            minHeight: "180px",
+          }}
+        >
+          <div className="p-8 relative z-10">
+            <div className="flex items-start justify-between">
+              <div className="space-y-2 max-w-md">
+                <div
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full"
+                  style={{ backgroundColor: "rgba(37,99,255,0.12)", color: "#2563FF", fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" }}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Core Guardian Feature
+                </div>
+                <h3 style={{ fontWeight: 800, fontSize: "clamp(18px,3vw,24px)", color: "#0F172A" }}>
+                  {slides[currentSlide].title}
+                </h3>
+                <p style={{ fontWeight: 400, fontSize: "13px", color: "#64748B", lineHeight: 1.6 }}>
+                  {slides[currentSlide].subtitle}
+                </p>
+              </div>
+              <div className="hidden md:flex items-center justify-center w-24 h-24 rounded-3xl" style={{ backgroundColor: "rgba(37,99,255,0.08)" }}>
+                <Shield className="h-12 w-12 text-blue-300" />
+              </div>
+            </div>
+            {/* Dots */}
+            <div className="flex gap-2 mt-5">
+              {slides.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentSlide(i)}
+                  className="rounded-full transition-all"
+                  style={{
+                    height: "8px",
+                    width: i === currentSlide ? "24px" : "8px",
+                    backgroundColor: i === currentSlide ? "#2563FF" : "#CBD5E1",
+                  }}
+                  aria-label={`Slide ${i + 1}`}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Dashboard Grid layout */}
+        {/* ============================================================
+            MAIN GRID: Feature Modules + Live Conditions
+            ============================================================ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left panel: Quick Actions (Grid of Cards) */}
+
+          {/* Feature Modules */}
           <div className="lg:col-span-8 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black text-muted uppercase tracking-widest text-left">
+              <h3 style={{ fontWeight: 700, fontSize: "12px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.12em" }}>
                 Safety & Guidance Modules
               </h3>
-              <span className="text-[10px] font-bold text-muted uppercase">6 Modules Available</span>
+              <span style={{ fontSize: "11px", color: "#94A3B8", fontWeight: 600 }}>6 Modules</span>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -235,26 +229,38 @@ export default function HomeDashboard() {
                     onClick={() => {
                       if (act.href === "#timer") {
                         setShowSafetyTimer(true);
-                      } else if (act.name === "AI Guardian") {
-                        router.push("/assist");
                       } else {
                         router.push(act.href);
                       }
                     }}
-                    className="rounded-3xl border border-border bg-surface hover:bg-elevated-surface p-5 shadow-sm hover:shadow-md transition-all text-left flex flex-col justify-between min-h-[140px] group border-t-2 hover:border-t-primary-accent"
+                    className="rounded-3xl p-5 text-left flex flex-col justify-between transition-all group"
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      border: "1px solid rgba(15,23,42,0.08)",
+                      boxShadow: "0 2px 8px rgba(37,99,255,0.06)",
+                      minHeight: "140px",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = "translateY(-3px)";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 24px rgba(37,99,255,0.14)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                      (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(37,99,255,0.06)";
+                    }}
                   >
                     <div className="flex justify-between items-start">
-                      <div className={`rounded-2xl p-3 ${act.color} flex items-center justify-center shadow-inner`}>
-                        <Icon className="h-6 w-6" />
+                      <div
+                        className="rounded-2xl p-3 flex items-center justify-center transition-transform group-hover:scale-110"
+                        style={{ backgroundColor: act.bg }}
+                      >
+                        <Icon className="h-6 w-6" style={{ color: act.color }} />
                       </div>
-                      <span className="text-muted group-hover:text-primary-accent transition-colors text-xs font-mono">➔</span>
+                      <ChevronRight className="h-4 w-4 opacity-30 group-hover:opacity-70 transition-opacity" style={{ color: act.color }} />
                     </div>
-
-                    <div className="mt-4">
-                      <h4 className="font-black text-sm text-foreground leading-tight group-hover:text-primary-accent transition-colors">{act.name}</h4>
-                      <span className="text-[10px] text-muted font-bold block mt-1 uppercase tracking-wider">
-                        {act.desc}
-                      </span>
+                    <div className="mt-3">
+                      <h4 style={{ fontWeight: 700, fontSize: "14px", color: "#0F172A" }}>{act.name}</h4>
+                      <span style={{ fontSize: "11px", color: "#94A3B8", fontWeight: 500 }}>{act.desc}</span>
                     </div>
                   </button>
                 );
@@ -262,81 +268,89 @@ export default function HomeDashboard() {
             </div>
           </div>
 
-          {/* Right panel: Live Conditions stats summary */}
-          <div className="lg:col-span-4 space-y-6">
-            
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 text-left transition-colors">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="text-xs font-black text-muted uppercase tracking-widest">
-                  Live Conditions Matrix
+          {/* Live Conditions */}
+          <div className="lg:col-span-4">
+            <div
+              className="rounded-3xl p-6 space-y-4"
+              style={{
+                backgroundColor: "#FFFFFF",
+                border: "1px solid rgba(15,23,42,0.08)",
+                boxShadow: "0 2px 8px rgba(37,99,255,0.06)",
+              }}
+            >
+              <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+                <h3 style={{ fontWeight: 700, fontSize: "12px", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+                  Live Conditions
                 </h3>
-                <span className="text-[9px] font-black text-success uppercase bg-success/10 px-2 py-0.5 rounded">
-                  Live Sync
+                <span
+                  className="flex items-center gap-1"
+                  style={{ fontSize: "10px", fontWeight: 700, color: "#22C55E", backgroundColor: "#F0FDF4", padding: "3px 8px", borderRadius: "9999px" }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+                  Live
                 </span>
               </div>
 
-              <div className="space-y-3">
-                {/* Weather */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-elevated-surface border border-border">
-                  <div className="flex items-center gap-3">
-                    <CloudSun className="h-5 w-5 text-primary-accent" />
-                    <span className="text-xs font-bold text-foreground">Weather</span>
-                  </div>
-                  <span className="text-xs font-black text-foreground">28°C, Clear</span>
-                </div>
-
-                {/* AQI */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-elevated-surface border border-border">
-                  <div className="flex items-center gap-3">
-                    <Wind className="h-5 w-5 text-info" />
-                    <span className="text-xs font-bold text-foreground">Air Quality</span>
-                  </div>
-                  <span className="text-xs font-black text-foreground">65 (Moderate)</span>
-                </div>
-
-                {/* Traffic */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-elevated-surface border border-border">
-                  <div className="flex items-center gap-3">
-                    <Car className="h-5 w-5 text-warning" />
-                    <span className="text-xs font-bold text-foreground">Highway Flow</span>
-                  </div>
-                  <span className="text-xs font-black text-success">Smooth Corridor</span>
-                </div>
-
-                {/* Connectivity */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-elevated-surface border border-border">
-                  <div className="flex items-center gap-3">
-                    <Wifi className="h-5 w-5 text-success" />
-                    <span className="text-xs font-bold text-foreground">Network Link</span>
-                  </div>
-                  <span className="text-xs font-black text-success">Online & Encrypted</span>
-                </div>
+              <div className="space-y-2.5">
+                {[
+                  { icon: CloudSun, label: "Weather", value: "28°C, Clear", valueColor: "#0F172A" },
+                  { icon: Wind, label: "Air Quality", value: "65 (Moderate)", valueColor: "#F59E0B" },
+                  { icon: Car, label: "Highway Flow", value: "Smooth", valueColor: "#22C55E" },
+                  { icon: Wifi, label: "Network Link", value: "Online", valueColor: "#22C55E" },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between rounded-2xl px-3 py-2.5"
+                      style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.05)" }}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="rounded-lg p-1.5" style={{ backgroundColor: "#EFF6FF" }}>
+                          <Icon className="h-4 w-4" style={{ color: "#2563FF" }} />
+                        </div>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#0F172A" }}>{item.label}</span>
+                      </div>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: item.valueColor }}>{item.value}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               <button
                 onClick={() => router.push("/assist")}
-                className="w-full mt-2 rounded-xl bg-primary-accent/10 hover:bg-primary-accent/20 border border-primary-accent/20 py-2.5 text-xs font-black text-primary-accent transition-colors flex items-center justify-center gap-2"
+                className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 transition-all"
+                style={{
+                  backgroundColor: "#EFF6FF",
+                  border: "1px solid rgba(37,99,255,0.15)",
+                  color: "#2563FF",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                }}
+                onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#DBEAFE"}
+                onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"}
               >
                 <Bot className="h-4 w-4" />
                 <span>Ask AI Guardian</span>
               </button>
             </div>
-
           </div>
-
         </div>
-
       </div>
 
-      {/* Safety Mode Timer Drawer Modal */}
+      {/* Safety Timer Modal */}
       {showSafetyTimer && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-[32px] bg-surface border border-border p-6 shadow-2xl space-y-5 animate-slideUp text-left">
-            <div className="flex justify-between items-center border-b border-border pb-3">
-              <h3 className="font-extrabold text-foreground text-sm">Safety Mode Check-in</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)" }}>
+          <div
+            className="w-full max-w-sm rounded-3xl p-6 space-y-5 animate-slideUp"
+            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 24px 64px rgba(15,23,42,0.20)" }}
+          >
+            <div className="flex justify-between items-center pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
+              <h3 style={{ fontWeight: 700, fontSize: "16px", color: "#0F172A" }}>Safety Mode Check-in</h3>
               <button
                 onClick={() => setShowSafetyTimer(false)}
-                className="text-muted hover:text-foreground font-bold text-xs p-1"
+                className="p-1.5 rounded-xl"
+                style={{ backgroundColor: "#F1F5F9", color: "#64748B" }}
               >
                 ✕
               </button>
@@ -344,28 +358,42 @@ export default function HomeDashboard() {
 
             {timerRemaining !== null ? (
               <div className="text-center py-6 space-y-4">
-                <div className="inline-flex flex-col items-center justify-center h-28 w-28 rounded-full border-4 border-primary-accent bg-primary-accent/10 text-primary-accent">
-                  <span className="text-xl font-black">{Math.floor(timerRemaining / 60)}m {timerRemaining % 60}s</span>
-                  <span className="text-[8px] font-bold text-muted mt-1 uppercase">Remaining</span>
+                <div
+                  className="inline-flex flex-col items-center justify-center h-28 w-28 rounded-full border-4"
+                  style={{ borderColor: "#2563FF", backgroundColor: "#EFF6FF", color: "#2563FF" }}
+                >
+                  <span style={{ fontSize: "18px", fontWeight: 800 }}>{Math.floor(timerRemaining / 60)}m {timerRemaining % 60}s</span>
+                  <span style={{ fontSize: "9px", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>Remaining</span>
                 </div>
-                <p className="text-[10px] text-muted leading-normal px-2">
-                  Alarm will dispatch location telemetry links to registered emergency contacts if bypass check-in fails.
+                <p style={{ fontSize: "12px", color: "#64748B", lineHeight: 1.6 }}>
+                  Alarm will dispatch location telemetry to emergency contacts if bypass check-in fails.
                 </p>
                 <button
                   onClick={handleBypassTimer}
-                  className="w-full rounded-xl bg-primary-accent hover:bg-primary-accent-hover py-3 text-xs font-black text-white"
+                  className="w-full rounded-2xl py-3 text-white font-bold transition-all"
+                  style={{ backgroundColor: "#2563FF", fontSize: "13px", fontWeight: 700 }}
                 >
-                  I am Safe (Bypass Check-in)
+                  I am Safe — Bypass Check-in
                 </button>
               </div>
             ) : (
               <form onSubmit={handleStartTimer} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-muted uppercase block">Set Check-in Interval</label>
+                  <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Set Check-in Interval
+                  </label>
                   <select
                     value={timerDuration}
                     onChange={(e) => setTimerDuration(e.target.value)}
-                    className="w-full rounded-xl bg-elevated-surface border border-border px-3 py-2.5 text-xs text-foreground font-bold focus:outline-none"
+                    className="w-full rounded-2xl px-4 py-3 outline-none"
+                    style={{
+                      backgroundColor: "#F8FAFC",
+                      border: "1.5px solid #E2E8F0",
+                      fontSize: "13px",
+                      fontWeight: 600,
+                      color: "#0F172A",
+                      fontFamily: "'Poppins',sans-serif",
+                    }}
                   >
                     <option value="1">1 Minute (Demo mode)</option>
                     <option value="5">5 Minutes</option>
@@ -375,7 +403,13 @@ export default function HomeDashboard() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full rounded-xl bg-primary-accent hover:bg-primary-accent-hover py-3 text-xs font-black text-white transition-colors"
+                  className="w-full rounded-2xl py-3 text-white transition-all"
+                  style={{
+                    background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    boxShadow: "0 4px 12px rgba(37,99,255,0.25)",
+                  }}
                 >
                   Start Safety Mode
                 </button>
@@ -385,11 +419,10 @@ export default function HomeDashboard() {
         </div>
       )}
 
-      {/* Bottom navbar for mobile viewport only */}
+      {/* Mobile Bottom Nav */}
       <div className="md:hidden">
         <BottomNav />
       </div>
-
     </div>
   );
 }

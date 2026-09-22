@@ -1,140 +1,378 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
-import { Shield, ArrowRight, Sun, Moon, Sparkles, Navigation, AlertTriangle, Download, HeartHandshake } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Shield, ArrowRight, Navigation, AlertTriangle, Download, Compass, MapPin, Bot, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function LandingScreen() {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleGetStarted = () => {
     router.push("/dashboard");
   };
 
+  const features = [
+    {
+      icon: Bot,
+      title: "AI Guardian",
+      desc: "Context-aware safety insights powered by Gemini AI",
+      color: "#2563FF",
+      bgColor: "#EFF6FF",
+      href: "/assist",
+    },
+    {
+      icon: Compass,
+      title: "Route Intelligence",
+      desc: "Multi-profile Safety Fit scoring on real Google routes",
+      color: "#2563FF",
+      bgColor: "#EFF6FF",
+      href: "/plan",
+    },
+    {
+      icon: AlertTriangle,
+      title: "Emergency SOS",
+      desc: "Direct 112 hotline & trusted contact escalation",
+      color: "#EF4444",
+      bgColor: "#FEF2F2",
+      href: "/emergency",
+    },
+    {
+      icon: MapPin,
+      title: "Live Navigation",
+      desc: "Safe havens, turn guidance & offline vector maps",
+      color: "#22C55E",
+      bgColor: "#F0FDF4",
+      href: "/map",
+    },
+  ];
+
   return (
-    <div 
-      className="min-h-screen bg-cover bg-center relative flex flex-col justify-between font-sans transition-colors duration-300"
-      style={{ backgroundImage: `url('/hero1.png')` }}
+    <div
+      className="min-h-screen flex flex-col overflow-x-hidden"
+      style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins', sans-serif" }}
     >
-      {/* Background shadow overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/60 to-black/90 z-10" />
-
-      {/* Top Header Bar with Theme Toggle */}
-      <header className="relative z-20 w-full max-w-7xl mx-auto px-4 md:px-8 py-6 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div className="rounded-2xl bg-white/10 p-2.5 backdrop-blur-md border border-white/20 shadow-lg">
-            <Shield className="h-6 w-6 text-primary-accent" />
-          </div>
-          <div className="text-left">
-            <h2 className="font-black text-white text-base tracking-widest leading-none">TRAVEL GUARDIAN</h2>
-            <p className="text-[9px] font-black text-primary-accent-hover tracking-[0.2em] uppercase mt-0.5">
-              AI Safety Companion
-            </p>
-          </div>
-        </div>
-
-        {/* Top Right: Theme Switcher & Status */}
-        <div className="flex items-center gap-3">
-          {mounted && (
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 text-white text-xs font-bold transition-all hover:scale-105 shadow-md"
-              title={`Switch to ${theme === "dark" ? "Light" : "Dark"} Mode`}
+      {/* ============================================================
+          TOP NAVIGATION BAR
+          ============================================================ */}
+      <header
+        className="w-full sticky top-0 z-40"
+        style={{
+          backgroundColor: "rgba(255,255,255,0.95)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(15,23,42,0.08)",
+          boxShadow: "0 2px 8px rgba(37,99,255,0.06)",
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+          {/* Brand */}
+          <div className="flex items-center gap-3">
+            <div
+              className="rounded-xl flex items-center justify-center"
+              style={{ background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)", padding: "9px" }}
             >
-              {theme === "dark" ? (
-                <>
-                  <Sun className="h-4 w-4 text-amber-400" />
-                  <span className="hidden sm:inline">Light Mode</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="h-4 w-4 text-indigo-400" />
-                  <span className="hidden sm:inline">Dark Mode</span>
-                </>
-              )}
-            </button>
-          )}
+              <Shield className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h1 style={{ fontWeight: 800, fontSize: "16px", color: "#0F172A", letterSpacing: "0.02em", margin: 0 }}>
+                Travel Guardian
+              </h1>
+              <p style={{ fontWeight: 500, fontSize: "9px", color: "#2563FF", letterSpacing: "0.14em", textTransform: "uppercase", margin: 0 }}>
+                Your Smart Travel Companion
+              </p>
+            </div>
+          </div>
 
-          <button
-            onClick={handleGetStarted}
-            className="px-4 py-2 rounded-full bg-primary-accent hover:bg-primary-accent-hover text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg hover:shadow-primary-accent/30"
-          >
-            Enter App →
-          </button>
+          {/* Nav right */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all"
+              style={{
+                background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+                color: "#FFFFFF",
+                fontWeight: 600,
+                fontSize: "13px",
+                boxShadow: "0 4px 12px rgba(37,99,255,0.25)",
+              }}
+            >
+              <span>Launch App</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </header>
 
-      {/* Main Hero Content */}
-      <main className="relative z-20 w-full max-w-5xl mx-auto flex flex-col items-center justify-center text-center gap-8 py-8 px-4 md:px-8">
-        
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-black text-white/90 uppercase tracking-widest shadow-md">
-          <Sparkles className="h-3.5 w-3.5 text-primary-accent-hover" />
-          <span>Next-Gen Travel Safety & Guidance</span>
-        </div>
+      {/* ============================================================
+          HERO SECTION — Light blue gradient, clean mobile-app style
+          ============================================================ */}
+      <section className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 40%, #E0F2FE 70%, #F0F9FF 100%)" }}>
+        {/* Decorative circles */}
+        <div
+          className="absolute -top-24 -right-24 rounded-full opacity-30"
+          style={{ width: "400px", height: "400px", background: "radial-gradient(circle, #2563FF 0%, transparent 70%)" }}
+        />
+        <div
+          className="absolute -bottom-16 -left-16 rounded-full opacity-20"
+          style={{ width: "300px", height: "300px", background: "radial-gradient(circle, #00D4FF 0%, transparent 70%)" }}
+        />
 
-        {/* Slogan & Intro */}
-        <div className="space-y-6 max-w-3xl">
-          <h1 className="text-5xl md:text-7xl font-black tracking-tight leading-tight text-white drop-shadow-2xl">
-            Travel Safer. <br />
-            <span className="text-primary-accent-hover">Travel Smarter.</span>
-          </h1>
-          <p className="text-base md:text-xl text-zinc-250 font-semibold leading-relaxed max-w-2xl mx-auto">
-            AI-powered travel safety companion. Real-time threat diagnostics, 6-city cross-compatible safe routing, interactive living maps, and instant emergency SOS telemetry.
+        <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-16 md:py-24">
+          <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+            {/* Left text */}
+            <div className="flex-1 text-center lg:text-left space-y-6">
+              {/* Tag */}
+              <div
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm"
+                style={{ backgroundColor: "rgba(37,99,255,0.1)", color: "#2563FF", fontWeight: 600, fontSize: "12px" }}
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>AI-Powered Travel Safety</span>
+              </div>
+
+              {/* Heading */}
+              <h1
+                className="leading-tight"
+                style={{ fontWeight: 800, fontSize: "clamp(32px,5vw,56px)", color: "#0F172A", lineHeight: 1.15 }}
+              >
+                Travel Safe.{" "}
+                <span style={{ background: "linear-gradient(135deg, #2563FF 0%, #00D4FF 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                  Explore More.
+                </span>
+                <br />Stay Together.
+              </h1>
+
+              <p style={{ fontWeight: 400, fontSize: "16px", color: "#64748B", lineHeight: 1.7, maxWidth: "480px" }}>
+                Your personal AI travel guardian. Real-time route safety scoring, fail-safe check-in timers, emergency SOS, and offline survival intelligence — all in one app.
+              </p>
+
+              {/* CTAs */}
+              <div className="flex flex-col sm:flex-row gap-4 items-center lg:items-start justify-center lg:justify-start">
+                <button
+                  onClick={handleGetStarted}
+                  className="flex items-center gap-2.5 px-8 py-4 rounded-2xl text-white font-semibold text-base transition-all active:scale-95"
+                  style={{
+                    background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+                    fontWeight: 700,
+                    fontSize: "15px",
+                    boxShadow: "0 6px 24px rgba(37,99,255,0.30)",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(37,99,255,0.40)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 24px rgba(37,99,255,0.30)";
+                  }}
+                >
+                  <span>Start Your Journey</span>
+                  <ArrowRight className="h-5 w-5" />
+                </button>
+
+                <button
+                  onClick={() => router.push("/offline-mode")}
+                  className="flex items-center gap-2.5 px-7 py-4 rounded-2xl font-semibold transition-all"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    color: "#2563FF",
+                    border: "1.5px solid rgba(37,99,255,0.25)",
+                    fontWeight: 600,
+                    fontSize: "15px",
+                    boxShadow: "0 2px 8px rgba(37,99,255,0.08)",
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Offline Guardian</span>
+                </button>
+              </div>
+
+              {/* Trust badges */}
+              <div className="flex flex-wrap gap-4 items-center justify-center lg:justify-start pt-2">
+                {[
+                  { label: "Real Google Routes", icon: "✓" },
+                  { label: "Gemini AI Powered", icon: "✓" },
+                  { label: "Works Offline", icon: "✓" },
+                  { label: "112 Emergency Ready", icon: "✓" },
+                ].map((b) => (
+                  <div key={b.label} className="flex items-center gap-1.5" style={{ color: "#64748B", fontSize: "12px", fontWeight: 500 }}>
+                    <span style={{ color: "#22C55E", fontWeight: 700 }}>{b.icon}</span>
+                    <span>{b.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right illustration — visual phone mockup */}
+            <div className="flex-shrink-0">
+              <div
+                className="relative rounded-3xl overflow-hidden flex items-center justify-center animate-float"
+                style={{
+                  width: "280px",
+                  height: "380px",
+                  background: "linear-gradient(145deg, #FFFFFF 0%, #EFF6FF 100%)",
+                  boxShadow: "0 24px 64px rgba(37,99,255,0.15), 0 8px 24px rgba(15,23,42,0.08)",
+                  border: "1px solid rgba(37,99,255,0.12)",
+                }}
+              >
+                {/* Mock UI inside card */}
+                <div className="p-6 space-y-4 w-full">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="rounded-2xl flex items-center justify-center"
+                      style={{ background: "linear-gradient(135deg, #2563FF, #1E40AF)", padding: "10px" }}
+                    >
+                      <Shield className="h-6 w-6 text-white" />
+                    </div>
+                    <div>
+                      <p style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>Travel Guardian</p>
+                      <p style={{ fontWeight: 500, fontSize: "10px", color: "#22C55E" }}>● Active & Monitoring</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-4 space-y-2" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+                    <p style={{ fontSize: "10px", fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Current Route</p>
+                    <p style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>Chennai → Bangalore</p>
+                    <div className="flex justify-between">
+                      <span style={{ fontSize: "11px", color: "#64748B" }}>5h 20m • 350 km</span>
+                      <span
+                        className="rounded-full px-2 py-0.5"
+                        style={{ fontSize: "10px", fontWeight: 700, backgroundColor: "#DCFCE7", color: "#16A34A" }}
+                      >
+                        94/100 Safe
+                      </span>
+                    </div>
+                  </div>
+
+                  {[
+                    { label: "Safety Check-In", status: "Active", color: "#22C55E" },
+                    { label: "AI Guardian", status: "Online", color: "#2563FF" },
+                    { label: "Emergency 112", status: "Ready", color: "#EF4444" },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center justify-between rounded-xl px-3 py-2" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.06)" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 500, color: "#374151" }}>{item.label}</span>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: item.color }}>● {item.status}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          FEATURES GRID — White cards
+          ============================================================ */}
+      <section className="py-16 md:py-20" style={{ backgroundColor: "#F8FAFC" }}>
+        <div className="max-w-7xl mx-auto px-4 md:px-8">
+          {/* Section Header */}
+          <div className="text-center mb-12 space-y-2">
+            <p style={{ fontWeight: 700, fontSize: "12px", color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              Everything You Need
+            </p>
+            <h2 style={{ fontWeight: 800, fontSize: "clamp(24px,4vw,36px)", color: "#0F172A" }}>
+              Your Complete Travel Safety Suite
+            </h2>
+            <p style={{ fontWeight: 400, fontSize: "15px", color: "#64748B", maxWidth: "480px", margin: "8px auto 0" }}>
+              Phases 0–9 of intelligent safety infrastructure, always with you.
+            </p>
+          </div>
+
+          {/* Feature Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feat) => {
+              const Icon = feat.icon;
+              return (
+                <button
+                  key={feat.title}
+                  onClick={() => router.push(feat.href)}
+                  className="p-6 rounded-3xl text-left transition-all group"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid rgba(15,23,42,0.08)",
+                    boxShadow: "0 2px 8px rgba(37,99,255,0.06)",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(-4px)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "0 12px 32px rgba(37,99,255,0.14)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "0 2px 8px rgba(37,99,255,0.06)";
+                  }}
+                >
+                  <div
+                    className="h-12 w-12 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110"
+                    style={{ backgroundColor: feat.bgColor }}
+                  >
+                    <Icon className="h-6 w-6" style={{ color: feat.color }} />
+                  </div>
+                  <h3 style={{ fontWeight: 700, fontSize: "15px", color: "#0F172A", marginBottom: "6px" }}>{feat.title}</h3>
+                  <p style={{ fontWeight: 400, fontSize: "13px", color: "#64748B", lineHeight: 1.6 }}>{feat.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          BOTTOM CTA STRIP
+          ============================================================ */}
+      <section
+        className="py-16"
+        style={{ background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)" }}
+      >
+        <div className="max-w-3xl mx-auto px-4 text-center space-y-6">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="rounded-2xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.15)" }}>
+              <ShieldCheck className="h-8 w-8 text-white" />
+            </div>
+          </div>
+          <h2 style={{ fontWeight: 800, fontSize: "clamp(24px,4vw,36px)", color: "#FFFFFF" }}>
+            Ready to Travel Safer?
+          </h2>
+          <p style={{ fontWeight: 400, fontSize: "16px", color: "rgba(255,255,255,0.80)", lineHeight: 1.7 }}>
+            Join thousands of travelers using Travel Guardian for AI-powered route safety, emergency readiness, and offline-first protection.
           </p>
-        </div>
-
-        {/* Primary CTA */}
-        <div className="pt-2">
           <button
             onClick={handleGetStarted}
-            className="group flex items-center gap-3.5 rounded-full bg-primary-accent hover:bg-primary-accent-hover px-10 py-5 text-base md:text-lg font-black text-white transition-all shadow-2xl hover:shadow-primary-accent/40 hover:-translate-y-1 active:translate-y-0"
+            className="inline-flex items-center gap-3 px-10 py-4 rounded-2xl font-semibold transition-all"
+            style={{
+              backgroundColor: "#FFFFFF",
+              color: "#2563FF",
+              fontWeight: 700,
+              fontSize: "15px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(0,0,0,0.20)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.15)";
+            }}
           >
-            <span>GET STARTED</span>
-            <ArrowRight className="h-5 w-5 group-hover:translate-x-1.5 transition-transform" />
+            <span>Get Started — It's Free</span>
+            <ArrowRight className="h-5 w-5" />
           </button>
         </div>
-
-        {/* Translucent Features Bar */}
-        <div className="mt-6 w-full max-w-4xl bg-black/40 backdrop-blur-md border border-white/15 rounded-3xl p-6 md:p-8 grid grid-cols-2 md:grid-cols-4 gap-6 text-center shadow-xl">
-          <div className="space-y-2">
-            <div className="text-primary-accent-hover text-2xl">🛡️</div>
-            <h4 className="font-extrabold text-xs md:text-sm text-white uppercase tracking-wider">AI Guardian</h4>
-            <p className="text-[11px] text-zinc-300 font-semibold leading-relaxed">Real-time threat diagnostics</p>
-          </div>
-
-          <div className="space-y-2 md:border-l border-white/15 md:pl-6">
-            <div className="text-primary-accent-hover text-2xl">🧭</div>
-            <h4 className="font-extrabold text-xs md:text-sm text-white uppercase tracking-wider">Route Intelligence</h4>
-            <p className="text-[11px] text-zinc-300 font-semibold leading-relaxed">Multi-profile route scoring</p>
-          </div>
-
-          <div className="space-y-2 border-t md:border-t-0 md:border-l border-white/15 pt-6 md:pt-0 md:pl-6">
-            <div className="text-primary-accent-hover text-2xl">🚨</div>
-            <h4 className="font-extrabold text-xs md:text-sm text-white uppercase tracking-wider">Emergency / SOS</h4>
-            <p className="text-[11px] text-zinc-300 font-semibold leading-relaxed">Instant 112 hotline & telemetry</p>
-          </div>
-
-          <div className="space-y-2 border-t md:border-t-0 md:border-l border-white/15 pt-6 md:pt-0 md:pl-6">
-            <div className="text-primary-accent-hover text-2xl">📍</div>
-            <h4 className="font-extrabold text-xs md:text-sm text-white uppercase tracking-wider">Living Maps</h4>
-            <p className="text-[11px] text-zinc-300 font-semibold leading-relaxed">Interactive POIs & GPS markers</p>
-          </div>
-        </div>
-
-      </main>
+      </section>
 
       {/* Footer */}
-      <footer className="relative z-20 w-full py-4 text-center text-xs font-semibold text-zinc-400">
-        Travel Guardian • Hackathon Travel Safety & Guidance Platform • Default Dark Theme
+      <footer
+        className="py-6 text-center"
+        style={{
+          backgroundColor: "#F1F5F9",
+          borderTop: "1px solid rgba(15,23,42,0.08)",
+          fontFamily: "'Poppins',sans-serif",
+          fontSize: "12px",
+          fontWeight: 500,
+          color: "#94A3B8",
+        }}
+      >
+        Travel Guardian • Travel Safe • Explore More • Stay Together
       </footer>
     </div>
   );

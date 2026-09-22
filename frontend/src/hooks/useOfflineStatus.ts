@@ -19,7 +19,7 @@ import {
 
 export function useOfflineStatus() {
   const [networkStatus, setNetworkStatus] = useState<NetworkConnectivityStatus>("ONLINE");
-  const [lastOnlineTimestamp, setLastOnlineTimestamp] = useState<number>(Date.now());
+  const [lastOnlineTimestamp, setLastOnlineTimestamp] = useState<number>(0);
   const [activePack, setActivePack] = useState<OfflineCorridorPack | null>(null);
   const [allPacks, setAllPacks] = useState<OfflineCorridorPack[]>([]);
   const [storageUsage, setStorageUsage] = useState<OfflineStorageUsage>({ totalPacks: 0, estimatedSizeKb: 0, activePackId: null });
@@ -40,6 +40,7 @@ export function useOfflineStatus() {
   }, []);
 
   useEffect(() => {
+    setLastOnlineTimestamp(Date.now());
     if (typeof window === "undefined") return;
 
     // Initial online state

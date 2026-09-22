@@ -1,0 +1,20 @@
+# 
+
+
+## TRAVEL GUARDIAN
+AI Safety Companion
+
+# Travel Safer. Travel Smarter.
+AI-powered travel safety companion. Real-time threat diagnostics, 6-city cross-compatible safe routing, interactive living maps, and instant emergency SOS telemetry.
+
+#### AI Guardian
+Real-time threat diagnostics
+
+#### Route Intelligence
+Multi-profile route scoring
+
+#### Emergency / SOS
+Instant 112 hotline & telemetry
+
+#### Living Maps
+Interactive POIs & GPS markers

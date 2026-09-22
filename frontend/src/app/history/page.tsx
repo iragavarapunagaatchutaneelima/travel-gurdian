@@ -64,39 +64,46 @@ export default function MyJourneysScreen() {
   const filteredJourneys = journeys.filter(j => j.status === activeTab);
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
       
       {/* Header */}
       <Header />
 
       {/* Main Container */}
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
+      <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
         
         <div className="text-center max-w-xl space-y-2">
-          <span className="text-[10px] text-primary-accent font-extrabold uppercase tracking-widest block">
-            SAVED VECTORS & LOGS
+          <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
+            Saved Routes &amp; Logs
           </span>
-          <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
+          <h2 style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", color: "#0F172A" }}>
             My Journeys
           </h2>
-          <p className="text-xs text-muted font-semibold leading-relaxed">
-            Access previous safety calculations, logged travel vectors across Indian metro corridors, and telemetry reports.
+          <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, lineHeight: 1.6 }}>
+            Access previous safety calculations, logged travel vectors, and telemetry reports.
           </p>
         </div>
 
         {/* Tab Selection */}
-        <div className="w-full max-w-md bg-surface border border-border rounded-2xl flex justify-around text-xs font-black text-muted overflow-hidden shadow-sm p-1">
+        <div
+          className="w-full max-w-md rounded-2xl flex justify-around overflow-hidden p-1"
+          style={{ backgroundColor: "#F1F5F9", border: "1px solid rgba(15,23,42,0.06)" }}
+        >
           {["Upcoming", "Completed", "Cancelled"].map((tab) => {
             const isActive = activeTab === tab;
             return (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`py-2.5 flex-1 text-center rounded-xl transition-all ${
-                  isActive
-                    ? "text-white bg-primary-accent shadow-sm"
-                    : "hover:text-foreground text-muted"
-                }`}
+                className="py-2.5 flex-1 text-center rounded-xl transition-all"
+                style={{
+                  fontFamily: "'Poppins',sans-serif",
+                  fontSize: "13px",
+                  fontWeight: isActive ? 700 : 500,
+                  backgroundColor: isActive ? "#2563FF" : "transparent",
+                  color: isActive ? "#FFFFFF" : "#64748B",
+                  boxShadow: isActive ? "0 2px 8px rgba(37,99,255,0.25)" : "none",
+                }}
               >
                 {tab}
               </button>
@@ -104,59 +111,80 @@ export default function MyJourneysScreen() {
           })}
         </div>
 
-        {/* List of Journeys Cards */}
+        {/* Journey Cards */}
         <div className="w-full max-w-lg space-y-4">
           {filteredJourneys.length === 0 ? (
-            <div className="text-center text-xs text-muted py-12 font-bold bg-surface border border-border rounded-3xl shadow-sm">
+            <div
+              className="text-center py-12 rounded-3xl"
+              style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", fontSize: "13px", fontWeight: 500, color: "#94A3B8" }}
+            >
               No logged journeys in this category.
             </div>
           ) : (
             filteredJourneys.map((j, idx) => (
               <div
                 key={idx}
-                className="rounded-3xl border border-border bg-surface p-5 shadow-sm space-y-4 text-left flex flex-col justify-between transition-colors hover:border-primary-accent/40"
+                className="rounded-3xl p-5 space-y-4 text-left flex flex-col justify-between transition-all"
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  border: "1px solid rgba(15,23,42,0.08)",
+                  boxShadow: "0 2px 8px rgba(37,99,255,0.06)",
+                }}
               >
                 <div className="flex items-start justify-between">
                   
                   {/* Route Label */}
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 text-xs font-black text-foreground">
-                      <Navigation className="h-3.5 w-3.5 text-primary-accent rotate-45" />
+                    <div className="flex items-center gap-2" style={{ fontSize: "14px", fontWeight: 700, color: "#0F172A" }}>
+                      <Navigation className="h-3.5 w-3.5 rotate-45" style={{ color: "#2563FF" }} />
                       <span>{j.from.split(",")[0]} ➔ {j.to.split(",")[0]}</span>
                     </div>
                     
-                    <p className="text-[10px] font-bold text-primary-accent">
+                    <p style={{ fontSize: "11px", fontWeight: 600, color: "#2563FF" }}>
                       {j.routeProfile} • Safety: {j.safetyScore}/100
                     </p>
 
                     {/* Date details */}
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted">
+                    <div className="flex items-center gap-1.5" style={{ fontSize: "11px", fontWeight: 500, color: "#64748B" }}>
                       <Calendar className="h-3.5 w-3.5" />
                       <span>{j.date}</span>
                     </div>
                     
                     {/* Stats details */}
-                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted">
+                    <div className="flex items-center gap-1.5" style={{ fontSize: "11px", fontWeight: 500, color: "#64748B" }}>
                       <Clock className="h-3.5 w-3.5" />
                       <span>{j.stats}</span>
                     </div>
                   </div>
 
-                  {/* Status tag */}
-                  <span className={`rounded-xl px-3 py-1.5 text-[9px] font-extrabold uppercase ${j.badgeColor}`}>
+                  {/* Status badge */}
+                  <span
+                    className="rounded-xl px-3 py-1.5"
+                    style={{
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      backgroundColor: j.status === "Completed" ? "#DCFCE7" : j.status === "Upcoming" ? "#EFF6FF" : "#F1F5F9",
+                      color: j.status === "Completed" ? "#16A34A" : j.status === "Upcoming" ? "#2563FF" : "#64748B",
+                    }}
+                  >
                     {j.status}
                   </span>
 
                 </div>
 
-                {/* Details actions */}
-                <div className="border-t border-border pt-3">
+                {/* Action */}
+                <div className="pt-3" style={{ borderTop: "1px solid rgba(15,23,42,0.06)" }}>
                   <button
                     onClick={() => router.push(`/map?from=${j.fromKey}&dest=${j.toKey}&mode=Car&routeId=A`)}
-                    className="w-full rounded-xl bg-elevated-surface border border-border hover:bg-border py-2.5 text-xs font-black text-foreground transition-colors flex items-center justify-center gap-1.5"
+                    className="w-full rounded-xl py-2.5 flex items-center justify-center gap-1.5 transition-all"
+                    style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.08)", fontSize: "12px", fontWeight: 600, color: "#374151", fontFamily: "'Poppins',sans-serif" }}
+                    onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"}
+                    onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#F8FAFC"}
                   >
-                    <span>View Living Map & Route Details</span>
-                    <ArrowRight className="h-3.5 w-3.5 text-primary-accent" />
+                    <span>View Living Map &amp; Route Details</span>
+                    <ArrowRight className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
                   </button>
                 </div>
 

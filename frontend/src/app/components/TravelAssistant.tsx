@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { 
   AssistantMessage, 
-  LiveTravelContext, 
-  ActionProposal 
+  LiveTravelContext 
 } from "../../types/gemini";
 import { queryTravelAssistant } from "../../services/geminiService";
 import AssistantToolConfirmation from "./AssistantToolConfirmation";
@@ -17,13 +16,9 @@ import {
   Clock, 
   MapPin, 
   Hospital, 
-  ShieldAlert, 
   Compass, 
   X, 
-  Minimize2, 
-  Maximize2,
   Wrench,
-  HelpCircle,
   PhoneCall
 } from "lucide-react";
 
@@ -46,6 +41,16 @@ const QUICK_ACTIONS = [
   { label: "Call 112 Protocol", prompt: "How do I call 112 emergency services?", icon: PhoneCall }
 ];
 
+const INITIAL_MESSAGES: AssistantMessage[] = [
+  {
+    id: "initial_welcome",
+    role: "assistant",
+    content: "Namaste! I am your AI Travel Guardian Assistant. I observe your verified navigation progress, safety scores, check-in status, and safe havens. How can I help with your journey?",
+    timestamp: 0,
+    mode: "CONNECTED"
+  }
+];
+
 export default function TravelAssistant({
   context = {},
   isOpen = true,
@@ -55,15 +60,7 @@ export default function TravelAssistant({
   onSelectRoute,
   onTriggerAlert
 }: TravelAssistantProps) {
-  const [messages, setMessages] = useState<AssistantMessage[]>([
-    {
-      id: "initial_welcome",
-      role: "assistant",
-      content: "Namaste! I am your AI Travel Guardian Assistant. I observe your verified navigation progress, safety scores, check-in status, and safe havens. How can I help with your journey?",
-      timestamp: Date.now(),
-      mode: "CONNECTED"
-    }
-  ]);
+  const [messages, setMessages] = useState<AssistantMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [intelligenceMode, setIntelligenceMode] = useState<"CONNECTED" | "DEMO" | "OFFLINE">("CONNECTED");
@@ -77,14 +74,15 @@ export default function TravelAssistant({
     scrollToBottom();
   }, [messages, loading]);
 
-  const handleSendPrompt = async (promptText: string) => {
+  const handleSendPrompt = useCallback(async (promptText: string) => {
     if (!promptText.trim() || loading) return;
 
+    const now = Date.now();
     const userMsg: AssistantMessage = {
-      id: `user_${Date.now()}`,
+      id: `user_${now}`,
       role: "user",
       content: promptText.trim(),
-      timestamp: Date.now()
+      timestamp: now
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -97,7 +95,7 @@ export default function TravelAssistant({
       setIntelligenceMode(assistantMsg.mode);
     }
     setLoading(false);
-  };
+  }, [loading, context]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,26 +105,37 @@ export default function TravelAssistant({
   if (!isOpen) return null;
 
   const content = (
-    <div className={`flex flex-col bg-surface border border-border rounded-3xl shadow-2xl overflow-hidden transition-all ${
-      isFloating 
-        ? "fixed bottom-6 right-4 md:right-8 z-50 w-[92vw] max-w-lg h-[580px] backdrop-blur-md" 
-        : "w-full h-full min-h-[540px]"
-    }`}>
+    <div
+      className={`flex flex-col overflow-hidden transition-all ${isFloating ? "fixed bottom-6 right-4 md:right-8 z-50 w-[92vw] max-w-lg h-[580px]" : "w-full h-full min-h-[540px]"}`}
+      style={{
+        backgroundColor: "#FFFFFF",
+        border: "1px solid rgba(15,23,42,0.08)",
+        borderRadius: "24px",
+        boxShadow: "0 4px 24px rgba(37,99,255,0.10), 0 1px 6px rgba(15,23,42,0.06)",
+        fontFamily: "'Poppins', sans-serif",
+      }}
+    >
       
       {/* Header */}
-      <div className="p-4 border-b border-border bg-elevated-surface flex items-center justify-between">
+      <div
+        className="p-4 flex items-center justify-between"
+        style={{ borderBottom: "1px solid rgba(15,23,42,0.08)", backgroundColor: "#F8FAFC" }}
+      >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-2xl bg-primary-accent/15 text-primary-accent border border-primary-accent/30">
-            <Bot className="h-5 w-5" />
+          <div
+            className="p-2 rounded-2xl"
+            style={{ background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)" }}
+          >
+            <Bot className="h-5 w-5 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-black text-sm text-foreground">Travel Guardian Assistant</h3>
-              <Sparkles className="h-3.5 w-3.5 text-primary-accent animate-pulse" />
+              <h3 style={{ fontWeight: 700, fontSize: "14px", color: "#0F172A" }}>Travel Guardian Assistant</h3>
+              <Sparkles className="h-3.5 w-3.5 animate-pulse" style={{ color: "#2563FF" }} />
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className={`h-1.5 w-1.5 rounded-full ${intelligenceMode === "CONNECTED" ? "bg-success" : "bg-warning"}`} />
-              <span className="text-[9px] font-black uppercase text-muted tracking-wider">
+              <span className={`h-1.5 w-1.5 rounded-full ${intelligenceMode === "CONNECTED" ? "bg-green-400" : "bg-amber-400"}`} />
+              <span style={{ fontSize: "9px", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.1em" }}>
                 {intelligenceMode === "CONNECTED" ? "Gemini 1.5 Flash Tools" : "Deterministic Tools Engine"}
               </span>
             </div>
@@ -137,7 +146,8 @@ export default function TravelAssistant({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl hover:bg-border text-muted hover:text-foreground transition-colors"
+              className="p-1.5 rounded-xl transition-colors"
+              style={{ color: "#94A3B8", backgroundColor: "#F1F5F9" }}
               title="Close Assistant"
             >
               <X className="h-5 w-5" />
@@ -147,7 +157,10 @@ export default function TravelAssistant({
       </div>
 
       {/* Quick Action Chips Bar */}
-      <div className="p-2.5 bg-surface border-b border-border overflow-x-auto flex gap-1.5 scrollbar-none">
+      <div
+        className="p-2.5 overflow-x-auto flex gap-1.5 scrollbar-none"
+        style={{ borderBottom: "1px solid rgba(15,23,42,0.06)", backgroundColor: "#FAFCFF" }}
+      >
         {QUICK_ACTIONS.map((action, idx) => {
           const Icon = action.icon;
           return (
@@ -156,9 +169,19 @@ export default function TravelAssistant({
               type="button"
               onClick={() => handleSendPrompt(action.prompt)}
               disabled={loading}
-              className="py-1.5 px-3 rounded-xl bg-elevated-surface hover:bg-border border border-border text-[11px] font-bold text-foreground shrink-0 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+              className="py-1.5 px-3 rounded-xl shrink-0 flex items-center gap-1.5 transition-all disabled:opacity-50"
+              style={{
+                backgroundColor: "#EFF6FF",
+                border: "1px solid rgba(37,99,255,0.15)",
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "#2563FF",
+                fontFamily: "'Poppins',sans-serif",
+              }}
+              onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#DBEAFE"}
+              onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"}
             >
-              <Icon className="h-3.5 w-3.5 text-primary-accent" />
+              <Icon className="h-3.5 w-3.5" />
               <span>{action.label}</span>
             </button>
           );
@@ -166,13 +189,11 @@ export default function TravelAssistant({
       </div>
 
       {/* Message Stream */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ backgroundColor: "#F8FAFC" }}>
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`space-y-2.5 max-w-[88%] ${
-              msg.role === "user" ? "ml-auto" : "mr-auto"
-            }`}
+            className={`space-y-2.5 max-w-[88%] ${msg.role === "user" ? "ml-auto" : "mr-auto"}`}
           >
             {/* Tool badges if executed */}
             {msg.toolCalls && msg.toolCalls.length > 0 && (
@@ -180,7 +201,8 @@ export default function TravelAssistant({
                 {msg.toolCalls.map((tc) => (
                   <span
                     key={tc.id}
-                    className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-elevated-surface border border-primary-accent/30 text-primary-accent"
+                    className="inline-flex items-center gap-1 rounded-lg px-2 py-0.5"
+                    style={{ fontSize: "9px", fontWeight: 700, textTransform: "uppercase", backgroundColor: "#EFF6FF", color: "#2563FF", border: "1px solid rgba(37,99,255,0.2)" }}
                   >
                     <Wrench className="h-2.5 w-2.5" />
                     <span>Tool: {tc.name} (Verified)</span>
@@ -191,11 +213,26 @@ export default function TravelAssistant({
 
             {/* Bubble content */}
             <div
-              className={`p-4 rounded-3xl text-xs font-semibold leading-relaxed shadow-sm ${
-                msg.role === "user"
-                  ? "bg-primary-accent text-white rounded-br-none"
-                  : "bg-elevated-surface text-foreground border border-border rounded-bl-none"
-              }`}
+              className="p-4 rounded-3xl text-xs font-semibold leading-relaxed"
+              style={{
+                ...(msg.role === "user"
+                  ? {
+                      background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+                      color: "#FFFFFF",
+                      borderBottomRightRadius: "4px",
+                      boxShadow: "0 2px 8px rgba(37,99,255,0.25)",
+                    }
+                  : {
+                      backgroundColor: "#FFFFFF",
+                      color: "#0F172A",
+                      border: "1px solid rgba(15,23,42,0.08)",
+                      borderBottomLeftRadius: "4px",
+                      boxShadow: "0 1px 4px rgba(15,23,42,0.04)",
+                    }),
+                fontFamily: "'Poppins',sans-serif",
+                fontSize: "13px",
+                fontWeight: 500,
+              }}
             >
               {msg.content}
             </div>
@@ -215,15 +252,18 @@ export default function TravelAssistant({
               </div>
             )}
 
-            <span className="text-[8px] font-bold text-muted block px-1">
+            <span style={{ fontSize: "9px", fontWeight: 600, color: "#94A3B8", display: "block", padding: "0 4px" }}>
               {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
         ))}
 
         {loading && (
-          <div className="mr-auto p-4 rounded-3xl bg-elevated-surface border border-border text-muted flex items-center gap-2.5 text-xs font-bold animate-pulse">
-            <Loader className="h-4 w-4 animate-spin text-primary-accent" />
+          <div
+            className="mr-auto p-4 rounded-3xl flex items-center gap-2.5 animate-pulse"
+            style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", fontSize: "13px", fontWeight: 500, color: "#64748B" }}
+          >
+            <Loader className="h-4 w-4 animate-spin" style={{ color: "#2563FF" }} />
             <span>Consulting verified safety tools...</span>
           </div>
         )}
@@ -232,19 +272,47 @@ export default function TravelAssistant({
       </div>
 
       {/* Input Strip */}
-      <form onSubmit={handleFormSubmit} className="p-3 border-t border-border bg-surface flex items-center gap-2">
+      <form
+        onSubmit={handleFormSubmit}
+        className="p-3 flex items-center gap-2"
+        style={{ borderTop: "1px solid rgba(15,23,42,0.08)", backgroundColor: "#FFFFFF" }}
+      >
         <input
           type="text"
-          placeholder="Ask e.g. 'Safety score?', 'Find hospital', 'When is next check-in?'..."
+          placeholder="Ask e.g. 'Safety score?', 'Find hospital', 'Next check-in?'..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={loading}
-          className="flex-1 rounded-2xl bg-elevated-surface border border-border px-4 py-3 text-xs font-bold text-foreground focus:outline-none focus:border-primary-accent disabled:opacity-50"
+          onFocus={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "#2563FF";
+            (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(37,99,255,0.10)";
+          }}
+          onBlur={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "#E2E8F0";
+            (e.currentTarget as HTMLElement).style.boxShadow = "none";
+          }}
+          style={{
+            flex: 1,
+            borderRadius: "14px",
+            backgroundColor: "#F8FAFC",
+            border: "1.5px solid #E2E8F0",
+            padding: "10px 16px",
+            fontSize: "13px",
+            fontWeight: 500,
+            color: "#0F172A",
+            fontFamily: "'Poppins',sans-serif",
+            outline: "none",
+            transition: "border-color 0.2s, box-shadow 0.2s",
+          }}
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="p-3 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white transition-all shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+          className="p-3 rounded-2xl text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{
+            background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
+            boxShadow: "0 2px 8px rgba(37,99,255,0.25)",
+          }}
           title="Send message"
         >
           <Send className="h-4 w-4" />

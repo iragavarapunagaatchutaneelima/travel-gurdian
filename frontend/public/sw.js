@@ -1,6 +1,6 @@
-// TRAVEL GUARDIAN SERVICE WORKER (PHASE 8)
-// Cache Version: travel-guardian-static-v8
-const CACHE_VERSION = 'travel-guardian-v8';
+// TRAVEL GUARDIAN SERVICE WORKER (PHASE 8 & 14)
+// Cache Version: travel-guardian-v10
+const CACHE_VERSION = 'travel-guardian-v10';
 const STATIC_CACHE = `travel-guardian-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `travel-guardian-runtime-${CACHE_VERSION}`;
 
@@ -21,6 +21,7 @@ const APP_SHELL = [
 
 // Install Event — Pre-cache Application Shell
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       // Use catch on each entry so one missing dev asset doesn't fail entire install
@@ -33,7 +34,6 @@ self.addEventListener('install', (event) => {
       );
     })
   );
-  // Do not self.skipWaiting() automatically to protect active navigation sessions
 });
 
 // Activate Event — Clean up obsolete Service Worker caches
@@ -60,6 +60,13 @@ self.addEventListener('fetch', (event) => {
 
   // 1. Skip non-GET requests and browser extensions
   if (event.request.method !== 'GET' || !url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Bypass Next.js internal development chunks on localhost to prevent stale module factory errors
+  const isLocalDev = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  if (isLocalDev && url.pathname.startsWith('/_next/')) {
+    event.respondWith(fetch(event.request));
     return;
   }
 

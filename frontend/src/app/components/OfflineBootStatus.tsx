@@ -32,7 +32,13 @@ export function OfflineBootStatus() {
   return (
     <aside 
       aria-label="Offline Boot Diagnostics"
-      className="bg-slate-900/90 border-b border-amber-500/30 px-4 py-2.5 backdrop-blur-md text-slate-200 text-xs"
+      className="px-4 py-2.5 shadow-sm text-xs"
+      style={{
+        backgroundColor: "#FFFBEB",
+        borderBottom: "1px solid #FDE68A",
+        color: "#92400E",
+        fontFamily: "'Poppins',sans-serif",
+      }}
     >
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -40,34 +46,34 @@ export function OfflineBootStatus() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
           </span>
-          <span className="font-bold text-amber-400 uppercase tracking-wider text-[11px]">
+          <span style={{ fontWeight: 800, color: "#D97706", textTransform: "uppercase", letterSpacing: "0.06em", fontSize: "11px" }}>
             Offline Mode Active
           </span>
-          <span className="text-slate-400 hidden sm:inline">• Using Cached Application Shell</span>
+          <span style={{ color: "#B45309" }} className="hidden sm:inline">• Using Cached Application Shell</span>
         </div>
 
         <div className="flex items-center gap-4 text-[11px]">
           {/* Active Corridor */}
-          <div className="flex items-center gap-1.5 text-slate-300">
-            <Database className="w-3.5 h-3.5 text-emerald-400" />
+          <div className="flex items-center gap-1.5" style={{ color: "#78350F" }}>
+            <Database className="w-3.5 h-3.5 text-emerald-600" />
             <span>
-              Pack: <strong className="text-white">{activePack ? `${activePack.origin.name.split(',')[0]} → ${activePack.destination.name.split(',')[0]}` : `${dbPacksCount} Cached`}</strong>
+              Pack: <strong style={{ color: "#0F172A" }}>{activePack ? `${activePack.origin.name.split(',')[0]} → ${activePack.destination.name.split(',')[0]}` : `${dbPacksCount} Cached`}</strong>
             </span>
           </div>
 
           {/* GPS Chip Availability */}
           <div className="flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-sky-400" />
-            <span className="text-slate-300">
-              GPS: <strong className={gpsSupported ? "text-sky-300" : "text-slate-500"}>{gpsSupported ? "Available" : "No GPS"}</strong>
+            <MapPin className="w-3.5 h-3.5 text-blue-600" />
+            <span style={{ color: "#78350F" }}>
+              GPS: <strong style={{ color: gpsSupported ? "#2563FF" : "#94A3B8" }}>{gpsSupported ? "Available" : "No GPS"}</strong>
             </span>
           </div>
 
           {/* Service Worker Shell */}
           <div className="hidden md:flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-slate-300">
-              PWA Shell: <strong className={swAvailable ? "text-emerald-400" : "text-amber-400"}>{swAvailable ? "Cached" : "Standard"}</strong>
+            <Cpu className="w-3.5 h-3.5 text-purple-600" />
+            <span style={{ color: "#78350F" }}>
+              PWA Shell: <strong style={{ color: swAvailable ? "#16A34A" : "#D97706" }}>{swAvailable ? "Cached" : "Standard"}</strong>
             </span>
           </div>
         </div>

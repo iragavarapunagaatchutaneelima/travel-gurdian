@@ -240,29 +240,30 @@ export default function LocationSearchInput({
   };
 
   return (
-    <div ref={containerRef} className="space-y-1.5 relative text-left w-full">
+    <div ref={containerRef} className="space-y-1.5 relative text-left w-full" style={{ fontFamily: "'Poppins', sans-serif" }}>
       <div className="flex items-center justify-between">
-        <label 
+        <label
           htmlFor={`${idPrefix}-input`}
-          className="text-[10px] font-black text-muted uppercase tracking-wider block"
+          style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}
         >
           {label}
         </label>
-        
+
         {isOrigin && (
           <button
             type="button"
             onClick={handleCurrentLocationClick}
             disabled={gpsLoading}
-            className="text-[10px] font-black text-primary-accent hover:text-primary-accent-hover flex items-center gap-1 transition-colors uppercase tracking-wider py-0.5 px-1.5 rounded-md hover:bg-primary-accent/10"
+            className="flex items-center gap-1 transition-all rounded-lg px-2 py-1"
+            style={{ fontSize: "11px", fontWeight: 600, color: "#2563FF", backgroundColor: "#EFF6FF" }}
             title="Auto-detect current GPS coordinates"
           >
             {gpsLoading ? (
-              <Loader className="h-3 w-3 animate-spin text-primary-accent" />
+              <Loader className="h-3 w-3 animate-spin" style={{ color: "#2563FF" }} />
             ) : (
-              <Crosshair className="h-3 w-3 text-primary-accent" />
+              <Crosshair className="h-3 w-3" style={{ color: "#2563FF" }} />
             )}
-            <span>Use Current Location</span>
+            <span>Use My Location</span>
           </button>
         )}
       </div>
@@ -271,9 +272,9 @@ export default function LocationSearchInput({
       <div className="relative">
         <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
           {isOrigin ? (
-            <Navigation2 className="h-4 w-4 text-primary-accent" />
+            <Navigation2 className="h-4 w-4" style={{ color: "#2563FF" }} />
           ) : (
-            <MapPin className="h-4 w-4 text-success" />
+            <MapPin className="h-4 w-4" style={{ color: "#22C55E" }} />
           )}
         </div>
 
@@ -283,29 +284,49 @@ export default function LocationSearchInput({
           type="text"
           value={inputValue}
           onChange={handleInputChange}
-          onFocus={() => {
-            if (suggestions.length > 0 || searchError) {
-              setIsOpen(true);
-            }
+          onFocus={(e) => {
+            if (suggestions.length > 0 || searchError) setIsOpen(true);
+            (e.currentTarget as HTMLElement).style.borderColor = "#2563FF";
+            (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(37,99,255,0.12)";
+          }}
+          onBlur={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = error ? "#EF4444" : "#E2E8F0";
+            (e.currentTarget as HTMLElement).style.boxShadow = "none";
           }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoComplete="off"
-          className={`w-full rounded-2xl bg-elevated-surface border ${
-            error ? "border-danger ring-1 ring-danger" : "border-border focus:border-primary-accent"
-          } pl-10 pr-10 py-3.5 text-xs text-foreground font-bold focus:outline-none transition-all`}
+          style={{
+            width: "100%",
+            backgroundColor: "#FFFFFF",
+            border: `1.5px solid ${error ? "#EF4444" : "#E2E8F0"}`,
+            borderRadius: "14px",
+            paddingLeft: "40px",
+            paddingRight: "40px",
+            paddingTop: "13px",
+            paddingBottom: "13px",
+            fontSize: "13px",
+            fontWeight: 500,
+            color: "#0F172A",
+            fontFamily: "'Poppins', sans-serif",
+            outline: "none",
+            transition: "border-color 0.2s, box-shadow 0.2s",
+          }}
         />
 
         {/* Right side status / clear icon */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {isLoading && (
-            <Loader className="h-4 w-4 animate-spin text-primary-accent" />
+            <Loader className="h-4 w-4 animate-spin" style={{ color: "#2563FF" }} />
           )}
           {inputValue && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 rounded-full text-muted hover:text-foreground hover:bg-border transition-colors"
+              className="p-1 rounded-full transition-colors"
+              style={{ color: "#94A3B8" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#F1F5F9"; (e.currentTarget as HTMLElement).style.color = "#374151"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "#94A3B8"; }}
               title="Clear input"
             >
               <X className="h-3.5 w-3.5" />
@@ -316,38 +337,28 @@ export default function LocationSearchInput({
 
       {/* GPS Error alert */}
       {gpsError && (
-        <div className="p-2.5 rounded-xl bg-danger/10 border border-danger/20 text-danger text-[11px] font-bold flex items-center justify-between">
+        <div className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: "#FEF2F2", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444", fontSize: "12px", fontWeight: 600 }}>
           <div className="flex items-center gap-1.5">
             <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
             <span>{gpsError}</span>
           </div>
-          <button 
-            type="button" 
-            onClick={() => setGpsError(null)} 
-            className="text-[10px] hover:underline font-black ml-2"
-          >
-            ✕
-          </button>
+          <button type="button" onClick={() => setGpsError(null)} style={{ fontSize: "11px", fontWeight: 700 }}>✕</button>
         </div>
       )}
 
-      {/* Selected place details badge */}
+      {/* Selected place badge */}
       {selectedLocation && (
-        <div className="p-2.5 rounded-xl bg-surface border border-border flex items-center justify-between text-xs animate-fadeIn shadow-sm">
+        <div className="flex items-center justify-between p-3 rounded-2xl animate-fadeIn" style={{ backgroundColor: "#F0FDF4", border: "1px solid rgba(34,197,94,0.2)" }}>
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="p-1 rounded-md bg-success/10 text-success flex-shrink-0">
-              <Check className="h-3.5 w-3.5 stroke-[3]" />
+            <div className="p-1 rounded-lg flex-shrink-0" style={{ backgroundColor: "#DCFCE7" }}>
+              <Check className="h-3.5 w-3.5" style={{ color: "#16A34A" }} />
             </div>
             <div className="truncate">
-              <span className="font-black text-foreground text-xs block truncate">
-                {selectedLocation.name}
-              </span>
-              <span className="text-[10px] text-muted block truncate">
-                {selectedLocation.formattedAddress}
-              </span>
+              <span className="block truncate" style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{selectedLocation.name}</span>
+              <span className="block truncate" style={{ fontSize: "11px", fontWeight: 400, color: "#64748B" }}>{selectedLocation.formattedAddress}</span>
             </div>
           </div>
-          <div className="text-[9px] font-mono font-bold text-muted ml-2 flex-shrink-0">
+          <div className="flex-shrink-0 ml-2" style={{ fontSize: "10px", fontWeight: 600, color: "#94A3B8", fontFamily: "monospace" }}>
             {selectedLocation.latitude.toFixed(3)}, {selectedLocation.longitude.toFixed(3)}
           </div>
         </div>
@@ -355,53 +366,55 @@ export default function LocationSearchInput({
 
       {/* Autocomplete dropdown */}
       {isOpen && (
-        <div 
-          className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-2xl bg-surface border border-border shadow-2xl overflow-hidden max-h-64 overflow-y-auto animate-slideUp text-left"
+        <div
+          className="absolute left-0 right-0 top-full mt-2 z-50 overflow-hidden max-h-64 overflow-y-auto animate-slideUp"
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1.5px solid rgba(37,99,255,0.15)",
+            borderRadius: "16px",
+            boxShadow: "0 12px 40px rgba(37,99,255,0.12), 0 4px 12px rgba(15,23,42,0.08)",
+          }}
           role="listbox"
         >
           {searchError ? (
-            <div className="p-4 text-xs text-muted space-y-1">
-              <div className="flex items-center gap-2 text-warning font-bold">
+            <div className="p-4 space-y-1">
+              <div className="flex items-center gap-2" style={{ fontSize: "12px", fontWeight: 700, color: "#F59E0B" }}>
                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                 <span>Notice</span>
               </div>
-              <p className="text-[11px] text-muted font-semibold leading-relaxed">
-                {searchError}
-              </p>
+              <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>{searchError}</p>
             </div>
           ) : suggestions.length > 0 ? (
-            <div className="py-1 divide-y divide-border">
+            <div className="py-1">
               {suggestions.map((sug, idx) => (
                 <button
                   key={sug.placeId || idx}
                   type="button"
                   onClick={() => handleSelectSuggestion(sug)}
-                  className={`w-full px-4 py-3 flex items-start gap-3 text-left transition-colors ${
-                    selectedIndex === idx 
-                      ? "bg-primary-accent/15 text-foreground" 
-                      : "hover:bg-elevated-surface text-foreground"
-                  }`}
+                  className="w-full px-4 py-3 flex items-start gap-3 text-left transition-colors"
+                  style={{
+                    backgroundColor: selectedIndex === idx ? "#EFF6FF" : "transparent",
+                    borderBottom: idx < suggestions.length - 1 ? "1px solid rgba(15,23,42,0.05)" : "none",
+                  }}
+                  onMouseEnter={(e) => { if (selectedIndex !== idx) (e.currentTarget as HTMLElement).style.backgroundColor = "#F8FAFC"; }}
+                  onMouseLeave={(e) => { if (selectedIndex !== idx) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
                   role="option"
                   aria-selected={selectedIndex === idx}
                 >
-                  <div className="p-1.5 rounded-lg bg-elevated-surface border border-border mt-0.5 flex-shrink-0">
+                  <div className="p-1.5 rounded-xl mt-0.5 flex-shrink-0" style={{ backgroundColor: "#F1F5F9" }}>
                     {getPlaceIcon(sug.types)}
                   </div>
                   <div className="flex-1 overflow-hidden">
-                    <span className="font-black text-xs text-foreground block truncate">
-                      {sug.mainText}
-                    </span>
+                    <span className="block truncate" style={{ fontSize: "13px", fontWeight: 600, color: "#0F172A" }}>{sug.mainText}</span>
                     {sug.secondaryText && (
-                      <span className="text-[10px] font-semibold text-muted block truncate mt-0.5">
-                        {sug.secondaryText}
-                      </span>
+                      <span className="block truncate mt-0.5" style={{ fontSize: "11px", fontWeight: 400, color: "#94A3B8" }}>{sug.secondaryText}</span>
                     )}
                   </div>
                 </button>
               ))}
             </div>
           ) : inputValue.trim() && !isLoading ? (
-            <div className="p-4 text-center text-xs text-muted font-bold">
+            <div className="p-4 text-center" style={{ fontSize: "12px", color: "#94A3B8", fontWeight: 500 }}>
               No matching places found. Try another landmark or city.
             </div>
           ) : null}

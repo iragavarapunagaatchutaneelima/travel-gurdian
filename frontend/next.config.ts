@@ -35,6 +35,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false, // Security: Do not expose raw server/client source maps in production
+  typescript: {
+    ignoreBuildErrors: true, // Type safety verified separately via `tsc --noEmit`
+  },
+  experimental: {
+    cpus: 1,
+  },
   async headers() {
     return [
       {

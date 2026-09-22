@@ -60,17 +60,17 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
   const [lastKnownSnapshot, setLastKnownSnapshot] = useState<LocationSnapshot | null>(null);
 
   // References for reliable interval ticks
-  const activeCycleRef = useRef<CheckInCycle | null>(null);
-  activeCycleRef.current = activeCycle;
-
+  const activeCycleRef = useRef<CheckInCycle | null>(activeCycle);
   const statusRef = useRef<SafetyCheckInStatus>(status);
-  statusRef.current = status;
-
   const configRef = useRef<SafetyCheckInConfig>(config);
-  configRef.current = config;
-
   const positionRef = useRef<NavigationPosition | null>(currentPosition || null);
-  positionRef.current = currentPosition || null;
+
+  useEffect(() => {
+    activeCycleRef.current = activeCycle;
+    statusRef.current = status;
+    configRef.current = config;
+    positionRef.current = currentPosition || null;
+  }, [activeCycle, status, config, currentPosition]);
 
   // Keep snapshot updated with latest valid position
   useEffect(() => {

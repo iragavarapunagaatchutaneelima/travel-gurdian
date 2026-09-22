@@ -23,6 +23,7 @@ export async function POST(req: Request) {
 
     const sanitizedPrompt = sanitizeInput(rawPrompt);
     const geminiKey = process.env.GEMINI_API_KEY;
+    const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
     const toolCallsExecuted: ToolCallRequest[] = [];
     const toolResults: ToolExecutionResult[] = [];
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
       return result;
     };
 
-    // 1. If real Gemini API key is available, call Gemini 1.5 Flash with tool declarations
+    // 1. If real Gemini API key is available, call Gemini with tool declarations
     if (geminiKey && geminiKey !== "your_gemini_api_key" && geminiKey.length > 5) {
       try {
         const functionDeclarations = ALLOWLISTED_TOOLS.map(t => ({
@@ -54,12 +55,12 @@ export async function POST(req: Request) {
               acc[k] = { type: v.type.toUpperCase(), description: v.description };
               return acc;
             }, {} as Record<string, any>),
-            required: Object.entries(t.parameters).filter(([_, v]) => v.required).map(([k]) => k)
+            required: Object.entries(t.parameters).filter(([, v]) => v.required).map(([k]) => k)
           }
         }));
 
         const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
               toolResults,
               proposals,
               mode: "CONNECTED",
-              model: "gemini-1.5-flash"
+              model: geminiModel
             });
           }
 
@@ -126,7 +127,7 @@ export async function POST(req: Request) {
               toolResults: [],
               proposals: [],
               mode: "CONNECTED",
-              model: "gemini-1.5-flash"
+              model: geminiModel
             });
           }
         }

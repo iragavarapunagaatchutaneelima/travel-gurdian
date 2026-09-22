@@ -6,6 +6,7 @@ import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import { CITIES, RouteOption, POI, City } from "@/data/routeData";
 import { calculateGoogleRoutes } from "@/services/googleRoutes";
+import { formatMapErrorMessage } from "@/services/googlePlaces";
 import { TravelerProfile, RoutePriority, IncidentReport, IncidentType } from "@/types/safety";
 import { LocationDetails } from "@/types/location";
 import { getActiveIncidents, reportCommunityIncident } from "@/services/incidentService";
@@ -18,7 +19,7 @@ import { getTrustedContacts } from "@/services/trustedContactService";
 import { TrustedContact } from "@/types/safetyCheckIn";
 import { LiveTravelContext } from "@/types/gemini";
 import { 
-  CheckCircle2, CloudRain, Sun, Moon, Loader, MapPin, 
+  CheckCircle2, CloudRain, Loader, MapPin, 
   Navigation, Crosshair, Layers, ShieldCheck, Fuel, Coffee, 
   BedDouble, PlusSquare, AlertCircle, Sparkles, Clock, Compass,
   Download, WifiOff, FileText, Check, Loader2, Hospital, ShieldAlert,
@@ -304,7 +305,7 @@ function LivingMapContent() {
     
     const styleUrl = mapStyle === "satellite" 
       ? "mapbox://styles/mapbox/satellite-streets-v12" 
-      : "mapbox://styles/mapbox/dark-v11";
+      : "mapbox://styles/mapbox/streets-v12";
 
     const newMap = new mapboxgl.Map({
       container: mapContainer.current,
@@ -342,7 +343,7 @@ function LivingMapContent() {
     if (!map.current || !mapLoaded) return;
     const styleUrl = mapStyle === "satellite" 
       ? "mapbox://styles/mapbox/satellite-streets-v12" 
-      : "mapbox://styles/mapbox/dark-v11";
+      : "mapbox://styles/mapbox/streets-v12";
     
     map.current.setStyle(styleUrl);
     map.current.once('style.load', () => {
@@ -432,8 +433,8 @@ function LivingMapContent() {
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
-    // Origin Marker (Purple)
-    const originMarker = new mapboxgl.Marker({ color: "#6366f1" })
+    // Origin Marker (Primary Blue #2563FF)
+    const originMarker = new mapboxgl.Marker({ color: "#2563FF" })
       .setLngLat([origin.longitude, origin.latitude])
       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<h4 style="font-weight:bold; color:#18181b;">Origin: ${origin.name}</h4><p style="color:#71717a; font-size:11px;">${origin.state}</p>`))
       .addTo(map.current);
@@ -752,20 +753,21 @@ function LivingMapContent() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-xs font-bold text-muted gap-3">
         <Loader2 className="h-7 w-7 animate-spin text-primary-accent" />
-        <span>Calculating Real Google Road Network Route...</span>
+        <span>Loading map...</span>
       </div>
     );
   }
 
   if (routeError || !selectedRoute) {
+    const formattedError = formatMapErrorMessage(routeError);
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-xs font-bold p-6 text-center">
         <Header />
         <div className="max-w-md w-full p-6 rounded-3xl bg-surface border border-warning/30 space-y-4 my-auto">
           <AlertCircle className="h-10 w-10 text-warning mx-auto" />
-          <h3 className="text-lg font-black text-foreground">Route Calculation Notice</h3>
+          <h3 className="text-lg font-black text-foreground">Map & Route Notice</h3>
           <p className="text-xs text-muted font-semibold leading-relaxed">
-            {routeError || "No real road route could be calculated for this location."}
+            {formattedError}
           </p>
           <button
             onClick={() => router.push(`/plan?from=${fromLoc}&dest=${toLoc}`)}

@@ -26,15 +26,15 @@ export default function RiskMeter({ score, size = 180 }: RiskMeterProps) {
 
   // Determine safety class
   const getSafetyLevel = (s: number) => {
-    if (s >= 80) return { label: "LOW RISK", color: "text-emerald-400", stroke: "#10b981", bg: "bg-emerald-950/20" };
-    if (s >= 60) return { label: "MEDIUM RISK", color: "text-amber-400", stroke: "#fbbf24", bg: "bg-amber-950/20" };
-    return { label: "HIGH RISK", color: "text-red-400", stroke: "#ef4444", bg: "bg-red-950/20" };
+    if (s >= 80) return { label: "LOW RISK", color: "#16A34A", stroke: "#22C55E", bg: "#DCFCE7", border: "#86EFAC" };
+    if (s >= 60) return { label: "MEDIUM RISK", color: "#D97706", stroke: "#F59E0B", bg: "#FEF3C7", border: "#FDE68A" };
+    return { label: "HIGH RISK", color: "#DC2626", stroke: "#EF4444", bg: "#FEE2E2", border: "#FECACA" };
   };
 
   const level = getSafetyLevel(score);
 
   return (
-    <div className="flex flex-col items-center justify-center select-none">
+    <div className="flex flex-col items-center justify-center select-none" style={{ fontFamily: "'Poppins',sans-serif" }}>
       <div className="relative" style={{ width: size, height: size }}>
         {/* Background Arc */}
         <svg className="w-full h-full -rotate-90">
@@ -43,7 +43,7 @@ export default function RiskMeter({ score, size = 180 }: RiskMeterProps) {
             cy={center}
             r={radius}
             fill="transparent"
-            stroke="#18181b"
+            stroke="#E2E8F0"
             strokeWidth={strokeWidth}
           />
           {/* Progress Arc */}
@@ -65,12 +65,20 @@ export default function RiskMeter({ score, size = 180 }: RiskMeterProps) {
 
         {/* Text Center */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-black tracking-tight text-white">{animatedScore}</span>
-          <span className="text-[10px] font-bold text-zinc-500 tracking-wider">SAFETY INDEX</span>
+          <span style={{ fontSize: "36px", fontWeight: 900, color: "#0F172A", lineHeight: 1 }}>{animatedScore}</span>
+          <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748B", letterSpacing: "0.08em", marginTop: "2px" }}>SAFETY INDEX</span>
         </div>
       </div>
 
-      <div className={`mt-4 rounded-full px-4 py-1.5 text-xs font-black tracking-wider ${level.color} ${level.bg} border border-white/5 shadow-sm`}>
+      <div
+        className="mt-4 rounded-full px-4 py-1.5 text-xs shadow-sm font-bold"
+        style={{
+          color: level.color,
+          backgroundColor: level.bg,
+          border: `1px solid ${level.border}`,
+          letterSpacing: "0.06em",
+        }}
+      >
         {level.label}
       </div>
     </div>

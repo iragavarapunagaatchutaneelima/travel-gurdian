@@ -1,22 +1,11 @@
 "use client";
 
 import React from "react";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { PwaManager } from "./components/PwaManager";
 import { OfflineBootStatus } from "./components/OfflineBootStatus";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export default function RootLayout({
   children,
@@ -24,15 +13,32 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" suppressHydrationWarning className="h-full antialiased">
       <head>
+        {/* Poppins Font — Travel Guardian primary typeface */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap"
+          rel="stylesheet"
+        />
+        {/* PWA & App Meta */}
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#059669" />
+        <meta name="theme-color" content="#2563FF" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Travel Guardian" />
+        <meta name="description" content="Travel Guardian — Your Smart Travel Companion. Travel Safe • Explore More • Stay Together." />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
-      <body className="min-h-full bg-background text-foreground flex flex-col font-sans transition-colors duration-300">
+      <body
+        className="min-h-full flex flex-col overflow-x-hidden"
+        style={{
+          fontFamily: "'Poppins', system-ui, -apple-system, Arial, sans-serif",
+          backgroundColor: "#F8FAFC",
+          color: "#0F172A",
+        }}
+      >
         <Providers>
           <OfflineBootStatus />
           <PwaManager />

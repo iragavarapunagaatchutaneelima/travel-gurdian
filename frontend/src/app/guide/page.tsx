@@ -171,22 +171,22 @@ export default function SafetyGuideAndReviews() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
       <Header />
 
       <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
         
         {/* Header */}
-        <div className="border-b border-border pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
           <div>
-            <span className="text-[10px] font-black text-primary-accent uppercase tracking-widest block">
-              GUIDE & REVIEW SESSIONS
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
+              GUIDE &amp; REVIEW SESSIONS
             </span>
-            <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-1">
-              Safety Guides & Corridor Reviews
+            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "#0F172A", marginTop: "4px" }}>
+              Safety Guides &amp; Corridor Reviews
             </h1>
-            <p className="text-xs text-muted font-semibold mt-0.5">
-              Consular emergency directories, highway safety notes, and simulated demo reviews across primary Indian hubs.
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "2px" }}>
+              Consular emergency directories, highway safety notes, and simulated reviews across primary Indian hubs.
             </p>
           </div>
 
@@ -195,7 +195,16 @@ export default function SafetyGuideAndReviews() {
             <select
               value={selectedCity}
               onChange={(e) => setSelectedCity(e.target.value)}
-              className="rounded-2xl bg-surface border border-border px-4 py-2.5 text-xs text-foreground font-black focus:outline-none focus:border-primary-accent shadow-sm cursor-pointer"
+              className="rounded-2xl px-4 py-2.5 shadow-sm cursor-pointer"
+              style={{
+                backgroundColor: "#FFFFFF",
+                border: "1px solid rgba(15,23,42,0.12)",
+                fontSize: "13px",
+                fontWeight: 700,
+                color: "#0F172A",
+                fontFamily: "'Poppins',sans-serif",
+                outline: "none",
+              }}
             >
               {Object.values(CITY_GUIDES).map(c => (
                 <option key={c.id} value={c.id}>{c.name} Safety Guide ({c.state})</option>
@@ -210,44 +219,44 @@ export default function SafetyGuideAndReviews() {
           <div className="lg:col-span-8 space-y-6">
             
             {/* City Banner */}
-            <div className="rounded-3xl border border-border bg-surface p-6 md:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 transition-colors">
+            <div className="rounded-3xl p-6 md:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
               <div>
-                <span className="text-[10px] font-black text-primary-accent uppercase tracking-widest">
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em" }}>
                   Municipal Safety Dossier
                 </span>
-                <h2 className="text-3xl font-black text-foreground mt-1">{activeGuide.name}, {activeGuide.state}</h2>
-                <p className="text-xs text-muted font-semibold mt-1">
+                <h2 style={{ fontWeight: 800, fontSize: "28px", color: "#0F172A", marginTop: "4px" }}>{activeGuide.name}, {activeGuide.state}</h2>
+                <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "4px", lineHeight: 1.6 }}>
                   Verified emergency infrastructure, recommended highway protocols, and regional safety telemetry.
                 </p>
               </div>
               
-              <div className="bg-elevated-surface border border-border p-4 rounded-2xl text-center min-w-32">
-                <span className="text-3xl font-black text-primary-accent">{activeGuide.safetyScore}</span>
-                <p className="text-[8px] font-bold text-muted uppercase tracking-wider mt-1">SAFETY SCORE</p>
+              <div className="p-4 rounded-2xl text-center min-w-32" style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)" }}>
+                <span style={{ fontSize: "32px", fontWeight: 900, color: "#2563FF", display: "block", lineHeight: 1 }}>{activeGuide.safetyScore}</span>
+                <p style={{ fontSize: "9px", fontWeight: 800, color: "#1E40AF", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: "4px" }}>SAFETY SCORE</p>
               </div>
             </div>
 
             {/* Emergency Contacts */}
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 transition-colors">
-              <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                <Phone className="h-4 w-4 text-danger" />
-                Emergency & Public Dispatch Contacts
+            <div className="rounded-3xl p-6 shadow-sm space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+              <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Phone className="h-4 w-4 text-red-500" />
+                Emergency &amp; Public Dispatch Contacts
               </h3>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border">
-                  <span className="text-[9px] font-bold text-muted uppercase block">National Emergency</span>
-                  <p className="text-sm font-black text-danger mt-1">{activeGuide.emergencyPhone}</p>
+                <div className="p-3.5 rounded-2xl" style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#DC2626", textTransform: "uppercase", display: "block" }}>National Emergency</span>
+                  <p style={{ fontSize: "16px", fontWeight: 900, color: "#B91C1C", marginTop: "4px" }}>{activeGuide.emergencyPhone}</p>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border">
-                  <span className="text-[9px] font-bold text-muted uppercase block">Police Control HQ</span>
-                  <p className="text-xs font-black text-foreground mt-1 truncate">{activeGuide.policeStation}</p>
+                <div className="p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", display: "block" }}>Police Control HQ</span>
+                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginTop: "4px" }} className="truncate">{activeGuide.policeStation}</p>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border">
-                  <span className="text-[9px] font-bold text-muted uppercase block">Trauma Hospital</span>
-                  <p className="text-xs font-black text-foreground mt-1 truncate">{activeGuide.hospital}</p>
+                <div className="p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", display: "block" }}>Trauma Hospital</span>
+                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginTop: "4px" }} className="truncate">{activeGuide.hospital}</p>
                 </div>
               </div>
             </div>
@@ -256,15 +265,15 @@ export default function SafetyGuideAndReviews() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               {/* Tips */}
-              <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-3 transition-colors">
-                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-success" />
+              <div className="rounded-3xl p-6 shadow-sm space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
                   Corridor Best Practices
                 </h3>
                 <div className="space-y-2.5">
                   {activeGuide.travelTips.map((tip, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-muted font-semibold leading-relaxed">
-                      <ChevronRight className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
+                    <div key={i} className="flex items-start gap-2 leading-relaxed" style={{ fontSize: "12px", color: "#475569", fontWeight: 500 }}>
+                      <ChevronRight className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
                       <span>{tip}</span>
                     </div>
                   ))}
@@ -272,15 +281,15 @@ export default function SafetyGuideAndReviews() {
               </div>
 
               {/* Warnings */}
-              <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-3 transition-colors">
-                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4 text-warning" />
-                  Highway Advisories & Radar
+              <div className="rounded-3xl p-6 shadow-sm space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <ShieldAlert className="h-4 w-4 text-amber-600" />
+                  Highway Advisories &amp; Radar
                 </h3>
                 <div className="space-y-2.5">
                   {activeGuide.highwayWarnings.map((warn, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-muted font-semibold leading-relaxed">
-                      <ChevronRight className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                    <div key={i} className="flex items-start gap-2 leading-relaxed" style={{ fontSize: "12px", color: "#475569", fontWeight: 500 }}>
+                      <ChevronRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                       <span>{warn}</span>
                     </div>
                   ))}
@@ -290,30 +299,30 @@ export default function SafetyGuideAndReviews() {
             </div>
 
             {/* Reviews Section */}
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 transition-colors">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
+            <div className="rounded-3xl p-6 shadow-sm space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+              <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
                   <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                  Traveler Reviews & Experience Log (Demo Data)
+                  Traveler Reviews &amp; Experience Log
                 </h3>
-                <span className="text-[9px] font-bold text-muted uppercase bg-elevated-surface px-2 py-0.5 rounded">
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "#2563FF", backgroundColor: "#EFF6FF", padding: "3px 8px", borderRadius: "8px" }}>
                   Simulated Reviews
                 </span>
               </div>
 
               <div className="space-y-3">
                 {activeGuide.reviews.map((rev, i) => (
-                  <div key={i} className="p-4 rounded-2xl bg-elevated-surface border border-border space-y-1.5">
+                  <div key={i} className="p-4 rounded-2xl space-y-1.5" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-foreground">{rev.author}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{rev.author}</span>
                       <div className="flex items-center gap-1 text-amber-400">
                         {Array.from({ length: rev.rating }).map((_, rIdx) => (
-                          <Star key={rIdx} className="h-3 w-3 fill-amber-400" />
+                          <Star key={rIdx} className="h-3.5 w-3.5 fill-amber-400" />
                         ))}
-                        <span className="text-[10px] text-muted ml-1 font-bold">{rev.date}</span>
+                        <span style={{ fontSize: "11px", color: "#64748B", marginLeft: "4px", fontWeight: 600 }}>{rev.date}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-muted font-semibold leading-relaxed">{rev.comment}</p>
+                    <p style={{ fontSize: "12px", color: "#475569", fontWeight: 400, lineHeight: 1.6 }}>{rev.comment}</p>
                   </div>
                 ))}
               </div>
@@ -323,13 +332,13 @@ export default function SafetyGuideAndReviews() {
 
           {/* Right Column: Pre-Travel Checklist */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm space-y-4 transition-colors">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <h3 className="text-xs font-black text-muted uppercase tracking-widest flex items-center gap-2">
-                  <ListTodo className="h-4 w-4 text-primary-accent" />
+            <div className="rounded-3xl p-6 shadow-sm space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
+              <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <ListTodo className="h-4 w-4" style={{ color: "#2563FF" }} />
                   Pre-Journey Checklist
                 </h3>
-                <span className="text-[9px] font-black text-primary-accent bg-primary-accent/10 px-2 py-0.5 rounded">
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", backgroundColor: "#EFF6FF", padding: "3px 8px", borderRadius: "8px" }}>
                   {checklist.filter(c => c.done).length}/{checklist.length} Done
                 </span>
               </div>
@@ -341,11 +350,19 @@ export default function SafetyGuideAndReviews() {
                   placeholder="Add item..."
                   value={newCheckItem}
                   onChange={(e) => setNewCheckItem(e.target.value)}
-                  className="flex-1 rounded-xl bg-elevated-surface border border-border px-3 py-2 text-xs text-foreground font-bold focus:outline-none"
+                  className="flex-1 rounded-xl px-3 py-2 text-xs focus:outline-none"
+                  style={{
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid rgba(15,23,42,0.12)",
+                    color: "#0F172A",
+                    fontWeight: 600,
+                    fontFamily: "'Poppins',sans-serif",
+                  }}
                 />
                 <button
                   type="submit"
-                  className="rounded-xl bg-primary-accent px-3 py-2 text-white hover:bg-primary-accent-hover text-xs font-bold"
+                  className="rounded-xl px-3 py-2 text-white text-xs font-bold transition-all"
+                  style={{ backgroundColor: "#2563FF" }}
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -357,15 +374,26 @@ export default function SafetyGuideAndReviews() {
                   <div
                     key={item.id}
                     onClick={() => toggleCheck(item.id)}
-                    className="flex items-center gap-2.5 p-3 rounded-xl bg-elevated-surface border border-border hover:border-primary-accent/30 cursor-pointer select-none transition-colors"
+                    className="flex items-center gap-2.5 p-3 rounded-xl cursor-pointer select-none transition-all"
+                    style={{
+                      backgroundColor: item.done ? "#F8FAFC" : "#FFFFFF",
+                      border: "1px solid rgba(15,23,42,0.08)",
+                    }}
                   >
                     <input
                       type="checkbox"
                       checked={item.done}
                       onChange={() => {}}
-                      className="rounded h-4 w-4 text-primary-accent"
+                      className="rounded h-4 w-4 accent-blue-600"
                     />
-                    <span className={`text-xs font-semibold ${item.done ? "line-through text-muted" : "text-foreground"}`}>
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: item.done ? 500 : 600,
+                        textDecoration: item.done ? "line-through" : "none",
+                        color: item.done ? "#94A3B8" : "#0F172A",
+                      }}
+                    >
                       {item.text}
                     </span>
                   </div>

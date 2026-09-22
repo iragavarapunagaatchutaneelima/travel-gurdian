@@ -55,30 +55,42 @@ export default function OfflineSurvivalCard({
   };
 
   return (
-    <div className={`rounded-3xl border border-border bg-surface shadow-xl p-5 md:p-6 text-left space-y-5 transition-colors ${className}`}>
-      
+    <div
+      className={`rounded-3xl p-5 md:p-6 text-left space-y-5 transition-all ${className}`}
+      style={{
+        backgroundColor: "#FFFFFF",
+        border: "1px solid rgba(15,23,42,0.08)",
+        boxShadow: "0 2px 8px rgba(37,99,255,0.06)",
+        fontFamily: "'Poppins',sans-serif",
+      }}
+    >
       {/* Header with Freshness and Provenance */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 pb-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-primary-accent block">
+            <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#2563FF", display: "block" }}>
               OFFLINE SURVIVAL DOSSIER
             </span>
-            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
-              freshness === "FRESH" 
-                ? "bg-success/15 border-success/30 text-success" 
-                : freshness === "STALE" 
-                ? "bg-warning/15 border-warning/30 text-warning" 
-                : "bg-danger/15 border-danger/30 text-danger"
-            }`}>
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                padding: "2px 8px",
+                borderRadius: "8px",
+                backgroundColor: freshness === "FRESH" ? "#DCFCE7" : freshness === "STALE" ? "#FEF3C7" : "#FEE2E2",
+                color: freshness === "FRESH" ? "#16A34A" : freshness === "STALE" ? "#D97706" : "#DC2626",
+                border: freshness === "FRESH" ? "1px solid #86EFAC" : freshness === "STALE" ? "1px solid #FDE68A" : "1px solid #FECACA",
+              }}
+            >
               {freshness} CACHE
             </span>
           </div>
 
-          <h3 className="text-xl font-black text-foreground mt-1">
+          <h3 style={{ fontSize: "20px", fontWeight: 800, color: "#0F172A", marginTop: "4px" }}>
             {pack.origin.name} ➔ {pack.destination.name}
           </h3>
-          <p className="text-xs text-muted font-semibold mt-0.5">
+          <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 500, marginTop: "2px" }}>
             {pack.packName} • Travel Mode: {pack.travelMode}
           </p>
         </div>
@@ -88,7 +100,8 @@ export default function OfflineSurvivalCard({
           <button
             onClick={handleDownloadPDF}
             disabled={downloading}
-            className="py-2.5 px-3.5 rounded-xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-50"
+            className="py-2.5 px-4 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+            style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
           >
             <Download className="h-3.5 w-3.5" />
             <span>{downloadSuccess ? "Saved PDF!" : "Export Survival PDF"}</span>
@@ -97,44 +110,55 @@ export default function OfflineSurvivalCard({
       </div>
 
       {/* Tabs Navigation */}
-      <div className="grid grid-cols-4 gap-1 p-1 bg-elevated-surface rounded-2xl border border-border text-xs font-bold">
+      <div
+        className="grid grid-cols-4 gap-1 p-1 rounded-2xl text-xs font-bold"
+        style={{ backgroundColor: "#F1F5F9", border: "1px solid rgba(15,23,42,0.06)" }}
+      >
         <button
           onClick={() => setActiveTab("overview")}
-          className={`py-2 rounded-xl transition-all ${
-            activeTab === "overview" 
-              ? "bg-surface text-primary-accent shadow-sm font-black" 
-              : "text-muted hover:text-foreground"
-          }`}
+          className="py-2.5 rounded-xl transition-all"
+          style={{
+            backgroundColor: activeTab === "overview" ? "#2563FF" : "transparent",
+            color: activeTab === "overview" ? "#FFFFFF" : "#64748B",
+            fontWeight: activeTab === "overview" ? 700 : 500,
+            boxShadow: activeTab === "overview" ? "0 2px 8px rgba(37,99,255,0.25)" : "none",
+          }}
         >
           Overview
         </button>
         <button
           onClick={() => setActiveTab("turns")}
-          className={`py-2 rounded-xl transition-all ${
-            activeTab === "turns" 
-              ? "bg-surface text-primary-accent shadow-sm font-black" 
-              : "text-muted hover:text-foreground"
-          }`}
+          className="py-2.5 rounded-xl transition-all"
+          style={{
+            backgroundColor: activeTab === "turns" ? "#2563FF" : "transparent",
+            color: activeTab === "turns" ? "#FFFFFF" : "#64748B",
+            fontWeight: activeTab === "turns" ? 700 : 500,
+            boxShadow: activeTab === "turns" ? "0 2px 8px rgba(37,99,255,0.25)" : "none",
+          }}
         >
           Turns ({pack.turnInstructions.length})
         </button>
         <button
           onClick={() => setActiveTab("havens")}
-          className={`py-2 rounded-xl transition-all ${
-            activeTab === "havens" 
-              ? "bg-surface text-primary-accent shadow-sm font-black" 
-              : "text-muted hover:text-foreground"
-          }`}
+          className="py-2.5 rounded-xl transition-all"
+          style={{
+            backgroundColor: activeTab === "havens" ? "#2563FF" : "transparent",
+            color: activeTab === "havens" ? "#FFFFFF" : "#64748B",
+            fontWeight: activeTab === "havens" ? 700 : 500,
+            boxShadow: activeTab === "havens" ? "0 2px 8px rgba(37,99,255,0.25)" : "none",
+          }}
         >
           Havens ({pack.safeHavens.length})
         </button>
         <button
           onClick={() => setActiveTab("emergency")}
-          className={`py-2 rounded-xl transition-all ${
-            activeTab === "emergency" 
-              ? "bg-surface text-danger shadow-sm font-black" 
-              : "text-muted hover:text-foreground"
-          }`}
+          className="py-2.5 rounded-xl transition-all"
+          style={{
+            backgroundColor: activeTab === "emergency" ? "#EF4444" : "transparent",
+            color: activeTab === "emergency" ? "#FFFFFF" : "#64748B",
+            fontWeight: activeTab === "emergency" ? 700 : 500,
+            boxShadow: activeTab === "emergency" ? "0 2px 8px rgba(239,68,68,0.25)" : "none",
+          }}
         >
           112 Rescue
         </button>
@@ -145,36 +169,37 @@ export default function OfflineSurvivalCard({
         <div className="space-y-4 animate-fadeIn">
           {/* Key Metrics Grid */}
           <div className="grid grid-cols-3 gap-2.5 text-center text-xs">
-            <div className="p-3 rounded-2xl bg-elevated-surface border border-border">
-              <span className="text-[10px] text-muted font-bold block uppercase">Distance</span>
-              <p className="font-black text-foreground mt-0.5 text-sm">{pack.route.distance}</p>
+            <div className="p-3 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <span style={{ fontSize: "10px", color: "#64748B", fontWeight: 700, display: "block", textTransform: "uppercase" }}>Distance</span>
+              <p style={{ fontWeight: 800, color: "#0F172A", marginTop: "2px", fontSize: "14px" }}>{pack.route.distance}</p>
             </div>
-            <div className="p-3 rounded-2xl bg-elevated-surface border border-border">
-              <span className="text-[10px] text-muted font-bold block uppercase">Cached Duration</span>
-              <p className="font-black text-foreground mt-0.5 text-sm">{pack.route.time}</p>
+            <div className="p-3 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <span style={{ fontSize: "10px", color: "#64748B", fontWeight: 700, display: "block", textTransform: "uppercase" }}>Cached Duration</span>
+              <p style={{ fontWeight: 800, color: "#0F172A", marginTop: "2px", fontSize: "14px" }}>{pack.route.time}</p>
             </div>
-            <div className="p-3 rounded-2xl bg-elevated-surface border border-border">
-              <span className="text-[10px] text-muted font-bold block uppercase">Safety Fit</span>
-              <p className="font-black text-success mt-0.5 text-sm">{pack.route.safetyScore}/100</p>
+            <div className="p-3 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <span style={{ fontSize: "10px", color: "#64748B", fontWeight: 700, display: "block", textTransform: "uppercase" }}>Safety Fit</span>
+              <p style={{ fontWeight: 800, color: "#16A34A", marginTop: "2px", fontSize: "14px" }}>{pack.route.safetyScore}/100</p>
             </div>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border space-y-1.5 text-xs text-muted leading-relaxed">
-            <div className="flex items-center gap-1.5 font-bold text-foreground">
-              <Clock className="h-3.5 w-3.5 text-primary-accent" />
+          <div className="p-3.5 rounded-2xl space-y-1.5 leading-relaxed" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)", fontSize: "12px", color: "#64748B" }}>
+            <div className="flex items-center gap-1.5 font-bold" style={{ color: "#0F172A" }}>
+              <Clock className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
               <span>Cache Provenance Information:</span>
             </div>
-            <p className="text-[11px]">
-              Stored on device: <strong className="text-foreground">{cachedDateStr} at {cachedTimeStr}</strong>.
+            <p style={{ fontSize: "11px" }}>
+              Stored on device: <strong style={{ color: "#0F172A" }}>{cachedDateStr} at {cachedTimeStr}</strong>.
               Live rerouting and real-time traffic are paused while disconnected.
             </p>
           </div>
 
           <Link
             href={`/map?from=${pack.origin.name.toLowerCase()}&dest=${pack.destination.name.toLowerCase()}&mode=${pack.travelMode}&routeId=${pack.route.id}`}
-            className="w-full py-3.5 rounded-2xl bg-elevated-surface hover:bg-border text-foreground font-black text-xs flex items-center justify-center gap-2 border border-border transition-colors text-center"
+            className="w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all text-center"
+            style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", color: "#2563FF" }}
           >
-            <MapPin className="h-4 w-4 text-primary-accent" />
+            <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
             <span>Open in Cached Living Map</span>
           </Link>
         </div>
@@ -186,14 +211,18 @@ export default function OfflineSurvivalCard({
           {pack.turnInstructions.map((turn, i) => (
             <div
               key={i}
-              className="p-3 rounded-2xl bg-elevated-surface border border-border flex items-start gap-3 text-xs"
+              className="p-3 rounded-2xl flex items-start gap-3 text-xs"
+              style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}
             >
-              <div className="h-6 w-6 rounded-full bg-primary-accent/15 text-primary-accent font-black flex items-center justify-center shrink-0 text-[10px]">
+              <div
+                className="h-6 w-6 rounded-full font-extrabold flex items-center justify-center shrink-0"
+                style={{ backgroundColor: "#EFF6FF", color: "#2563FF", fontSize: "10px" }}
+              >
                 {turn.stepIndex}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-foreground leading-tight">{turn.instruction}</p>
-                <span className="text-[10px] text-muted font-semibold mt-0.5 block">{turn.distanceText} • est. {turn.durationText}</span>
+                <p style={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.4 }}>{turn.instruction}</p>
+                <span style={{ fontSize: "11px", color: "#64748B", fontWeight: 500, marginTop: "2px", display: "block" }}>{turn.distanceText} • est. {turn.durationText}</span>
               </div>
             </div>
           ))}
@@ -206,16 +235,27 @@ export default function OfflineSurvivalCard({
           {pack.safeHavens.map((haven) => (
             <div
               key={haven.id}
-              className="p-3 rounded-2xl bg-elevated-surface border border-border flex items-center justify-between text-xs"
+              className="p-3 rounded-2xl flex items-center justify-between text-xs"
+              style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}
             >
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-surface border border-border text-primary-accent">
+                  <span
+                    style={{
+                      fontSize: "9px",
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      padding: "2px 6px",
+                      borderRadius: "6px",
+                      backgroundColor: "#EFF6FF",
+                      color: "#2563FF",
+                    }}
+                  >
                     {haven.type}
                   </span>
-                  <h4 className="font-black text-foreground">{haven.name}</h4>
+                  <h4 style={{ fontWeight: 700, color: "#0F172A" }}>{haven.name}</h4>
                 </div>
-                <p className="text-[10px] text-muted font-semibold">
+                <p style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>
                   {haven.distanceAheadText} {haven.notes ? `• ${haven.notes}` : ""}
                 </p>
               </div>
@@ -223,14 +263,15 @@ export default function OfflineSurvivalCard({
               {haven.phone && (
                 <a
                   href={`tel:${haven.phone}`}
-                  className="py-1.5 px-3 rounded-xl bg-surface hover:bg-border text-foreground font-black text-[11px] border border-border shrink-0"
+                  className="py-1.5 px-3 rounded-xl font-bold text-[11px] shrink-0 transition-all"
+                  style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.12)", color: "#0F172A" }}
                 >
                   Dial {haven.phone}
                 </a>
               )}
             </div>
           ))}
-          <div className="text-[10px] text-muted italic text-center pt-1">
+          <div style={{ fontSize: "11px", color: "#94A3B8", fontStyle: "italic", textAlign: "center", paddingTop: "4px" }}>
             * Cached coordinates. Current availability cannot be verified offline.
           </div>
         </div>
@@ -239,10 +280,10 @@ export default function OfflineSurvivalCard({
       {/* TAB 4: EMERGENCY */}
       {activeTab === "emergency" && (
         <div className="space-y-3 animate-fadeIn">
-          <div className="p-4 rounded-2xl bg-danger/10 border border-danger/30 text-danger text-center space-y-2">
+          <div className="p-4 rounded-2xl text-center space-y-2" style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626" }}>
             <ShieldAlert className="h-8 w-8 mx-auto animate-pulse" />
-            <h4 className="font-black text-sm uppercase">National Public Emergency Protocol</h4>
-            <p className="text-xs text-muted font-semibold leading-relaxed">
+            <h4 style={{ fontWeight: 800, fontSize: "14px", textTransform: "uppercase" }}>National Public Emergency Protocol</h4>
+            <p style={{ fontSize: "12px", color: "#475569", fontWeight: 500, lineHeight: 1.5 }}>
               If cellular voice service is available on your mobile device, you can dial national dispatch line 112 directly.
             </p>
           </div>
@@ -250,7 +291,8 @@ export default function OfflineSurvivalCard({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <a
               href="tel:112"
-              className="py-3 px-3 rounded-2xl bg-danger hover:opacity-90 text-white font-black flex items-center justify-center gap-1.5 shadow-md text-center"
+              className="py-3 px-3 rounded-2xl text-white font-bold flex items-center justify-center gap-1.5 shadow-sm text-center transition-all"
+              style={{ backgroundColor: "#EF4444" }}
             >
               <PhoneCall className="h-4 w-4" />
               <span>Call 112 (Police/Med)</span>
@@ -258,9 +300,10 @@ export default function OfflineSurvivalCard({
 
             <a
               href="tel:1091"
-              className="py-3 px-3 rounded-2xl bg-elevated-surface hover:bg-border text-foreground font-black flex items-center justify-center gap-1.5 border border-border text-center"
+              className="py-3 px-3 rounded-2xl font-bold flex items-center justify-center gap-1.5 text-center transition-all"
+              style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", color: "#2563FF" }}
             >
-              <PhoneCall className="h-4 w-4 text-primary-accent" />
+              <PhoneCall className="h-4 w-4" style={{ color: "#2563FF" }} />
               <span>Women Helpline 1091</span>
             </a>
           </div>

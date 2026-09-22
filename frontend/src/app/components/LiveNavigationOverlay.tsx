@@ -53,30 +53,30 @@ interface LiveNavigationOverlayProps {
   onRejectReroute: () => void;
 }
 
-export function ManeuverIconComponent({ type, className = "h-8 w-8" }: { type: ManeuverType; className?: string }) {
+export function ManeuverIconComponent({ type, className = "h-8 w-8", style }: { type: ManeuverType; className?: string; style?: React.CSSProperties }) {
   switch (type) {
     case "turn-left":
     case "turn-sharp-left":
-      return <CornerUpLeft className={className} />;
+      return <CornerUpLeft className={className} style={style} />;
     case "turn-right":
     case "turn-sharp-right":
-      return <CornerUpRight className={className} />;
+      return <CornerUpRight className={className} style={style} />;
     case "turn-slight-left":
     case "fork-left":
     case "ramp-left":
-      return <ArrowUpLeft className={className} />;
+      return <ArrowUpLeft className={className} style={style} />;
     case "turn-slight-right":
     case "fork-right":
     case "ramp-right":
-      return <ArrowUpRight className={className} />;
+      return <ArrowUpRight className={className} style={style} />;
     case "uturn-left":
     case "uturn-right":
-      return <RotateCcw className={className} />;
+      return <RotateCcw className={className} style={style} />;
     case "arrive":
-      return <MapPin className={className} />;
+      return <MapPin className={className} style={style} />;
     case "straight":
     default:
-      return <ArrowUp className={className} />;
+      return <ArrowUp className={className} style={style} />;
   }
 }
 
@@ -105,41 +105,42 @@ export default function LiveNavigationOverlay({
   // 1. ARRIVAL SCREEN MODAL
   if (status === "ARRIVED") {
     return (
-      <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-surface border border-success/40 rounded-3xl p-6 text-center space-y-5 shadow-2xl animate-fadeIn">
-          <div className="h-16 w-16 bg-success/20 text-success rounded-full flex items-center justify-center mx-auto border-2 border-success">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: "rgba(15,23,42,0.4)", fontFamily: "'Poppins',sans-serif" }}>
+        <div className="w-full max-w-md rounded-3xl p-6 text-center space-y-5 shadow-2xl animate-fadeIn" style={{ backgroundColor: "#FFFFFF", border: "2px solid #22C55E" }}>
+          <div className="h-16 w-16 rounded-full flex items-center justify-center mx-auto" style={{ backgroundColor: "#DCFCE7", color: "#16A34A", border: "2px solid #22C55E" }}>
             <CheckCircle2 className="h-10 w-10" />
           </div>
           <div>
-            <span className="text-[10px] font-black text-success uppercase tracking-widest block">
+            <span style={{ fontSize: "11px", fontWeight: 800, color: "#16A34A", textTransform: "uppercase", letterSpacing: "0.1em", display: "block" }}>
               JOURNEY COMPLETED
             </span>
-            <h3 className="text-2xl font-black text-foreground mt-1">You Have Arrived!</h3>
-            <p className="text-xs text-muted font-semibold mt-1">
+            <h3 style={{ fontSize: "24px", fontWeight: 800, color: "#0F172A", marginTop: "4px" }}>You Have Arrived!</h3>
+            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "4px" }}>
               Destination reached safely via {activeRoute.name}.
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 p-3.5 rounded-2xl bg-elevated-surface border border-border text-center">
+          <div className="grid grid-cols-3 gap-2 p-3.5 rounded-2xl text-center" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
             <div>
-              <span className="text-[9px] text-muted uppercase font-bold block">Distance</span>
-              <p className="text-sm font-black text-foreground mt-0.5">{activeRoute.distance}</p>
+              <span style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: 700, display: "block" }}>Distance</span>
+              <p style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>{activeRoute.distance}</p>
             </div>
             <div>
-              <span className="text-[9px] text-muted uppercase font-bold block">Safety Fit</span>
-              <p className="text-sm font-black text-success mt-0.5">{activeRoute.safetyScore}/100</p>
+              <span style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: 700, display: "block" }}>Safety Fit</span>
+              <p style={{ fontSize: "14px", fontWeight: 800, color: "#16A34A", marginTop: "2px" }}>{activeRoute.safetyScore}/100</p>
             </div>
             <div>
-              <span className="text-[9px] text-muted uppercase font-bold block">Status</span>
-              <p className="text-sm font-black text-foreground mt-0.5">Arrived</p>
+              <span style={{ fontSize: "10px", color: "#64748B", textTransform: "uppercase", fontWeight: 700, display: "block" }}>Status</span>
+              <p style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>Arrived</p>
             </div>
           </div>
 
           <button
             onClick={onEndNavigation}
-            className="w-full py-3.5 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs transition-all shadow-lg"
+            className="w-full py-3.5 rounded-2xl text-white font-bold text-xs transition-all shadow-sm"
+            style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
           >
-            Finish & Close Navigation
+            Finish &amp; Close Navigation
           </button>
         </div>
       </div>
@@ -149,25 +150,34 @@ export default function LiveNavigationOverlay({
   return (
     <>
       {/* TOP TURN-BY-TURN MANEUVER CARD & SAFETY CHECK-IN */}
-      <div className="absolute top-4 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-slideDown space-y-3">
-        <div className="rounded-3xl border border-border bg-surface/95 backdrop-blur-md p-4 shadow-xl text-left space-y-3">
-          
+      <div className="absolute top-4 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-slideDown space-y-3" style={{ fontFamily: "'Poppins',sans-serif" }}>
+        <div
+          className="rounded-3xl p-4 text-left space-y-3 shadow-md"
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid rgba(15,23,42,0.08)",
+            boxShadow: "0 4px 16px rgba(37,99,255,0.08)",
+          }}
+        >
           {/* Main Next Turn Action */}
           <div className="flex items-center gap-3.5">
-            <div className="h-14 w-14 rounded-2xl bg-primary-accent text-white flex items-center justify-center shrink-0 shadow-md">
+            <div
+              className="h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm text-white"
+              style={{ backgroundColor: "#2563FF" }}
+            >
               <ManeuverIconComponent type={currentManeuver?.maneuverType || "straight"} className="h-7 w-7 stroke-[2.5]" />
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-primary-accent tracking-wide uppercase">
+                <span style={{ fontSize: "12px", fontWeight: 800, color: "#2563FF", letterSpacing: "0.04em", textTransform: "uppercase" }}>
                   In {currentManeuver?.distanceText || "100 m"}
                 </span>
-                <span className="text-[9px] font-bold text-muted bg-elevated-surface px-2 py-0.5 rounded-md border border-border">
+                <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748B", backgroundColor: "#F1F5F9", padding: "2px 6px", borderRadius: "6px" }}>
                   Step {currentManeuver?.stepIndex || 1} of {currentManeuver?.totalSteps || 1}
                 </span>
               </div>
-              <h4 className="text-sm font-black text-foreground truncate mt-0.5 leading-tight">
+              <h4 style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A", marginTop: "2px", lineHeight: 1.3 }} className="truncate">
                 {currentManeuver?.instruction || "Continue on route"}
               </h4>
             </div>
@@ -175,13 +185,13 @@ export default function LiveNavigationOverlay({
 
           {/* Next Maneuver Preview */}
           {nextManeuver && (
-            <div className="pt-2 border-t border-border/80 flex items-center justify-between text-xs text-muted">
+            <div className="pt-2 flex items-center justify-between text-xs" style={{ borderTop: "1px solid rgba(15,23,42,0.06)", color: "#64748B" }}>
               <div className="flex items-center gap-1.5 truncate">
-                <span className="text-[10px] font-bold uppercase text-muted">Then:</span>
-                <ManeuverIconComponent type={nextManeuver.maneuverType} className="h-3.5 w-3.5 text-foreground shrink-0" />
-                <span className="text-foreground font-semibold truncate text-[11px]">{nextManeuver.instruction}</span>
+                <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", color: "#94A3B8" }}>Then:</span>
+                <ManeuverIconComponent type={nextManeuver.maneuverType} className="h-3.5 w-3.5 shrink-0" style={{ color: "#0F172A" }} />
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "#0F172A" }} className="truncate">{nextManeuver.instruction}</span>
               </div>
-              <span className="text-[10px] font-bold text-muted ml-2 shrink-0">{nextManeuver.distanceText}</span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", marginLeft: "8px" }} className="shrink-0">{nextManeuver.distanceText}</span>
             </div>
           )}
 
@@ -195,11 +205,13 @@ export default function LiveNavigationOverlay({
       <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
         <button
           onClick={onRecenter}
-          className={`p-3 rounded-2xl border shadow-md backdrop-blur-md transition-all ${
-            isFollowMode 
-              ? "bg-primary-accent text-white border-primary-accent shadow-primary-accent/30" 
-              : "bg-surface/90 text-foreground border-border hover:bg-surface"
-          }`}
+          className="p-3 rounded-2xl shadow-sm transition-all"
+          style={{
+            backgroundColor: isFollowMode ? "#2563FF" : "#FFFFFF",
+            color: isFollowMode ? "#FFFFFF" : "#0F172A",
+            border: isFollowMode ? "1px solid #2563FF" : "1px solid rgba(15,23,42,0.1)",
+            boxShadow: isFollowMode ? "0 2px 8px rgba(37,99,255,0.25)" : "0 2px 6px rgba(15,23,42,0.08)",
+          }}
           title={isFollowMode ? "Camera following user" : "Re-center camera on GPS"}
         >
           <Crosshair className={`h-5 w-5 ${isFollowMode ? "animate-spin-slow" : ""}`} />
@@ -207,7 +219,13 @@ export default function LiveNavigationOverlay({
 
         <button
           onClick={onEndNavigation}
-          className="p-3 rounded-2xl bg-surface/90 hover:bg-danger text-foreground hover:text-white border border-border shadow-md backdrop-blur-md transition-all"
+          className="p-3 rounded-2xl transition-all"
+          style={{
+            backgroundColor: "#FFFFFF",
+            color: "#EF4444",
+            border: "1px solid rgba(15,23,42,0.1)",
+            boxShadow: "0 2px 6px rgba(15,23,42,0.08)",
+          }}
           title="End Live Navigation"
         >
           <X className="h-5 w-5" />
@@ -216,30 +234,31 @@ export default function LiveNavigationOverlay({
 
       {/* GPS ACCURACY WARNING BANNER */}
       {gpsAccuracyWarning && (
-        <div className="absolute top-28 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-fadeIn">
-          <div className="p-2.5 rounded-2xl bg-warning/15 border border-warning/30 text-warning text-xs font-bold flex items-center gap-2 backdrop-blur-md shadow-sm">
+        <div className="absolute top-28 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-fadeIn" style={{ fontFamily: "'Poppins',sans-serif" }}>
+          <div className="p-2.5 rounded-2xl flex items-center gap-2 shadow-sm text-xs" style={{ backgroundColor: "#FFFBEB", border: "1px solid #FDE68A", color: "#D97706" }}>
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span className="text-[11px]">GPS accuracy is low ({currentPosition?.accuracy ? Math.round(currentPosition.accuracy) : 50}m). Navigation continues.</span>
+            <span style={{ fontSize: "11px", fontWeight: 600 }}>GPS accuracy is low ({currentPosition?.accuracy ? Math.round(currentPosition.accuracy) : 50}m). Navigation continues.</span>
           </div>
         </div>
       )}
 
       {/* OFF-ROUTE NOTICE BANNER & RECALCULATE PROMPT */}
       {status === "OFF_ROUTE" && !rerouteProposal && (
-        <div className="absolute top-36 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-fadeIn">
-          <div className="rounded-3xl border border-rose-500/50 bg-surface/95 backdrop-blur-md p-4 shadow-2xl text-left space-y-3">
-            <div className="flex items-center gap-2 text-rose-400">
+        <div className="absolute top-36 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-fadeIn" style={{ fontFamily: "'Poppins',sans-serif" }}>
+          <div className="rounded-3xl p-4 shadow-xl text-left space-y-3" style={{ backgroundColor: "#FFFFFF", border: "2px solid #EF4444" }}>
+            <div className="flex items-center gap-2" style={{ color: "#EF4444" }}>
               <AlertTriangle className="h-5 w-5" />
-              <h4 className="font-black text-xs uppercase tracking-wider">Off Planned Route</h4>
+              <h4 style={{ fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em" }}>Off Planned Route</h4>
             </div>
-            <p className="text-xs text-muted font-semibold leading-relaxed">
+            <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>
               You are {progress?.distanceToRouteMeters ? Math.round(progress.distanceToRouteMeters) : 100}m away from the corridor. Would you like to calculate a new real Google route from your current GPS position?
             </p>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={onRequestReroute}
                 disabled={isRerouting}
-                className="flex-1 py-2.5 px-3 rounded-xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-md"
+                className="flex-1 py-2.5 px-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
               >
                 {isRerouting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 <span>Recalculate Route</span>
@@ -251,41 +270,41 @@ export default function LiveNavigationOverlay({
 
       {/* USER-APPROVED REROUTE PROPOSAL MODAL */}
       {rerouteProposal && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-surface border border-primary-accent/40 rounded-3xl p-6 text-left space-y-4 shadow-2xl animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-border pb-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ backgroundColor: "rgba(15,23,42,0.4)", fontFamily: "'Poppins',sans-serif" }}>
+          <div className="w-full max-w-md rounded-3xl p-6 text-left space-y-4 shadow-2xl animate-fadeIn" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
+            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
               <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary-accent" />
-                <h3 className="font-black text-base text-foreground">New Route Available</h3>
+                <Sparkles className="h-5 w-5" style={{ color: "#2563FF" }} />
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: "#0F172A" }}>New Route Available</h3>
               </div>
-              <span className="text-[10px] font-black text-success bg-success/15 px-2 py-0.5 rounded-md">
+              <span style={{ fontSize: "10px", fontWeight: 800, color: "#16A34A", backgroundColor: "#DCFCE7", padding: "2px 8px", borderRadius: "6px" }}>
                 Fit: {rerouteProposal.newRoute.safetyScore}/100
               </span>
             </div>
 
-            <p className="text-xs text-muted font-semibold leading-relaxed">
+            <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>
               Google Directions calculated a new real road route from your current position.
             </p>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-3 rounded-2xl bg-elevated-surface border border-border">
-                <span className="text-[10px] text-muted font-bold block">New Distance</span>
-                <p className="font-black text-foreground mt-0.5">{rerouteProposal.newRoute.distance}</p>
+              <div className="p-3 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+                <span style={{ fontSize: "10px", color: "#64748B", fontWeight: 700, display: "block" }}>New Distance</span>
+                <p style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>{rerouteProposal.newRoute.distance}</p>
               </div>
-              <div className="p-3 rounded-2xl bg-elevated-surface border border-border">
-                <span className="text-[10px] text-muted font-bold block">New Est. Duration</span>
-                <p className="font-black text-foreground mt-0.5">{rerouteProposal.newRoute.time}</p>
+              <div className="p-3 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+                <span style={{ fontSize: "10px", color: "#64748B", fontWeight: 700, display: "block" }}>New Est. Duration</span>
+                <p style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>{rerouteProposal.newRoute.time}</p>
               </div>
             </div>
 
             {/* Why This Route */}
-            <div className="space-y-1.5 p-3 rounded-2xl bg-elevated-surface border border-border text-xs">
-              <span className="text-[10px] font-black text-primary-accent uppercase tracking-wider block">
+            <div className="space-y-1.5 p-3 rounded-2xl text-xs" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <span style={{ fontSize: "10px", fontWeight: 800, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>
                 Safety Engine Assessment
               </span>
               {rerouteProposal.explanation.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-1.5 text-muted font-semibold text-[11px]">
-                  <span className="text-primary-accent font-black">•</span>
+                <div key={idx} className="flex items-start gap-1.5 text-[11px]" style={{ color: "#64748B", fontWeight: 500 }}>
+                  <span style={{ color: "#2563FF", fontWeight: 800 }}>•</span>
                   <span>{item}</span>
                 </div>
               ))}
@@ -294,13 +313,15 @@ export default function LiveNavigationOverlay({
             <div className="flex gap-3 pt-2">
               <button
                 onClick={onRejectReroute}
-                className="flex-1 py-3 rounded-2xl bg-elevated-surface hover:bg-border text-muted font-black text-xs transition-all border border-border"
+                className="flex-1 py-3 rounded-2xl text-xs font-bold transition-all"
+                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.1)", color: "#64748B", fontFamily: "'Poppins',sans-serif" }}
               >
                 Keep Current Route
               </button>
               <button
                 onClick={onApproveReroute}
-                className="flex-1 py-3 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs transition-all shadow-md"
+                className="flex-1 py-3 rounded-2xl text-white font-bold text-xs transition-all shadow-sm"
+                style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
               >
                 Use New Route
               </button>
@@ -310,55 +331,61 @@ export default function LiveNavigationOverlay({
       )}
 
       {/* BOTTOM TELEMETRY STRIP */}
-      <div className="absolute bottom-4 left-4 right-4 md:left-6 md:right-6 z-40 animate-slideUp">
-        <div className="rounded-3xl border border-border bg-surface/95 backdrop-blur-md p-4 md:p-5 shadow-2xl text-left space-y-3">
-          
+      <div className="absolute bottom-4 left-4 right-4 md:left-6 md:right-6 z-40 animate-slideUp" style={{ fontFamily: "'Poppins',sans-serif" }}>
+        <div
+          className="rounded-3xl p-4 md:p-5 shadow-lg text-left space-y-3"
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid rgba(15,23,42,0.08)",
+            boxShadow: "0 4px 20px rgba(37,99,255,0.08)",
+          }}
+        >
           {/* Progress Bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] font-black text-muted">
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[11px] font-bold" style={{ color: "#64748B" }}>
               <span>{progress ? `${(progress.distanceRemainingMeters / 1000).toFixed(1)} km remaining` : activeRoute.distance}</span>
-              <span className="text-primary-accent font-black">{progress?.progressPercent || 0}% Complete</span>
+              <span style={{ color: "#2563FF", fontWeight: 800 }}>{progress?.progressPercent || 0}% Complete</span>
             </div>
-            <div className="h-2 w-full bg-elevated-surface rounded-full overflow-hidden">
+            <div className="h-2 w-full rounded-full overflow-hidden" style={{ backgroundColor: "#F1F5F9" }}>
               <div 
-                className="h-full bg-primary-accent rounded-full transition-all duration-300"
-                style={{ width: `${progress?.progressPercent || 0}%` }}
+                className="h-full rounded-full transition-all duration-300"
+                style={{ width: `${progress?.progressPercent || 0}%`, backgroundColor: "#2563FF" }}
               />
             </div>
           </div>
 
           {/* Telemetry Metrics Grid */}
           <div className="grid grid-cols-4 gap-2 text-center text-xs">
-            <div className="p-2.5 rounded-2xl bg-elevated-surface border border-border">
-              <div className="flex items-center justify-center gap-1 text-muted text-[10px] font-bold">
-                <Clock className="h-3 w-3 text-primary-accent" /> ETA
+            <div className="p-2.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold" style={{ color: "#64748B" }}>
+                <Clock className="h-3 w-3" style={{ color: "#2563FF" }} /> ETA
               </div>
-              <p className="font-black text-foreground mt-0.5 text-sm">{progress?.etaString || activeRoute.time}</p>
+              <p style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>{progress?.etaString || activeRoute.time}</p>
             </div>
 
-            <div className="p-2.5 rounded-2xl bg-elevated-surface border border-border">
-              <div className="flex items-center justify-center gap-1 text-muted text-[10px] font-bold">
-                <Gauge className="h-3 w-3 text-info" /> Speed
+            <div className="p-2.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold" style={{ color: "#64748B" }}>
+                <Gauge className="h-3 w-3" style={{ color: "#00D4FF" }} /> Speed
               </div>
-              <p className="font-black text-foreground mt-0.5 text-xs truncate">
+              <p style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginTop: "2px" }} className="truncate">
                 {formatSpeedKmh(currentPosition?.speed ?? null)}
               </p>
             </div>
 
-            <div className="p-2.5 rounded-2xl bg-elevated-surface border border-border">
-              <div className="flex items-center justify-center gap-1 text-muted text-[10px] font-bold">
-                <Compass className="h-3 w-3 text-warning" /> Heading
+            <div className="p-2.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold" style={{ color: "#64748B" }}>
+                <Compass className="h-3 w-3 text-amber-500" /> Heading
               </div>
-              <p className="font-black text-foreground mt-0.5 text-xs truncate">
+              <p style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginTop: "2px" }} className="truncate">
                 {formatHeading(currentPosition?.heading ?? null)}
               </p>
             </div>
 
-            <div className="p-2.5 rounded-2xl bg-elevated-surface border border-border">
-              <div className="flex items-center justify-center gap-1 text-muted text-[10px] font-bold">
-                <ShieldCheck className="h-3 w-3 text-success" /> Safety Fit
+            <div className="p-2.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
+              <div className="flex items-center justify-center gap-1 text-[10px] font-bold" style={{ color: "#64748B" }}>
+                <ShieldCheck className="h-3 w-3 text-emerald-600" /> Safety Fit
               </div>
-              <p className="font-black text-success mt-0.5 text-sm">{activeRoute.safetyScore}</p>
+              <p style={{ fontSize: "14px", fontWeight: 800, color: "#16A34A", marginTop: "2px" }}>{activeRoute.safetyScore}</p>
             </div>
           </div>
 

@@ -4,6 +4,7 @@ from app.core.database import SessionLocal, engine
 from app.models import models
 
 def seed_db():
+    models.Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     
     # 1. Clear existing data
