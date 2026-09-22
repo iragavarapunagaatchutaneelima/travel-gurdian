@@ -4,12 +4,25 @@ import React, { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
-import { CITIES, generateRoutes, RouteOption, POI } from "@/data/routeData";
+import { CITIES, RouteOption, POI, City } from "@/data/routeData";
+import { calculateGoogleRoutes } from "@/services/googleRoutes";
+import { TravelerProfile, RoutePriority, IncidentReport, IncidentType } from "@/types/safety";
+import { LocationDetails } from "@/types/location";
+import { getActiveIncidents, reportCommunityIncident } from "@/services/incidentService";
+import { useLiveNavigation } from "@/hooks/useLiveNavigation";
+import LiveNavigationOverlay from "../components/LiveNavigationOverlay";
+import { useSafetyCheckIn } from "@/hooks/useSafetyCheckIn";
+import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
+import TravelAssistant from "../components/TravelAssistant";
+import { getTrustedContacts } from "@/services/trustedContactService";
+import { TrustedContact } from "@/types/safetyCheckIn";
+import { LiveTravelContext } from "@/types/gemini";
 import { 
   CheckCircle2, CloudRain, Sun, Moon, Loader, MapPin, 
   Navigation, Crosshair, Layers, ShieldCheck, Fuel, Coffee, 
   BedDouble, PlusSquare, AlertCircle, Sparkles, Clock, Compass,
-  Download, WifiOff, FileText, Check
+  Download, WifiOff, FileText, Check, Loader2, Hospital, ShieldAlert,
+  Plus, X, AlertTriangle, Play, Bot
 } from "lucide-react";
 import jsPDF from "jspdf";
 
@@ -25,14 +38,46 @@ function LivingMapContent() {
   // Route parameters
   const fromLoc = searchParams.get("from") || "chennai";
   const toLoc = searchParams.get("dest") || "bangalore";
-  const travelMode = searchParams.get("mode") || "Car";
+  const fromName = searchParams.get("fromName");
+  const destName = searchParams.get("destName");
+  const fromLat = searchParams.get("fromLat");
+  const fromLng = searchParams.get("fromLng");
+  const destLat = searchParams.get("destLat");
+  const destLng = searchParams.get("destLng");
+  const fromAddress = searchParams.get("fromAddress");
+  const destAddress = searchParams.get("destAddress");
+  const fromPlaceId = searchParams.get("fromPlaceId");
+  const destPlaceId = searchParams.get("destPlaceId");
+  const travelMode = (searchParams.get("mode") as any) || "Car";
+  const profileParam = (searchParams.get("profile") as TravelerProfile) || "Solo";
+  const priorityParam = (searchParams.get("priority") as RoutePriority) || "Balanced";
   const routeIdParam = searchParams.get("routeId") || "A";
+  const startNavParam = searchParams.get("startNav") === "true";
 
-  const [origin, setOrigin] = useState(CITIES[fromLoc] || CITIES["chennai"]);
-  const [dest, setDest] = useState(CITIES[toLoc] || CITIES["bangalore"]);
+  const [origin, setOrigin] = useState<City>(CITIES[fromLoc] || CITIES["chennai"]);
+  const [dest, setDest] = useState<City>(CITIES[toLoc] || CITIES["bangalore"]);
   const [allRoutes, setAllRoutes] = useState<RouteOption[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteOption | null>(null);
+  const [routeLoading, setRouteLoading] = useState(true);
+  const [routeError, setRouteError] = useState<string | null>(null);
   
+  // Layer Toggles
+  const [activeLayers, setActiveLayers] = useState({
+    hospitals: true,
+    police: true,
+    pharmacies: true,
+    fuel: true,
+    rest: true,
+    incidents: true
+  });
+
+  // Incident reporting modal
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [incidentType, setIncidentType] = useState<IncidentType>("Road blocked");
+  const [incidentDesc, setIncidentDesc] = useState("");
+  const [incidentReportSuccess, setIncidentReportSuccess] = useState(false);
+  const [communityIncidents, setCommunityIncidents] = useState<IncidentReport[]>([]);
+
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -42,14 +87,14 @@ function LivingMapContent() {
   const [mapboxTokenMissing, setMapboxTokenMissing] = useState(false);
   const [mapStyle, setMapStyle] = useState<"streets" | "satellite">("streets");
   
-  // GPS State
+  // GPS Geolocation State for single-shot Locate Button
   const [gpsLoading, setGpsLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
   // Selected POI card
   const [activePOI, setActivePOI] = useState<POI | null>(null);
-  const [weatherCondition, setWeatherCondition] = useState<"sunny" | "rainy" | "cloudy">("sunny");
+  const [activeIncident, setActiveIncident] = useState<IncidentReport | null>(null);
 
   // Offline Pack State
   const [isOffline, setIsOffline] = useState(false);
@@ -57,13 +102,101 @@ function LivingMapContent() {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [offlinePackInfo, setOfflinePackInfo] = useState<{ savedAt: string; routeId: string; route: RouteOption; origin: typeof CITIES[string]; dest: typeof CITIES[string] } | null>(null);
 
+  const destinationDetails: LocationDetails = {
+    placeId: destPlaceId || (toLoc.startsWith("ChIJ") ? toLoc : ""),
+    name: dest.name,
+    formattedAddress: dest.state,
+    latitude: dest.latitude,
+    longitude: dest.longitude
+  };
+
+  // Phase 4 Live Navigation Controller
+  const {
+    status: navStatus,
+    activeRoute: navActiveRoute,
+    currentPosition: navPosition,
+    progress: navProgress,
+    currentManeuver: navCurrentManeuver,
+    nextManeuver: navNextManeuver,
+    isFollowMode,
+    setIsFollowMode,
+    gpsError: navGpsError,
+    gpsAccuracyWarning: navGpsAccuracyWarning,
+    rerouteProposal,
+    isRerouting,
+    startNavigation,
+    endNavigation,
+    requestReroute,
+    approveReroute,
+    rejectReroute
+  } = useLiveNavigation({
+    initialRoute: selectedRoute,
+    destination: destinationDetails,
+    travelMode,
+    profile: profileParam,
+    priority: priorityParam,
+    onRouteUpdated: (newRoute) => {
+      setSelectedRoute(newRoute);
+      setAllRoutes(prev => [newRoute, ...prev.filter(r => r.id !== newRoute.id)]);
+    }
+  });
+
+  // Phase 5 Safety Check-In Controller
+  const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
+  const [showAssistant, setShowAssistant] = useState(false);
+
+  const {
+    status: checkInStatus,
+    config: checkInConfig,
+    activeCycle: checkInCycle,
+    secondsRemaining: checkInSecondsRemaining,
+    graceSecondsRemaining: checkInGraceSecondsRemaining,
+    lastKnownSnapshot: checkInLocationSnapshot,
+    escalationResult: checkInEscalationResult,
+    startCheckIn,
+    confirmSafety,
+    requestHelp,
+    cancelCheckIn,
+    resolveOnArrival
+  } = useSafetyCheckIn({
+    destinationName: dest?.name || destinationDetails.name,
+    currentPosition: navPosition
+  });
+
+  // Phase 6 Live Context for Gemini Assistant
+  const liveTravelContext: LiveTravelContext = {
+    navStatus,
+    activeRoute: navActiveRoute || selectedRoute,
+    currentPosition: navPosition,
+    progress: navProgress,
+    safetyScore: selectedRoute?.safetyScore,
+    safetyAssessment: selectedRoute?.safetyAssessment,
+    checkInStatus,
+    activeCheckInCycle: checkInCycle,
+    checkInSecondsRemaining,
+    trustedContactsCount: trustedContacts.filter(c => c.enabled).length,
+    originName: origin.name,
+    destinationName: dest.name,
+    travelMode
+  };
+
+  // Arrival Integration: resolve active safety check-in cleanly on arrival
   useEffect(() => {
+    if (navStatus === "ARRIVED") {
+      resolveOnArrival();
+    }
+  }, [navStatus, resolveOnArrival]);
+
+  useEffect(() => {
+    setTrustedContacts(getTrustedContacts());
     setIsOffline(!navigator.onLine);
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+
+    setCommunityIncidents(getActiveIncidents());
 
     try {
       const stored = localStorage.getItem("offline_travel_pack");
@@ -80,17 +213,77 @@ function LivingMapContent() {
     };
   }, []);
 
-  useEffect(() => {
-    const orig = CITIES[fromLoc] || CITIES["chennai"];
-    const dst = CITIES[toLoc] || CITIES["bangalore"];
+  const loadRoutesData = () => {
+    let orig: City = CITIES[fromLoc.toLowerCase()] || CITIES["chennai"];
+    if (fromLat && fromLng) {
+      orig = {
+        id: fromLoc,
+        name: fromName || orig.name,
+        state: fromAddress || orig.state,
+        latitude: parseFloat(fromLat),
+        longitude: parseFloat(fromLng),
+        region: "Selected Location",
+        highways: ["Corridor Road"]
+      };
+    }
+
+    let dst: City = CITIES[toLoc.toLowerCase()] || CITIES["bangalore"];
+    if (destLat && destLng) {
+      dst = {
+        id: toLoc,
+        name: destName || dst.name,
+        state: destAddress || dst.state,
+        latitude: parseFloat(destLat),
+        longitude: parseFloat(destLng),
+        region: "Selected Location",
+        highways: ["Corridor Road"]
+      };
+    }
+
     setOrigin(orig);
     setDest(dst);
+    setRouteLoading(true);
+    setRouteError(null);
 
-    const routes = generateRoutes(fromLoc, toLoc, travelMode);
-    setAllRoutes(routes);
-    const route = routes.find(r => r.id === routeIdParam) || routes[0];
-    setSelectedRoute(route);
-  }, [fromLoc, toLoc, travelMode, routeIdParam]);
+    const originDetails: LocationDetails = {
+      placeId: fromPlaceId || (fromLoc.startsWith("ChIJ") ? fromLoc : ""),
+      name: orig.name,
+      formattedAddress: orig.state,
+      latitude: orig.latitude,
+      longitude: orig.longitude
+    };
+
+    const destDetailsObj: LocationDetails = {
+      placeId: destPlaceId || (toLoc.startsWith("ChIJ") ? toLoc : ""),
+      name: dst.name,
+      formattedAddress: dst.state,
+      latitude: dst.latitude,
+      longitude: dst.longitude
+    };
+
+    calculateGoogleRoutes(originDetails, destDetailsObj, travelMode, profileParam, priorityParam)
+      .then((realRoutes) => {
+        setAllRoutes(realRoutes);
+        const route = realRoutes.find(r => r.id === routeIdParam) || realRoutes[0];
+        setSelectedRoute(route);
+        setRouteLoading(false);
+
+        if (startNavParam) {
+          setTimeout(() => {
+            startNavigation();
+          }, 600);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to calculate real Google routes for map:", err);
+        setRouteError(err.message || "Unable to calculate Google route for this location.");
+        setRouteLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    loadRoutesData();
+  }, [fromLoc, toLoc, fromName, destName, fromLat, fromLng, destLat, destLng, fromAddress, destAddress, fromPlaceId, destPlaceId, travelMode, profileParam, priorityParam, routeIdParam]);
 
   // Mapbox Initialization
   useEffect(() => {
@@ -102,7 +295,6 @@ function LivingMapContent() {
 
     if (!mapContainer.current || !origin || !dest || !selectedRoute) return;
 
-    // Avoid recreation
     if (map.current) {
       updateMapLayers();
       return;
@@ -122,10 +314,14 @@ function LivingMapContent() {
         (origin.latitude + dest.latitude) / 2
       ],
       zoom: 6,
-      preserveDrawingBuffer: true // Required for PDF map snapshot
+      preserveDrawingBuffer: true
     });
 
     newMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
+
+    newMap.on('dragstart', () => {
+      setIsFollowMode(false);
+    });
 
     newMap.on('load', () => {
       map.current = newMap;
@@ -154,6 +350,81 @@ function LivingMapContent() {
     });
   }, [mapStyle]);
 
+  // Re-render markers whenever activeLayers changes
+  useEffect(() => {
+    if (map.current && mapLoaded) {
+      updateMapLayers();
+    }
+  }, [activeLayers]);
+
+  // Live GPS User Position Marker update on Mapbox
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !navPosition) return;
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setLngLat([navPosition.longitude, navPosition.latitude]);
+      const el = userMarkerRef.current.getElement();
+      const dot = el.querySelector(".tg-marker-dot") as HTMLElement;
+      if (dot && navPosition.heading !== null && navPosition.heading !== undefined) {
+        dot.style.transform = `rotate(${navPosition.heading}deg)`;
+        dot.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>`;
+      }
+    } else {
+      const container = document.createElement("div");
+      container.className = "tg-gps-user-marker";
+      container.style.width = "32px";
+      container.style.height = "32px";
+      container.style.display = "flex";
+      container.style.alignItems = "center";
+      container.style.justifyContent = "center";
+      container.style.position = "relative";
+
+      const pulse = document.createElement("div");
+      pulse.style.position = "absolute";
+      pulse.style.inset = "0";
+      pulse.style.borderRadius = "50%";
+      pulse.style.backgroundColor = "rgba(99, 102, 241, 0.35)";
+      pulse.style.animation = "ping 2s cubic-bezier(0, 0, 0.2, 1) infinite";
+      container.appendChild(pulse);
+
+      const dot = document.createElement("div");
+      dot.className = "tg-marker-dot";
+      dot.style.width = "22px";
+      dot.style.height = "22px";
+      dot.style.borderRadius = "50%";
+      dot.style.backgroundColor = "#6366f1";
+      dot.style.border = "3px solid #ffffff";
+      dot.style.boxShadow = "0 0 12px rgba(99, 102, 241, 0.8)";
+      dot.style.display = "flex";
+      dot.style.alignItems = "center";
+      dot.style.justifyContent = "center";
+      dot.style.position = "relative";
+      dot.style.zIndex = "2";
+      dot.style.transition = "transform 0.3s ease";
+
+      if (navPosition.heading !== null && navPosition.heading !== undefined) {
+        dot.style.transform = `rotate(${navPosition.heading}deg)`;
+        dot.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>`;
+      } else {
+        dot.innerHTML = `<div style="width:6px; height:6px; background:white; border-radius:50%;"></div>`;
+      }
+      container.appendChild(dot);
+
+      userMarkerRef.current = new mapboxgl.Marker({ element: container })
+        .setLngLat([navPosition.longitude, navPosition.latitude])
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<b>YOUR LIVE GPS POSITION</b><br/>Accuracy: ±${Math.round(navPosition.accuracy)}m`))
+        .addTo(map.current);
+    }
+
+    if (isFollowMode && navStatus === "ACTIVE") {
+      map.current.easeTo({
+        center: [navPosition.longitude, navPosition.latitude],
+        zoom: 15,
+        duration: 800
+      });
+    }
+  }, [navPosition, isFollowMode, navStatus, mapLoaded]);
+
   const updateMapLayers = () => {
     if (!map.current || !origin || !dest || !selectedRoute) return;
 
@@ -161,29 +432,40 @@ function LivingMapContent() {
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
-    // Origin Marker
+    // Origin Marker (Purple)
     const originMarker = new mapboxgl.Marker({ color: "#6366f1" })
       .setLngLat([origin.longitude, origin.latitude])
       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<h4 style="font-weight:bold; color:#18181b;">Origin: ${origin.name}</h4><p style="color:#71717a; font-size:11px;">${origin.state}</p>`))
       .addTo(map.current);
     markersRef.current.push(originMarker);
 
-    // Destination Marker
+    // Destination Marker (Green)
     const destMarker = new mapboxgl.Marker({ color: "#10b981" })
       .setLngLat([dest.longitude, dest.latitude])
       .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<h4 style="font-weight:bold; color:#18181b;">Destination: ${dest.name}</h4><p style="color:#71717a; font-size:11px;">${dest.state}</p>`))
       .addTo(map.current);
     markersRef.current.push(destMarker);
 
-    // POI Markers
+    // Real POI Markers filtered by active toggles
     if (selectedRoute.pois) {
       selectedRoute.pois.forEach(poi => {
-        const color = poi.type === "petrol" ? "#f59e0b" : poi.type === "hospital" ? "#ef4444" : poi.type === "hotel" ? "#3b82f6" : "#8b5cf6";
+        if (poi.type === "hospital" && !activeLayers.hospitals) return;
+        if (poi.type === "police" && !activeLayers.police) return;
+        if (poi.type === "pharmacy" && !activeLayers.pharmacies) return;
+        if (poi.type === "petrol" && !activeLayers.fuel) return;
+        if ((poi.type === "food" || poi.type === "rest") && !activeLayers.rest) return;
+
+        const color = poi.type === "hospital" ? "#ef4444" : 
+                      poi.type === "police" ? "#3b82f6" : 
+                      poi.type === "pharmacy" ? "#a855f7" :
+                      poi.type === "petrol" ? "#f59e0b" : "#10b981";
+
         const poiMarker = new mapboxgl.Marker({ color })
           .setLngLat([poi.longitude, poi.latitude])
           .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`
             <div style="padding:4px; font-family:sans-serif; color:#18181b;">
-              <b style="font-size:12px;">${poi.name}</b>
+              <span style="font-size:9px; font-weight:bold; text-transform:uppercase; color:${color};">${poi.type.toUpperCase()} • VERIFIED GOOGLE PLACE</span>
+              <b style="font-size:12px; display:block; margin-top:2px;">${poi.name}</b>
               <p style="margin:2px 0 0 0; font-size:10px; color:#64748b;">${poi.distanceAhead} • ${poi.status}</p>
             </div>
           `))
@@ -191,8 +473,32 @@ function LivingMapContent() {
         
         poiMarker.getElement().addEventListener('click', () => {
           setActivePOI(poi);
+          setActiveIncident(null);
         });
         markersRef.current.push(poiMarker);
+      });
+    }
+
+    // Community Incident Markers
+    if (activeLayers.incidents && communityIncidents.length > 0) {
+      communityIncidents.forEach(inc => {
+        const incMarker = new mapboxgl.Marker({ color: "#dc2626" })
+          .setLngLat([inc.longitude, inc.latitude])
+          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`
+            <div style="padding:4px; font-family:sans-serif; color:#18181b;">
+              <span style="font-size:9px; font-weight:bold; text-transform:uppercase; color:#dc2626;">⚠️ USER REPORTED HAZARD</span>
+              <b style="font-size:12px; display:block; margin-top:2px;">${inc.type}</b>
+              <p style="margin:2px 0 0 0; font-size:10px; color:#64748b;">${inc.description}</p>
+              <span style="font-size:8px; color:#a1a1aa; margin-top:4px; display:block;">Reported: ${new Date(inc.timestamp).toLocaleTimeString()}</span>
+            </div>
+          `))
+          .addTo(map.current!);
+
+        incMarker.getElement().addEventListener('click', () => {
+          setActiveIncident(inc);
+          setActivePOI(null);
+        });
+        markersRef.current.push(incMarker);
       });
     }
 
@@ -228,8 +534,8 @@ function LivingMapContent() {
           'line-cap': 'round'
         },
         paint: {
-          'line-color': selectedRoute.recommendation === "HIGHLY RECOMMENDED" ? '#10b981' : 
-                        selectedRoute.recommendation === "RECOMMENDED" ? '#6366f1' : '#f59e0b',
+          'line-color': selectedRoute.safetyScore >= 85 ? '#10b981' : 
+                        selectedRoute.safetyScore >= 70 ? '#6366f1' : '#f59e0b',
           'line-width': 6,
           'line-opacity': 0.9
         }
@@ -245,6 +551,31 @@ function LivingMapContent() {
     bounds.extend([dest.longitude, dest.latitude]);
     
     map.current.fitBounds(bounds, { padding: 60 });
+  };
+
+  const handleReportHazard = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!incidentDesc.trim() || !selectedRoute) return;
+
+    // Report at approximately route midpoint or origin
+    const midPoint = selectedRoute.waypoints[Math.floor(selectedRoute.waypoints.length / 2)] || [origin.longitude, origin.latitude];
+    reportCommunityIncident(
+      incidentType,
+      midPoint[1],
+      midPoint[0],
+      incidentDesc,
+      selectedRoute.name
+    );
+
+    const updated = getActiveIncidents();
+    setCommunityIncidents(updated);
+    setIncidentReportSuccess(true);
+    setIncidentDesc("");
+    setTimeout(() => {
+      setShowIncidentModal(false);
+      setIncidentReportSuccess(false);
+      loadRoutesData(); // Re-evaluate safety fit with newly reported community incident
+    }, 1200);
   };
 
   // Generate PDF and save to localStorage
@@ -290,10 +621,7 @@ function LivingMapContent() {
       doc.setFontSize(12);
       doc.text(`Travel Mode: ${travelMode}`, 15, 72);
       doc.text(`Route: ${selectedRoute.name}`, 15, 79);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Recommendation: ${selectedRoute.recommendation}`, 15, 86);
       
-      // Try to capture map image
       let mapY = 100;
       try {
         if (map.current) {
@@ -420,11 +748,32 @@ function LivingMapContent() {
     );
   };
 
-  if (!origin || !dest || !selectedRoute) {
+  if (routeLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-xs font-bold text-muted">
-        <Loader className="h-6 w-6 animate-spin text-primary-accent mr-2" />
-        Loading Live Map Intelligence...
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center text-xs font-bold text-muted gap-3">
+        <Loader2 className="h-7 w-7 animate-spin text-primary-accent" />
+        <span>Calculating Real Google Road Network Route...</span>
+      </div>
+    );
+  }
+
+  if (routeError || !selectedRoute) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center text-xs font-bold p-6 text-center">
+        <Header />
+        <div className="max-w-md w-full p-6 rounded-3xl bg-surface border border-warning/30 space-y-4 my-auto">
+          <AlertCircle className="h-10 w-10 text-warning mx-auto" />
+          <h3 className="text-lg font-black text-foreground">Route Calculation Notice</h3>
+          <p className="text-xs text-muted font-semibold leading-relaxed">
+            {routeError || "No real road route could be calculated for this location."}
+          </p>
+          <button
+            onClick={() => router.push(`/plan?from=${fromLoc}&dest=${toLoc}`)}
+            className="w-full py-3 rounded-2xl bg-primary-accent text-white font-black hover:bg-primary-accent-hover transition-all"
+          >
+            Return to Journey Planner
+          </button>
+        </div>
       </div>
     );
   }
@@ -535,115 +884,225 @@ function LivingMapContent() {
           </div>
         )}
 
+        {/* Layer Filter Pills Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <span className="text-[10px] font-black text-muted uppercase tracking-widest flex items-center gap-1 shrink-0 mr-1">
+            <Layers className="h-3.5 w-3.5 text-primary-accent" /> Layers:
+          </span>
+          <button
+            onClick={() => setActiveLayers(prev => ({ ...prev, hospitals: !prev.hospitals }))}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeLayers.hospitals 
+                ? "bg-red-500/15 text-red-400 border border-red-500/30" 
+                : "bg-surface text-muted border border-border opacity-60"
+            }`}
+          >
+            <Hospital className="h-3.5 w-3.5" />
+            Hospitals ({selectedRoute.pois?.filter(p => p.type === "hospital").length || 0})
+          </button>
+          <button
+            onClick={() => setActiveLayers(prev => ({ ...prev, police: !prev.police }))}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeLayers.police 
+                ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" 
+                : "bg-surface text-muted border border-border opacity-60"
+            }`}
+          >
+            <ShieldAlert className="h-3.5 w-3.5" />
+            Police ({selectedRoute.pois?.filter(p => p.type === "police").length || 0})
+          </button>
+          <button
+            onClick={() => setActiveLayers(prev => ({ ...prev, pharmacies: !prev.pharmacies }))}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeLayers.pharmacies 
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/30" 
+                : "bg-surface text-muted border border-border opacity-60"
+            }`}
+          >
+            <PlusSquare className="h-3.5 w-3.5" />
+            Pharmacies ({selectedRoute.pois?.filter(p => p.type === "pharmacy").length || 0})
+          </button>
+          <button
+            onClick={() => setActiveLayers(prev => ({ ...prev, fuel: !prev.fuel }))}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeLayers.fuel 
+                ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" 
+                : "bg-surface text-muted border border-border opacity-60"
+            }`}
+          >
+            <Fuel className="h-3.5 w-3.5" />
+            Fuel ({selectedRoute.pois?.filter(p => p.type === "petrol").length || 0})
+          </button>
+          <button
+            onClick={() => setActiveLayers(prev => ({ ...prev, rest: !prev.rest }))}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeLayers.rest 
+                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" 
+                : "bg-surface text-muted border border-border opacity-60"
+            }`}
+          >
+            <Coffee className="h-3.5 w-3.5" />
+            Food & Rest ({selectedRoute.pois?.filter(p => p.type === "food" || p.type === "rest").length || 0})
+          </button>
+          <button
+            onClick={() => setActiveLayers(prev => ({ ...prev, incidents: !prev.incidents }))}
+            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+              activeLayers.incidents 
+                ? "bg-rose-500/15 text-rose-400 border border-rose-500/30" 
+                : "bg-surface text-muted border border-border opacity-60"
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Hazards ({communityIncidents.length})
+          </button>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
-          {/* Left Column: Route Detail Panel */}
-          <div className="lg:col-span-4 space-y-6">
+          {/* Left Column: Route Safety Assessment Panel */}
+          <div className="lg:col-span-4 space-y-5">
+
+            {/* Start Live Navigation Action Button */}
+            <button
+              onClick={startNavigation}
+              className="w-full py-4 px-5 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-black text-sm tracking-wide flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
+            >
+              <Navigation className="h-5 w-5 fill-white" />
+              <span>START LIVE NAVIGATION</span>
+            </button>
+
+            {/* Safety Check-In Pre-Trip Card */}
+            <SafetyCheckInWidget
+              status={checkInStatus}
+              config={checkInConfig}
+              activeCycle={checkInCycle}
+              secondsRemaining={checkInSecondsRemaining}
+              graceSecondsRemaining={checkInGraceSecondsRemaining}
+              lastKnownSnapshot={checkInLocationSnapshot}
+              escalationResult={checkInEscalationResult}
+              trustedContacts={trustedContacts}
+              onStart={startCheckIn}
+              onConfirmSafe={confirmSafety}
+              onRequestHelp={requestHelp}
+              onCancel={cancelCheckIn}
+            />
             
-            {/* Safety Score Card */}
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm text-left space-y-5 transition-colors">
+            {/* Safety Fit Card */}
+            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm text-left space-y-4 transition-colors">
               <div className="flex items-center justify-between border-b border-border pb-4">
                 <div className="space-y-1">
-                  <h3 className="text-xs font-black text-muted uppercase tracking-widest">
-                    Route Safety Index
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-black text-muted uppercase tracking-widest">
+                      Safety Fit
+                    </h3>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                      selectedRoute.safetyAssessment?.confidence === "HIGH" ? "bg-success/15 text-success" :
+                      selectedRoute.safetyAssessment?.confidence === "MEDIUM" ? "bg-info/15 text-info" :
+                      "bg-warning/15 text-warning"
+                    }`}>
+                      {selectedRoute.safetyAssessment?.confidence || "MEDIUM"} Confidence
+                    </span>
+                  </div>
                   <p className="text-sm font-black text-foreground">{selectedRoute.name}</p>
                 </div>
                 
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-16 w-16 items-center justify-center rounded-full border-4 font-black text-base shadow-inner transition-colors ${
-                    selectedRoute.safetyScore >= 85 ? "border-success bg-success/10 text-success" : 
-                    selectedRoute.safetyScore >= 70 ? "border-info bg-info/10 text-info" : 
-                    "border-warning bg-warning/10 text-warning"
-                  }`}>
-                    {selectedRoute.safetyScore}
-                  </div>
+                <div className={`flex h-16 w-16 items-center justify-center rounded-full border-4 font-black text-lg shadow-inner transition-colors ${
+                  selectedRoute.safetyScore >= 80 ? "border-success bg-success/10 text-success" : 
+                  selectedRoute.safetyScore >= 65 ? "border-info bg-info/10 text-info" : 
+                  "border-warning bg-warning/10 text-warning"
+                }`}>
+                  {selectedRoute.safetyScore}
                 </div>
               </div>
 
-              {/* Day & Night Safety Analysis */}
-              <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-muted flex items-center gap-1.5">
-                    <Sun className="h-3.5 w-3.5 text-amber-400" /> Day Safety:
+              {/* Factors Summary Grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
+                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
+                    <Hospital className="h-3 w-3 text-red-400" /> Medical Access
                   </span>
-                  <span className="text-success font-black">Optimal (06:00 - 18:00)</span>
-                </div>
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-muted flex items-center gap-1.5">
-                    <Moon className="h-3.5 w-3.5 text-indigo-400" /> Night Safety:
-                  </span>
-                  <span className={`font-black ${selectedRoute.nightSafety === "High" ? "text-success" : selectedRoute.nightSafety === "Medium" ? "text-warning" : "text-danger"}`}>
-                    {selectedRoute.nightSafety} Rating
+                  <p className="font-black text-foreground">
+                    {selectedRoute.safetyAssessment?.factors.medicalAccess.rating || "Moderate"}
+                  </p>
+                  <span className="text-[9px] text-muted block">
+                    {selectedRoute.safetyAssessment?.factors.medicalAccess.details || `${selectedRoute.pois?.filter(p => p.type === "hospital").length || 0} hospitals nearby`}
                   </span>
                 </div>
-              </div>
 
-              {/* Progress Bar Metrics */}
-              <div className="space-y-3 text-xs font-bold">
-                <div>
-                  <div className="flex justify-between text-muted mb-1">
-                    <span>Traffic Congestion</span>
-                    <span className="text-foreground">{selectedRoute.trafficScore}</span>
-                  </div>
-                  <div className="h-2 w-full bg-elevated-surface rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${selectedRoute.trafficScore === "Low" ? "w-4/5 bg-success" : selectedRoute.trafficScore === "Medium" ? "w-1/2 bg-warning" : "w-1/4 bg-danger"}`} 
-                    />
-                  </div>
+                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
+                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3 text-blue-400" /> Police Access
+                  </span>
+                  <p className="font-black text-foreground">
+                    {selectedRoute.safetyAssessment?.factors.policeAccess.rating || "Moderate"}
+                  </p>
+                  <span className="text-[9px] text-muted block">
+                    {selectedRoute.safetyAssessment?.factors.policeAccess.details || `${selectedRoute.pois?.filter(p => p.type === "police").length || 0} police nodes nearby`}
+                  </span>
                 </div>
 
-                <div>
-                  <div className="flex justify-between text-muted mb-1">
-                    <span>Road Quality Index</span>
-                    <span className="text-foreground">{selectedRoute.roadScore}</span>
-                  </div>
-                  <div className="h-2 w-full bg-elevated-surface rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${selectedRoute.roadScore === "Good" ? "w-5/6 bg-success" : selectedRoute.roadScore === "Moderate" ? "w-3/5 bg-warning" : "w-1/3 bg-danger"}`} 
-                    />
-                  </div>
+                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
+                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
+                    <Fuel className="h-3 w-3 text-amber-400" /> Fuel Access
+                  </span>
+                  <p className="font-black text-foreground">
+                    {selectedRoute.safetyAssessment?.factors.fuelAccess.rating || "Good"}
+                  </p>
+                  <span className="text-[9px] text-muted block">
+                    {selectedRoute.safetyAssessment?.factors.fuelAccess.details || `${selectedRoute.fuelStops} fuel plazas along corridor`}
+                  </span>
                 </div>
 
-                <div>
-                  <div className="flex justify-between text-muted mb-1">
-                    <span>Emergency Accessibility</span>
-                    <span className="text-foreground">{selectedRoute.emergencyAccessScore}/100</span>
-                  </div>
-                  <div className="h-2 w-full bg-elevated-surface rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-accent rounded-full" style={{ width: `${selectedRoute.emergencyAccessScore}%` }} />
-                  </div>
+                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
+                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
+                    <CloudRain className="h-3 w-3 text-cyan-400" /> Weather Telemetry
+                  </span>
+                  <p className="font-black text-muted">
+                    {selectedRoute.safetyAssessment?.factors.weather.rating || "Not Configured"}
+                  </p>
+                  <span className="text-[9px] text-muted block truncate" title="Live weather provider not configured">
+                    API Not Configured
+                  </span>
                 </div>
-              </div>
-              
-              {/* Route Notes */}
-              <div className="p-3.5 bg-elevated-surface rounded-2xl text-xs text-muted font-semibold leading-relaxed border border-border">
-                {selectedRoute.notes}
               </div>
 
-              {/* Amenities Grid */}
-              <div className="grid grid-cols-4 gap-2 pt-2 text-center text-muted">
-                <div className="p-2 rounded-xl bg-elevated-surface border border-border">
-                  <Coffee className="h-4 w-4 mx-auto mb-1 text-primary-accent" />
-                  <span className="text-[10px] font-black text-foreground block">{selectedRoute.restStops}</span>
-                  <span className="text-[8px] font-bold uppercase">Rest Stops</span>
+              {/* Emergency Access Score Bar */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex justify-between text-xs font-bold text-muted">
+                  <span>Emergency Facility Accessibility</span>
+                  <span className="text-foreground">{selectedRoute.emergencyAccessScore}/100</span>
                 </div>
-                <div className="p-2 rounded-xl bg-elevated-surface border border-border">
-                  <Fuel className="h-4 w-4 mx-auto mb-1 text-warning" />
-                  <span className="text-[10px] font-black text-foreground block">{selectedRoute.fuelStops}</span>
-                  <span className="text-[8px] font-bold uppercase">Fuel</span>
-                </div>
-                <div className="p-2 rounded-xl bg-elevated-surface border border-border">
-                  <BedDouble className="h-4 w-4 mx-auto mb-1 text-info" />
-                  <span className="text-[10px] font-black text-foreground block">{selectedRoute.hotels}</span>
-                  <span className="text-[8px] font-bold uppercase">Hotels</span>
-                </div>
-                <div className="p-2 rounded-xl bg-elevated-surface border border-border">
-                  <PlusSquare className="h-4 w-4 mx-auto mb-1 text-danger" />
-                  <span className="text-[10px] font-black text-foreground block">Active</span>
-                  <span className="text-[8px] font-bold uppercase">SOS</span>
+                <div className="h-2 w-full bg-elevated-surface rounded-full overflow-hidden">
+                  <div className="h-full bg-primary-accent rounded-full" style={{ width: `${selectedRoute.emergencyAccessScore}%` }} />
                 </div>
               </div>
+
+              {/* Why This Route Explanation */}
+              <div className="space-y-2 pt-2 border-t border-border">
+                <span className="text-[10px] font-black text-primary-accent uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="h-3.5 w-3.5" /> Why This Route?
+                </span>
+                <div className="space-y-1.5">
+                  {(selectedRoute.whyThisRoute && selectedRoute.whyThisRoute.length > 0 
+                    ? selectedRoute.whyThisRoute 
+                    : [selectedRoute.notes]
+                  ).map((bullet, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-xs text-muted font-semibold leading-relaxed">
+                      <span className="text-primary-accent font-black">•</span>
+                      <span>{bullet}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Report Community Incident Button */}
+              <button
+                onClick={() => setShowIncidentModal(true)}
+                className="w-full py-2.5 px-4 rounded-2xl bg-elevated-surface hover:bg-border border border-border text-foreground text-xs font-black flex items-center justify-center gap-2 transition-all shadow-sm"
+              >
+                <AlertTriangle className="h-4 w-4 text-warning" />
+                <span>Report Road Hazard / Incident</span>
+              </button>
             </div>
 
             {/* Selected POI Card */}
@@ -652,19 +1111,41 @@ function LivingMapContent() {
                 <div className="flex justify-between items-start">
                   <div>
                     <span className="text-[9px] font-black text-primary-accent uppercase tracking-wider block">
-                      Selected Route POI
+                      VERIFIED GOOGLE PLACE
                     </span>
-                    <h4 className="font-black text-sm text-foreground">{activePOI.name}</h4>
+                    <h4 className="font-black text-sm text-foreground mt-0.5">{activePOI.name}</h4>
                   </div>
                   <button onClick={() => setActivePOI(null)} className="text-muted hover:text-foreground text-xs p-1">✕</button>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-muted font-semibold">
-                  <span>{activePOI.distanceAhead}</span>
+                  <span className="text-foreground font-bold">{activePOI.distanceAhead}</span>
                   <span>•</span>
                   <span className="text-success font-bold">{activePOI.status}</span>
                 </div>
-                <div className="text-[10px] text-muted italic">
-                  DEMO POI: Marker calibrated along corridor coordinates.
+                <div className="text-[10px] text-muted">
+                  Source: Google Places along {selectedRoute.name} corridor
+                </div>
+              </div>
+            )}
+
+            {/* Selected Community Incident Card */}
+            {activeIncident && (
+              <div className="rounded-3xl border border-rose-500/40 bg-surface p-5 text-left space-y-3 shadow-md animate-fadeIn">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider block">
+                      ⚠️ COMMUNITY REPORTED HAZARD
+                    </span>
+                    <h4 className="font-black text-sm text-foreground mt-0.5">{activeIncident.type}</h4>
+                  </div>
+                  <button onClick={() => setActiveIncident(null)} className="text-muted hover:text-foreground text-xs p-1">✕</button>
+                </div>
+                <p className="text-xs text-muted font-semibold leading-relaxed">
+                  {activeIncident.description}
+                </p>
+                <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-border">
+                  <span>Corridor: {activeIncident.corridorName || "Route"}</span>
+                  <span>Reported: {new Date(activeIncident.timestamp).toLocaleTimeString()}</span>
                 </div>
               </div>
             )}
@@ -702,25 +1183,69 @@ function LivingMapContent() {
                   </div>
                   <h3 className="text-xl font-black text-foreground">MAP PREVIEW MODE</h3>
                   <p className="text-xs md:text-sm text-muted max-w-md leading-relaxed">
-                    Interactive Mapbox GL service requires your public token. To enable high-resolution satellite tiles and turn navigation, configure <code className="bg-elevated-surface px-2 py-0.5 rounded text-primary-accent font-mono">NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN</code> in your environment variables.
+                    Interactive Mapbox GL service requires your public token. Configure <code className="bg-elevated-surface px-2 py-0.5 rounded text-primary-accent font-mono">NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN</code> in your environment variables.
                   </p>
                   <div className="p-4 rounded-2xl bg-elevated-surface border border-border text-left w-full max-w-md text-xs space-y-1 text-muted">
-                    <span className="font-bold text-foreground block">Active Simulated Route:</span>
+                    <span className="font-bold text-foreground block">Active Real Google Route:</span>
                     <div className="flex justify-between"><span>Origin:</span> <span className="font-bold text-foreground">{origin.name} ({origin.state})</span></div>
                     <div className="flex justify-between"><span>Destination:</span> <span className="font-bold text-foreground">{dest.name} ({dest.state})</span></div>
-                    <div className="flex justify-between"><span>Safety Corridor:</span> <span className="font-bold text-success">{selectedRoute.name} ({selectedRoute.safetyScore}/100)</span></div>
+                    <div className="flex justify-between"><span>Safety Fit:</span> <span className="font-bold text-success">{selectedRoute.name} ({selectedRoute.safetyScore}/100)</span></div>
                   </div>
                 </div>
               ) : (
                 <div ref={mapContainer} className="w-full h-full" />
               )}
+
+              {/* Phase 4 Live Navigation Overlay with Phase 5 Safety Check-In */}
+              <LiveNavigationOverlay
+                status={navStatus}
+                activeRoute={navActiveRoute || selectedRoute}
+                currentPosition={navPosition}
+                progress={navProgress}
+                currentManeuver={navCurrentManeuver}
+                nextManeuver={navNextManeuver}
+                isFollowMode={isFollowMode}
+                gpsAccuracyWarning={navGpsAccuracyWarning}
+                rerouteProposal={rerouteProposal}
+                isRerouting={isRerouting}
+                safetyWidget={
+                  <SafetyCheckInWidget
+                    status={checkInStatus}
+                    config={checkInConfig}
+                    activeCycle={checkInCycle}
+                    secondsRemaining={checkInSecondsRemaining}
+                    graceSecondsRemaining={checkInGraceSecondsRemaining}
+                    lastKnownSnapshot={checkInLocationSnapshot}
+                    escalationResult={checkInEscalationResult}
+                    trustedContacts={trustedContacts}
+                    onStart={startCheckIn}
+                    onConfirmSafe={confirmSafety}
+                    onRequestHelp={requestHelp}
+                    onCancel={cancelCheckIn}
+                  />
+                }
+                onRecenter={() => {
+                  setIsFollowMode(true);
+                  if (map.current && navPosition) {
+                    map.current.easeTo({
+                      center: [navPosition.longitude, navPosition.latitude],
+                      zoom: 15,
+                      duration: 800
+                    });
+                  }
+                }}
+                onEndNavigation={endNavigation}
+                onRequestReroute={requestReroute}
+                onApproveReroute={approveReroute}
+                onRejectReroute={rejectReroute}
+              />
               
             </div>
 
             {/* Route Selector Switcher */}
             <div className={`rounded-2xl border border-border bg-surface p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm ${isOffline ? "opacity-50 pointer-events-none" : ""}`}>
               <span className="text-xs font-black text-muted uppercase tracking-wider">
-                Select Alternative Route Profile:
+                Select Alternative Google Route:
               </span>
               <div className="flex flex-wrap gap-2">
                 {allRoutes.map(r => (
@@ -733,7 +1258,7 @@ function LivingMapContent() {
                         : "bg-elevated-surface hover:bg-border text-foreground border border-border"
                     }`}
                   >
-                    Route {r.id}: {r.name.split(" ")[0]} ({r.safetyScore}/100)
+                    Route {r.id}: {r.name.split(" ")[0]} (Fit: {r.safetyScore}/100)
                   </button>
                 ))}
               </div>
@@ -743,6 +1268,115 @@ function LivingMapContent() {
 
         </div>
       </div>
+
+      {/* Community Incident Report Modal */}
+      {showIncidentModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-surface border border-border rounded-3xl p-6 space-y-5 shadow-2xl text-left animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-warning" />
+                <h3 className="font-black text-base text-foreground">Report Community Hazard</h3>
+              </div>
+              <button 
+                onClick={() => setShowIncidentModal(false)}
+                className="text-muted hover:text-foreground text-xs p-1 rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {incidentReportSuccess ? (
+              <div className="p-4 rounded-2xl bg-success/15 border border-success/30 text-success text-center space-y-2">
+                <CheckCircle2 className="h-8 w-8 mx-auto" />
+                <p className="font-black text-sm">Hazard Report Logged!</p>
+                <p className="text-xs font-semibold">Marked as USER REPORTED along corridor. Route safety fit updated.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleReportHazard} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-muted uppercase tracking-wider block">
+                    Incident / Hazard Type
+                  </label>
+                  <select
+                    value={incidentType}
+                    onChange={(e) => setIncidentType(e.target.value as IncidentType)}
+                    className="w-full rounded-2xl bg-elevated-surface border border-border px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-primary-accent"
+                  >
+                    <option value="Road blocked">Road blocked / Obstruction</option>
+                    <option value="Accident">Accident reported</option>
+                    <option value="Heavy traffic">Heavy gridlock / Traffic</option>
+                    <option value="Flood / water">Flood / Water logging</option>
+                    <option value="Construction">Active road work / Construction</option>
+                    <option value="Other">Other road safety issue</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-muted uppercase tracking-wider block">
+                    Description & Observations
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Describe the condition (e.g., lane partially closed after toll plaza)..."
+                    value={incidentDesc}
+                    onChange={(e) => setIncidentDesc(e.target.value)}
+                    required
+                    className="w-full rounded-2xl bg-elevated-surface border border-border p-3 text-xs text-foreground font-semibold focus:outline-none focus:border-primary-accent"
+                  />
+                </div>
+
+                <div className="p-3 rounded-2xl bg-elevated-surface border border-border text-[10px] text-muted space-y-1">
+                  <span className="font-black text-foreground block">⚠️ Truthful Data Label:</span>
+                  <span>Will be published as <strong className="text-warning font-black">USER REPORTED</strong> with a 6-hour automatic validity expiration.</span>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowIncidentModal(false)}
+                    className="flex-1 py-3 rounded-2xl bg-elevated-surface hover:bg-border text-muted font-black text-xs transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs transition-all shadow-md"
+                  >
+                    Submit Report
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Travel Assistant Button */}
+      <button
+        onClick={() => setShowAssistant(!showAssistant)}
+        className="fixed bottom-20 md:bottom-8 right-4 md:right-8 z-40 p-3.5 rounded-full bg-primary-accent hover:bg-primary-accent-hover text-white shadow-2xl shadow-primary-accent/40 flex items-center gap-2 border-2 border-white/20 transition-transform active:scale-95"
+        title="Open AI Travel Guardian Assistant"
+      >
+        <Bot className="h-6 w-6" />
+        <span className="font-black text-xs hidden md:inline">AI Assistant</span>
+      </button>
+
+      {/* Floating Travel Assistant Drawer/Modal */}
+      {showAssistant && (
+        <TravelAssistant
+          isOpen={showAssistant}
+          isFloating={true}
+          onClose={() => setShowAssistant(false)}
+          context={liveTravelContext}
+          onApplyInterval={(mins) => startCheckIn({ intervalMinutes: mins })}
+          onSelectRoute={(id) => {
+            const r = allRoutes.find(x => x.id === id);
+            if (r) setSelectedRoute(r);
+          }}
+          onTriggerAlert={() => requestHelp("Assistance requested via AI Assistant.")}
+        />
+      )}
 
       <div className="md:hidden">
         <BottomNav />
@@ -764,3 +1398,4 @@ export default function LivingMap() {
     </Suspense>
   );
 }
+
