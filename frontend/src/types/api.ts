@@ -87,4 +87,60 @@ export interface SOSResponse {
   latitude: number;
   longitude: number;
   nearest_havens: SafeHaven[];
+  sms_status?: "sent" | "failed" | "pending";
+  call_status?: "initiated" | "failed" | "pending";
+  overall_status?: "completed" | "partially_completed" | "failed" | "pending";
+  recipient_name?: string;
+  recipient_phone_masked?: string;
 }
+
+export interface EmergencyActionParams {
+  latitude?: number;
+  longitude?: number;
+  custom_message?: string;
+  location_name?: string;
+  voice_message?: string;
+  include_sms?: boolean;
+  include_call?: boolean;
+  contact_name?: string;
+  contact_phone?: string;
+  contact_relation?: string;
+}
+
+
+export interface EmergencySMSResponse {
+  success: boolean;
+  status: "sent" | "failed" | "pending";
+  message: string;
+  safe_message?: string;
+  recipient_name?: string;
+  recipient_phone_masked?: string;
+  sid?: string | null;
+  error?: string | null;
+}
+
+export interface EmergencyCallResponse {
+  success: boolean;
+  status: "initiated" | "failed" | "pending";
+  message: string;
+  safe_message?: string;
+  recipient_name?: string;
+  recipient_phone_masked?: string;
+  sid?: string | null;
+  error?: string | null;
+}
+
+export interface EmergencyNotificationResponse {
+  success: boolean;
+  overall_status: "completed" | "partially_completed" | "failed" | "pending";
+  sms_status: "sent" | "failed" | "pending";
+  call_status: "initiated" | "failed" | "pending";
+  message: string;
+  safe_message?: string;
+  recipient_name?: string;
+  recipient_phone_masked?: string;
+  sms_sid?: string | null;
+  call_sid?: string | null;
+  timestamp: string;
+}
+

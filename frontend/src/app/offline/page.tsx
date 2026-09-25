@@ -8,7 +8,7 @@ import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { saveOfflinePack, deleteOfflinePack } from "../../services/offlineStorageService";
 import { downloadCorridorMapPack } from "../../services/offlineTileService";
 import { OfflineCorridorPack, CacheFreshness } from "../../types/offline";
-import { CITIES, generateRoutes } from "../../data/routeData";
+import { CITIES, generateRoutes, City } from "../../data/routeData";
 import { generateSurvivalKitPDF } from "../../services/survivalPdfGenerator";
 import { 
   Download, 
@@ -52,6 +52,12 @@ function OfflinePacksManagerContent() {
   const fromParam = searchParams.get("from") || "chennai";
   const destParam = searchParams.get("dest") || "bangalore";
   const modeParam = (searchParams.get("mode") as any) || "Car";
+  const fromLat = parseFloat(searchParams.get("fromLat") || "");
+  const fromLng = parseFloat(searchParams.get("fromLng") || "");
+  const destLat = parseFloat(searchParams.get("destLat") || "");
+  const destLng = parseFloat(searchParams.get("destLng") || "");
+  const fromName = searchParams.get("fromName") || fromParam;
+  const destName = searchParams.get("destName") || destParam;
 
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{
@@ -62,6 +68,7 @@ function OfflinePacksManagerContent() {
     total: number;
   } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDownloadNewPack = async () => {
     setDownloading(true);
@@ -73,8 +80,25 @@ function OfflinePacksManagerContent() {
       total: 100,
     });
 
-    const origin = CITIES[fromParam.toLowerCase()] || CITIES["chennai"];
-    const dest = CITIES[destParam.toLowerCase()] || CITIES["bangalore"];
+    const origin: City = CITIES[fromParam.toLowerCase()] || {
+      id: fromParam.toLowerCase().replace(/[^a-z0-9]/g, "_") || "origin",
+      name: fromName,
+      state: "Regional",
+      latitude: !isNaN(fromLat) ? fromLat : 13.0827,
+      longitude: !isNaN(fromLng) ? fromLng : 80.2707,
+      region: "Local Corridor",
+      highways: ["National Highway"]
+    };
+    const dest: City = CITIES[destParam.toLowerCase()] || {
+      id: destParam.toLowerCase().replace(/[^a-z0-9]/g, "_") || "destination",
+      name: destName,
+      state: "Regional",
+      latitude: !isNaN(destLat) ? destLat : 12.9716,
+      longitude: !isNaN(destLng) ? destLng : 77.5946,
+      region: "Local Corridor",
+      highways: ["National Highway"]
+    };
+
     const routes = generateRoutes(origin.id, dest.id, modeParam);
     const activeRoute = routes[0];
     const packId = `pack_${origin.id}_${dest.id}_${Date.now()}`;
@@ -107,7 +131,7 @@ function OfflinePacksManagerContent() {
         travelMode: modeParam,
         route: activeRoute,
         turnInstructions: [
-          { stepIndex: 1, instruction: `Depart from ${origin.name} toward main national highway link`, distanceText: "2.5 km", durationText: "5 mins", maneuverType: "straight" },
+          { stepIndex: 1, instruction: `Depart from ${origin.name} toward main corridor link`, distanceText: "2.5 km", durationText: "5 mins", maneuverType: "straight" },
           { stepIndex: 2, instruction: `Join ${activeRoute.name} corridor and maintain highway cruise`, distanceText: activeRoute.distance, durationText: activeRoute.time, maneuverType: "straight" },
           { stepIndex: 3, instruction: `Arrive at destination: ${dest.name}`, distanceText: "1.0 km", durationText: "2 mins", maneuverType: "arrive" }
         ],
@@ -138,12 +162,16 @@ function OfflinePacksManagerContent() {
         setSuccessMessage(`Cached vector corridor (${mapPackMetadata.tileCount} tiles) for ${origin.name} ➔ ${dest.name} successfully!`);
         await refreshStorage();
         setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        setErrorMessage(`Storage warning: ${res.error || "Unable to save pack"}`);
+        setTimeout(() => setErrorMessage(null), 6000);
       }
     } catch (err: any) {
       console.error("Vector pack download error:", err);
       setDownloading(false);
       setDownloadProgress(null);
-      alert(`Download failure: ${err.message || "Could not complete vector download"}`);
+      setErrorMessage(`Download failure: ${err.message || "Could not complete vector download"}`);
+      setTimeout(() => setErrorMessage(null), 6000);
     }
   };
 
@@ -198,6 +226,16 @@ function OfflinePacksManagerContent() {
         </div>
 
         {/* Global Feedback Alert */}
+        {errorMessage && (
+          <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "#FEE2E2", border: "1px solid #FCA5A5", color: "#DC2626", fontSize: "13px", fontWeight: 600 }}>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            <button onClick={() => setErrorMessage(null)} className="font-bold hover:underline p-1">✕</button>
+          </div>
+        )}
+
         {successMessage && (
           <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "#DCFCE7", border: "1px solid #86EFAC", color: "#16A34A", fontSize: "13px", fontWeight: 600 }}>
             <div className="flex items-center gap-2">

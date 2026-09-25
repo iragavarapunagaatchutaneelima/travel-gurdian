@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 480" fill="none" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="waveGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563FF" stop-opacity="0.14" />
+      <stop offset="50%" stop-color="#00D4FF" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#1E40AF" stop-opacity="0.02" />
+    </linearGradient>
+    <linearGradient id="waveGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00D4FF" stop-opacity="0.10" />
+      <stop offset="100%" stop-color="#2563FF" stop-opacity="0.04" />
+    </linearGradient>
+  </defs>
+  <path d="M0,192L48,197.3C96,203,192,213,288,208C384,203,480,181,576,181.3C672,181,768,203,864,213.3C960,224,1056,224,1152,208C1248,192,1344,160,1392,144L1440,128L1440,480L1392,480C1344,480,1248,480,1152,480C1056,480,960,480,864,480C768,480,672,480,576,480C480,480,384,480,288,480C192,480,96,480,48,480L0,480Z" fill="url(#waveGrad1)"/>
+  <path d="M0,256L48,240C96,224,192,192,288,197.3C384,203,480,245,576,261.3C672,277,768,267,864,240C960,213,1056,171,1152,165.3C1248,160,1344,192,1392,208L1440,224L1440,480L1392,480C1344,480,1248,480,1152,480C1056,480,960,480,864,480C768,480,672,480,576,480C480,480,384,480,288,480C192,480,96,480,48,480L0,480Z" fill="url(#waveGrad2)"/>
+</svg>

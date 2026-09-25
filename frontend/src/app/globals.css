@@ -31,6 +31,9 @@
     --tg-border-solid: #E2E8F0;
 
     /* === Tailwind-mapped semantic tokens === */
+    --primary: var(--tg-primary);
+    --primary-foreground: #FFFFFF;
+    --accent: var(--tg-accent);
     --background: var(--tg-background);
     --foreground: var(--tg-navy);
     --surface: var(--tg-surface);
@@ -48,25 +51,49 @@
     --muted: var(--tg-muted);
   }
 
-  /* Keep .dark class but make it the same as light — prevents any dark flash */
+  /* === Dedicated Travel Guardian Dark Theme === */
   .dark {
-    --background: var(--tg-background);
-    --foreground: var(--tg-navy);
-    --surface: var(--tg-surface);
-    --elevated-surface: var(--tg-surface-muted);
-    --soft-blue: var(--tg-surface-soft);
-    --border: var(--tg-border-solid);
-    --primary-accent: var(--tg-primary);
-    --primary-accent-hover: var(--tg-primary-hover);
-    --secondary-blue: var(--tg-primary-dark);
-    --accent-cyan: var(--tg-accent);
-    --success: var(--tg-success);
-    --warning: var(--tg-warning);
-    --danger: var(--tg-danger);
-    --info: var(--tg-info);
-    --muted: var(--tg-muted);
+    --tg-primary: #3B82F6;
+    --tg-primary-dark: #2563FF;
+    --tg-primary-hover: #60A5FA;
+    --tg-navy: #F8FAFC;
+    --tg-background: #090D16;
+    --tg-surface: #111827;
+    --tg-surface-soft: rgba(37, 99, 255, 0.16);
+    --tg-surface-muted: #1E293B;
+    --tg-accent: #38BDF8;
+    --tg-success: #34D399;
+    --tg-success-light: rgba(52, 211, 153, 0.15);
+    --tg-warning: #FBBF24;
+    --tg-warning-light: rgba(251, 191, 36, 0.15);
+    --tg-danger: #F87171;
+    --tg-danger-light: rgba(248, 113, 113, 0.15);
+    --tg-info: #38BDF8;
+    --tg-muted: #94A3B8;
+    --tg-border: rgba(255, 255, 255, 0.10);
+    --tg-border-solid: #334155;
+
+    --primary: #3B82F6;
+    --primary-foreground: #FFFFFF;
+    --accent: #38BDF8;
+    --background: #090D16;
+    --foreground: #F8FAFC;
+    --surface: #111827;
+    --elevated-surface: #1E293B;
+    --soft-blue: rgba(37, 99, 255, 0.16);
+    --border: #334155;
+    --primary-accent: #3B82F6;
+    --primary-accent-hover: #60A5FA;
+    --secondary-blue: #2563FF;
+    --accent-cyan: #38BDF8;
+    --success: #34D399;
+    --warning: #FBBF24;
+    --danger: #F87171;
+    --info: #38BDF8;
+    --muted: #94A3B8;
   }
 }
+
 
 @theme inline {
   --color-background: var(--background);
@@ -338,3 +365,38 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Dark mode utility styling */
+.dark .tg-card {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+.dark .tg-input {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground) !important;
+}
+
+.dark .tg-hero-gradient {
+  background: linear-gradient(135deg, #0B132B 0%, #090D16 50%, #0F172A 100%) !important;
+}
+
+/* Horizontal scroll overflow protection */
+html, body {
+  max-width: 100vw;
+  overflow-x: clip;
+}
+
+/* Accessibility: prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+

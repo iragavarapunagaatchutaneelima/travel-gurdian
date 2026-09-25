@@ -7,9 +7,9 @@ import { getActiveIncidents } from "./incidentService";
 
 /**
  * Decodes Google encoded polyline string into an array of [longitude, latitude] coordinates
- * suitable for Mapbox GeoJSON LineString rendering.
+ * suitable for Google Maps and GeoJSON spatial rendering.
  *
- * NOTE: GeoJSON specifies coordinates in [longitude, latitude] order.
+ * NOTE: Standard coordinate format is [longitude, latitude] order.
  */
 export function decodeGooglePolyline(encoded: string): [number, number][] {
   if (!encoded) return [];
@@ -42,7 +42,7 @@ export function decodeGooglePolyline(encoded: string): [number, number][] {
     const dlng = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
     lng += dlng;
 
-    // Return in [longitude, latitude] order for GeoJSON / Mapbox
+    // Return in [longitude, latitude] order
     points.push([lng * 1e-5, lat * 1e-5]);
   }
 
@@ -74,6 +74,9 @@ export function formatDistanceMeters(meters: number): string {
 }
 
 let directionsServiceInstance: any = null;
+const inFlightRouteRequests = new Map<string, Promise<RouteOption[]>>();
+const routeResultCache = new Map<string, { routes: RouteOption[]; timestamp: number }>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache
 
 function getDirectionsService(): any {
   if (!directionsServiceInstance && window.google?.maps) {
@@ -85,6 +88,7 @@ function getDirectionsService(): any {
 /**
  * Request real road routing from Google Maps DirectionsService.
  * Returns normalized Travel Guardian RouteOption objects with real road geometry and real safety assessments.
+ * Includes in-flight deduplication and caching for sub-second repeat responses.
  */
 export async function calculateGoogleRoutes(
   origin: LocationDetails,
@@ -101,13 +105,31 @@ export async function calculateGoogleRoutes(
     throw new Error("OFFLINE");
   }
 
-  // Load Google Maps API with directions support
-  await loadGoogleMapsScript();
+  // Generate cache & deduplication key
+  const origKey = origin.placeId || `${origin.latitude?.toFixed(4)}_${origin.longitude?.toFixed(4)}_${origin.name}`;
+  const destKey = destination.placeId || `${destination.latitude?.toFixed(4)}_${destination.longitude?.toFixed(4)}_${destination.name}`;
+  const cacheKey = `${origKey}__${destKey}__${travelMode}__${profile}__${priority}`;
 
-  const service = getDirectionsService();
-  if (!service) {
-    throw new Error("SERVICE_UNAVAILABLE");
+  // Check cache
+  const cached = routeResultCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.routes;
   }
+
+  // Deduplicate in-flight identical request
+  if (inFlightRouteRequests.has(cacheKey)) {
+    return inFlightRouteRequests.get(cacheKey)!;
+  }
+
+  const executionPromise: Promise<RouteOption[]> = (async (): Promise<RouteOption[]> => {
+    try {
+      // Load Google Maps API with directions support
+      await loadGoogleMapsScript();
+
+      const service = getDirectionsService();
+      if (!service) {
+        throw new Error("SERVICE_UNAVAILABLE");
+      }
 
   // Map TravelGuardian TravelMode to Google Maps TravelMode
   let googleTravelMode: any;
@@ -135,7 +157,7 @@ export async function calculateGoogleRoutes(
 
   const activeIncidents = getActiveIncidents();
 
-  return new Promise((resolve, reject) => {
+  return new Promise<RouteOption[]>((resolve, reject) => {
     service.route(
       {
         origin: originLocation,
@@ -334,5 +356,15 @@ export async function calculateGoogleRoutes(
       }
     );
   });
+
+    } finally {
+      inFlightRouteRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightRouteRequests.set(cacheKey, executionPromise);
+  const result = await executionPromise;
+  routeResultCache.set(cacheKey, { routes: result, timestamp: Date.now() });
+  return result;
 }
 

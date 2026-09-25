@@ -9,7 +9,7 @@ import { calculateCorridorTiles, generateCorridorGeoJSON } from "./vectorTileMat
 const DB_NAME = "TravelGuardianOfflineDB";
 const TILE_STORE = "offline_map_tiles";
 const PACK_STORE = "offline_corridor_packs";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /**
  * Opens IndexedDB with schema migration support for vector map tiles

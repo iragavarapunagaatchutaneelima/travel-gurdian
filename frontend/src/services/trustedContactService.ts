@@ -4,43 +4,25 @@ const STORAGE_KEY = "tg_trusted_contacts";
 export const MIN_TRUSTED_CONTACTS = 1;
 export const MAX_TRUSTED_CONTACTS = 5;
 
-const DEFAULT_CONTACTS: TrustedContact[] = [
-  {
-    id: "tc_default_1",
-    name: "Primary Guardian (Family)",
-    phone: "+91 98765 43210",
-    relationship: "Family",
-    enabled: true,
-    createdAt: 1711000000000
-  },
-  {
-    id: "tc_default_2",
-    name: "Emergency Contact (Friend)",
-    phone: "+91 98765 12345",
-    relationship: "Friend",
-    enabled: true,
-    createdAt: 1711000001000
-  }
-];
+const DEFAULT_CONTACTS: TrustedContact[] = [];
 
 export function getTrustedContacts(): TrustedContact[] {
   if (typeof window === "undefined") {
-    return DEFAULT_CONTACTS;
+    return [];
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_CONTACTS));
-      return DEFAULT_CONTACTS;
+      return [];
     }
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       return parsed;
     }
-    return DEFAULT_CONTACTS;
+    return [];
   } catch (err) {
     console.warn("Failed to load trusted contacts from localStorage", err);
-    return DEFAULT_CONTACTS;
+    return [];
   }
 }
 

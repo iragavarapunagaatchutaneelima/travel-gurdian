@@ -114,13 +114,18 @@ export function createDefaultCorridorPacks(): OfflineCorridorPack[] {
 /**
  * Internal helper to open IndexedDB
  */
-function openIndexedDB(): Promise<IDBDatabase> {
+const DB_VERSION = 3;
+
+/**
+ * Internal helper to open IndexedDB with unified store definitions
+ */
+export function openIndexedDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
       return reject(new Error("IndexedDB not available in this environment"));
     }
 
-    const request = window.indexedDB.open(DB_NAME, 2);
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onupgradeneeded = (event: any) => {
       const db = event.target.result;
@@ -177,14 +182,21 @@ export async function saveOfflinePack(
   } catch (err: any) {
     console.warn("IndexedDB save failed, attempting localStorage fallback:", err);
 
-    // 2. LocalStorage Fallback
+    // 2. LocalStorage Fallback (strip heavy vector features to prevent QuotaExceededError)
     try {
       if (typeof window !== "undefined") {
+        const lightweightPack: OfflineCorridorPack = {
+          ...updatedPack,
+          mapPack: updatedPack.mapPack ? {
+            ...updatedPack.mapPack,
+            vectorFeatures: undefined // Omit heavy GeoJSON from localStorage to respect 5MB limit
+          } : undefined
+        };
         const existing = listFallbackPacks();
-        const filtered = existing.filter(p => p.packId !== updatedPack.packId);
-        filtered.push(updatedPack);
+        const filtered = existing.filter(p => p.packId !== lightweightPack.packId);
+        filtered.push(lightweightPack);
         localStorage.setItem(FALLBACK_KEY, JSON.stringify(filtered));
-        setActiveOfflinePackId(updatedPack.packId);
+        setActiveOfflinePackId(lightweightPack.packId);
         return { success: true };
       }
     } catch (lsErr: any) {

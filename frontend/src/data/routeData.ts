@@ -150,7 +150,7 @@ export type RouteOption = {
   hotels: number;
   notes: string;
   type: "safe" | "fast" | "balanced" | "risky";
-  waypoints: [number, number][]; // [longitude, latitude] for Mapbox GeoJSON
+  waypoints: [number, number][]; // [longitude, latitude] GeoJSON format
   pois: POI[];
   provider?: "google" | "synthetic";
   tollInfo?: string;

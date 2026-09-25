@@ -21,27 +21,27 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 /**
  * Sample up to 4 evenly-spaced anchor points along the route geometry.
  */
+// Sample up to 2 strategic anchor points along the route corridor (midpoint and quarter-point)
 function sampleRouteWaypoints(waypoints: [number, number][]): [number, number][] {
-  if (waypoints.length <= 4) return waypoints;
-  const count = 4;
-  const step = Math.floor(waypoints.length / count);
-  const sampled: [number, number][] = [];
-  for (let i = 0; i < count; i++) {
-    sampled.push(waypoints[i * step]);
-  }
-  sampled.push(waypoints[waypoints.length - 1]);
-  return sampled;
+  if (waypoints.length <= 2) return waypoints;
+  const mid = Math.floor(waypoints.length / 2);
+  const quarter = Math.floor(waypoints.length / 4);
+  return [waypoints[quarter], waypoints[mid]];
 }
 
 /**
  * Queries Google Places for real POIs along the route corridor.
- * Throttled, deduplicated, and cached.
+ * Throttled, deduplicated, parallelized with timeout, and cached.
  */
 export async function fetchRouteCorridorPOIs(
   waypoints: [number, number][],
   travelMode: TravelMode = "Car"
 ): Promise<POI[]> {
-  if (typeof window === "undefined" || !navigator.onLine) {
+  if (typeof window === "undefined" || (typeof navigator !== "undefined" && !navigator.onLine)) {
+    return [];
+  }
+
+  if (!waypoints || waypoints.length === 0) {
     return [];
   }
 
@@ -73,6 +73,9 @@ export async function fetchRouteCorridorPOIs(
   const allPOIs: POI[] = [];
   const seenPlaceIds = new Set<string>();
 
+  // Prepare batch requests to run in parallel
+  const searchPromises: Promise<POI[]>[] = [];
+
   for (const pt of samplePoints) {
     const lng = pt[0];
     const lat = pt[1];
@@ -90,8 +93,17 @@ export async function fetchRouteCorridorPOIs(
         continue;
       }
 
-      try {
-        const results = await new Promise<any[]>((resolve) => {
+      // Run query with a strict 2-second timeout to avoid blocking route calculation
+      const queryPromise = new Promise<POI[]>((resolve) => {
+        let isDone = false;
+        const timer = setTimeout(() => {
+          if (!isDone) {
+            isDone = true;
+            resolve([]);
+          }
+        }, 1800);
+
+        try {
           placesService.nearbySearch(
             {
               location: new window.google.maps.LatLng(lat, lng),
@@ -99,42 +111,56 @@ export async function fetchRouteCorridorPOIs(
               type: cat.googleType as any
             },
             (res: any[], status: any) => {
+              if (isDone) return;
+              isDone = true;
+              clearTimeout(timer);
+
               if (status === window.google.maps.places.PlacesServiceStatus.OK && res) {
-                resolve(res.slice(0, 3)); // Keep top 3 per sample node to control volume
+                const mapped: POI[] = res.slice(0, 3).map((r) => {
+                  const rLat = typeof r.geometry?.location?.lat === "function" ? r.geometry.location.lat() : r.geometry?.location?.lat || lat;
+                  const rLng = typeof r.geometry?.location?.lng === "function" ? r.geometry.location.lng() : r.geometry?.location?.lng || lng;
+                  const distFromAnchor = calculateDistanceKm(lat, lng, rLat, rLng).toFixed(1);
+
+                  return {
+                    id: r.place_id || `poi_${Math.random()}`,
+                    name: r.name || "Verified Facility",
+                    type: cat.type,
+                    latitude: rLat,
+                    longitude: rLng,
+                    distanceAhead: `~${distFromAnchor} km from corridor`,
+                    status: r.business_status ? r.business_status.replace(/_/g, " ") : (r.rating ? `Rating: ${r.rating}★` : "Verified Listing")
+                  };
+                });
+                poiCache.set(cacheKey, mapped);
+                resolve(mapped);
               } else {
                 resolve([]);
               }
             }
           );
-        });
-
-        const mapped: POI[] = results.map((r) => {
-          const rLat = typeof r.geometry?.location?.lat === "function" ? r.geometry.location.lat() : r.geometry?.location?.lat || lat;
-          const rLng = typeof r.geometry?.location?.lng === "function" ? r.geometry.location.lng() : r.geometry?.location?.lng || lng;
-          const distFromAnchor = calculateDistanceKm(lat, lng, rLat, rLng).toFixed(1);
-
-          return {
-            id: r.place_id || `poi_${Math.random()}`,
-            name: r.name || "Verified Facility",
-            type: cat.type,
-            latitude: rLat,
-            longitude: rLng,
-            distanceAhead: `~${distFromAnchor} km from corridor`,
-            status: r.business_status ? r.business_status.replace(/_/g, " ") : (r.rating ? `Rating: ${r.rating}★` : "Verified Listing")
-          };
-        });
-
-        poiCache.set(cacheKey, mapped);
-        mapped.forEach(p => {
-          if (!seenPlaceIds.has(p.id)) {
-            seenPlaceIds.add(p.id);
-            allPOIs.push(p);
+        } catch {
+          if (!isDone) {
+            isDone = true;
+            clearTimeout(timer);
+            resolve([]);
           }
-        });
-      } catch (e) {
-        // Continue gracefully on individual search errors
-      }
+        }
+      });
+
+      searchPromises.push(queryPromise);
     }
+  }
+
+  if (searchPromises.length > 0) {
+    const batchResults = await Promise.all(searchPromises);
+    batchResults.forEach(batch => {
+      batch.forEach(p => {
+        if (!seenPlaceIds.has(p.id)) {
+          seenPlaceIds.add(p.id);
+          allPOIs.push(p);
+        }
+      });
+    });
   }
 
   return allPOIs;

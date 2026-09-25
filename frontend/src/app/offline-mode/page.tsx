@@ -3,6 +3,7 @@
 import React, { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../components/Header";
+import Footer from "../components/Footer";
 import BottomNav from "../components/BottomNav";
 import OfflineSurvivalCard from "../components/OfflineSurvivalCard";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
@@ -134,6 +135,7 @@ function OfflineModeContent() {
               </p>
               <a
                 href="tel:112"
+                aria-label="Call National Emergency Line 112"
                 className="w-full py-3.5 rounded-2xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm text-center transition-all"
                 style={{ backgroundColor: "#EF4444", fontFamily: "'Poppins',sans-serif" }}
               >
@@ -146,7 +148,7 @@ function OfflineModeContent() {
             <div className="p-5 rounded-3xl space-y-3 text-xs" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
               <div className="flex items-center justify-between font-extrabold" style={{ color: "#0F172A" }}>
                 <span style={{ textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.08em", color: "#64748B" }}>Corridor Packs</span>
-                <Link href="/offline" style={{ color: "#2563FF", fontSize: "11px" }} className="hover:underline">
+                <Link href="/offline" aria-label="Manage All Offline Corridor Packs" style={{ color: "#2563FF", fontSize: "11px" }} className="hover:underline">
                   Manage All
                 </Link>
               </div>
@@ -155,6 +157,7 @@ function OfflineModeContent() {
               </p>
               <Link
                 href="/offline"
+                aria-label="Browse all cached packs"
                 className="w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors text-center"
                 style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.1)", color: "#0F172A", fontFamily: "'Poppins',sans-serif" }}
               >
@@ -168,6 +171,8 @@ function OfflineModeContent() {
         </div>
 
       </div>
+
+      <Footer />
 
       <div className="md:hidden">
         <BottomNav />

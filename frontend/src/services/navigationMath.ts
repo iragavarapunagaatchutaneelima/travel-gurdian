@@ -307,22 +307,22 @@ export function getCurrentAndNextManeuver(
 }
 
 /**
- * Formats speed into human-readable km/h string or returns fallback.
+ * Formats speed into human-readable km/h string or returns standard fallback.
  */
 export function formatSpeedKmh(speedMps: number | null): string {
   if (speedMps === null || speedMps === undefined || isNaN(speedMps) || speedMps < 0) {
-    return "Speed unavailable";
+    return "-- km/h";
   }
   const kmh = Math.round(speedMps * 3.6);
   return `${kmh} km/h`;
 }
 
 /**
- * Formats heading into cardinal direction and degree string.
+ * Formats heading into cardinal direction and degree string or returns standard fallback.
  */
 export function formatHeading(headingDegrees: number | null): string {
   if (headingDegrees === null || headingDegrees === undefined || isNaN(headingDegrees)) {
-    return "Heading unavailable";
+    return "--";
   }
 
   const normalized = ((headingDegrees % 360) + 360) % 360;

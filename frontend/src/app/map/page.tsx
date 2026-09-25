@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useRef } from "react";
+import React, { useState, useEffect, Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import { CITIES, RouteOption, POI, City } from "@/data/routeData";
 import { calculateGoogleRoutes } from "@/services/googleRoutes";
-import { formatMapErrorMessage } from "@/services/googlePlaces";
+import { formatMapErrorMessage, loadGoogleMapsScript } from "@/services/googlePlaces";
 import { TravelerProfile, RoutePriority, IncidentReport, IncidentType } from "@/types/safety";
 import { LocationDetails } from "@/types/location";
 import { getActiveIncidents, reportCommunityIncident } from "@/services/incidentService";
@@ -14,21 +14,16 @@ import { useLiveNavigation } from "@/hooks/useLiveNavigation";
 import LiveNavigationOverlay from "../components/LiveNavigationOverlay";
 import { useSafetyCheckIn } from "@/hooks/useSafetyCheckIn";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
-import TravelAssistant from "../components/TravelAssistant";
 import { getTrustedContacts } from "@/services/trustedContactService";
 import { TrustedContact } from "@/types/safetyCheckIn";
-import { LiveTravelContext } from "@/types/gemini";
 import { 
-  CheckCircle2, CloudRain, Loader, MapPin, 
+  CheckCircle2, Loader, MapPin, 
   Navigation, Crosshair, Layers, ShieldCheck, Fuel, Coffee, 
-  BedDouble, PlusSquare, AlertCircle, Sparkles, Clock, Compass,
-  Download, WifiOff, FileText, Check, Loader2, Hospital, ShieldAlert,
-  Plus, X, AlertTriangle, Play, Bot
+  AlertCircle, Sparkles, Clock, Compass,
+  Download, WifiOff, Check, Loader2, Hospital, ShieldAlert,
+  Plus, X, AlertTriangle, Menu, ArrowLeft, PlusSquare, ChevronDown, ChevronUp
 } from "lucide-react";
 import jsPDF from "jspdf";
-
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
 
 export const dynamic = "force-dynamic";
 
@@ -55,14 +50,46 @@ function LivingMapContent() {
   const routeIdParam = searchParams.get("routeId") || "A";
   const startNavParam = searchParams.get("startNav") === "true";
 
-  const [origin, setOrigin] = useState<City>(CITIES[fromLoc] || CITIES["chennai"]);
-  const [dest, setDest] = useState<City>(CITIES[toLoc] || CITIES["bangalore"]);
+  const [origin, setOrigin] = useState<City>(() => {
+    if (fromLat && fromLng) {
+      return {
+        id: fromLoc,
+        name: fromName || "Origin",
+        state: fromAddress || "Selected Location",
+        latitude: parseFloat(fromLat),
+        longitude: parseFloat(fromLng),
+        region: "Selected Location",
+        highways: ["Corridor Road"]
+      };
+    }
+    return CITIES[fromLoc.toLowerCase()] || CITIES["chennai"];
+  });
+
+  const [dest, setDest] = useState<City>(() => {
+    if (destLat && destLng) {
+      return {
+        id: toLoc,
+        name: destName || "Destination",
+        state: destAddress || "Selected Location",
+        latitude: parseFloat(destLat),
+        longitude: parseFloat(destLng),
+        region: "Selected Location",
+        highways: ["Corridor Road"]
+      };
+    }
+    return CITIES[toLoc.toLowerCase()] || CITIES["bangalore"];
+  });
+
   const [allRoutes, setAllRoutes] = useState<RouteOption[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteOption | null>(null);
   const [routeLoading, setRouteLoading] = useState(true);
   const [routeError, setRouteError] = useState<string | null>(null);
-  
-  // Layer Toggles
+
+  // Layers Menu & Toggles (Section 11)
+  const [showLayersMenu, setShowLayersMenu] = useState(false);
+  const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+  const layersMenuRef = useRef<HTMLDivElement>(null);
+
   const [activeLayers, setActiveLayers] = useState({
     hospitals: true,
     police: true,
@@ -79,18 +106,23 @@ function LivingMapContent() {
   const [incidentReportSuccess, setIncidentReportSuccess] = useState(false);
   const [communityIncidents, setCommunityIncidents] = useState<IncidentReport[]>([]);
 
+  // Google Maps references
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const userMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const map = useRef<any>(null);
+  const routePolylineRef = useRef<any>(null);
+  const originMarkerRef = useRef<any>(null);
+  const destMarkerRef = useRef<any>(null);
+  const poiMarkersRef = useRef<any[]>([]);
+  const incidentMarkersRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
+  const userCircleRef = useRef<any>(null);
 
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapboxTokenMissing, setMapboxTokenMissing] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [mapStyle, setMapStyle] = useState<"streets" | "satellite">("streets");
   
   // GPS Geolocation State for single-shot Locate Button
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
 
   // Selected POI card
@@ -101,7 +133,7 @@ function LivingMapContent() {
   const [isOffline, setIsOffline] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
-  const [offlinePackInfo, setOfflinePackInfo] = useState<{ savedAt: string; routeId: string; route: RouteOption; origin: typeof CITIES[string]; dest: typeof CITIES[string] } | null>(null);
+  const [offlinePackInfo, setOfflinePackInfo] = useState<any>(null);
 
   const destinationDetails: LocationDetails = {
     placeId: destPlaceId || (toLoc.startsWith("ChIJ") ? toLoc : ""),
@@ -144,7 +176,6 @@ function LivingMapContent() {
 
   // Phase 5 Safety Check-In Controller
   const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
-  const [showAssistant, setShowAssistant] = useState(false);
 
   const {
     status: checkInStatus,
@@ -157,46 +188,41 @@ function LivingMapContent() {
     startCheckIn,
     confirmSafety,
     requestHelp,
-    cancelCheckIn,
-    resolveOnArrival
+    cancelCheckIn
   } = useSafetyCheckIn({
-    destinationName: dest?.name || destinationDetails.name,
-    currentPosition: navPosition
+    destinationName: dest.name
   });
 
-  // Phase 6 Live Context for Gemini Assistant
-  const liveTravelContext: LiveTravelContext = {
-    navStatus,
-    activeRoute: navActiveRoute || selectedRoute,
-    currentPosition: navPosition,
-    progress: navProgress,
-    safetyScore: selectedRoute?.safetyScore,
-    safetyAssessment: selectedRoute?.safetyAssessment,
-    checkInStatus,
-    activeCheckInCycle: checkInCycle,
-    checkInSecondsRemaining,
-    trustedContactsCount: trustedContacts.filter(c => c.enabled).length,
-    originName: origin.name,
-    destinationName: dest.name,
-    travelMode
-  };
-
-  // Arrival Integration: resolve active safety check-in cleanly on arrival
+  // Close layers menu on outside click or escape
   useEffect(() => {
-    if (navStatus === "ARRIVED") {
-      resolveOnArrival();
-    }
-  }, [navStatus, resolveOnArrival]);
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (layersMenuRef.current && !layersMenuRef.current.contains(e.target as Node)) {
+        setShowLayersMenu(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowLayersMenu(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, []);
 
+  // Offline network status listeners
   useEffect(() => {
-    setTrustedContacts(getTrustedContacts());
-    setIsOffline(!navigator.onLine);
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
-    
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
 
+    if (typeof window !== "undefined") {
+      setIsOffline(!navigator.onLine);
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+    }
+
+    setTrustedContacts(getTrustedContacts());
     setCommunityIncidents(getActiveIncidents());
 
     try {
@@ -214,7 +240,98 @@ function LivingMapContent() {
     };
   }, []);
 
-  const loadRoutesData = () => {
+  // Initialize Google Maps instance with timeout guard to prevent infinite loading (Section 12 & 13)
+  useEffect(() => {
+    let isCancelled = false;
+
+    if (!mapContainer.current || map.current) return;
+
+    const timeoutTimer = setTimeout(() => {
+      if (!isCancelled && !mapLoaded) {
+        setMapError("Map initialization timed out. Please check your network connection or reload.");
+      }
+    }, 9000);
+
+    loadGoogleMapsScript()
+      .then(() => {
+        if (isCancelled || !mapContainer.current || map.current) return;
+        clearTimeout(timeoutTimer);
+
+        const centerLat = (origin.latitude + dest.latitude) / 2;
+        const centerLng = (origin.longitude + dest.longitude) / 2;
+
+        const gMap = new window.google.maps.Map(mapContainer.current, {
+          center: { lat: centerLat, lng: centerLng },
+          zoom: 7,
+          mapTypeId: mapStyle === "satellite" 
+            ? window.google.maps.MapTypeId.HYBRID 
+            : window.google.maps.MapTypeId.ROADMAP,
+          disableDefaultUI: true,
+          zoomControl: true,
+          zoomControlOptions: {
+            position: window.google.maps.ControlPosition.RIGHT_BOTTOM
+          },
+          gestureHandling: "greedy"
+        });
+
+        gMap.addListener("dragstart", () => {
+          setIsFollowMode(false);
+        });
+
+        map.current = gMap;
+        setMapLoaded(true);
+        setMapError(null);
+      })
+      .catch((err) => {
+        if (isCancelled) return;
+        clearTimeout(timeoutTimer);
+        console.error("Failed to initialize Google Maps:", err);
+        setMapError(formatMapErrorMessage(err));
+      });
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutTimer);
+      if (routePolylineRef.current) {
+        routePolylineRef.current.setMap(null);
+        routePolylineRef.current = null;
+      }
+      if (originMarkerRef.current) {
+        originMarkerRef.current.setMap(null);
+        originMarkerRef.current = null;
+      }
+      if (destMarkerRef.current) {
+        destMarkerRef.current.setMap(null);
+        destMarkerRef.current = null;
+      }
+      poiMarkersRef.current.forEach(m => m.setMap(null));
+      poiMarkersRef.current = [];
+      incidentMarkersRef.current.forEach(m => m.setMap(null));
+      incidentMarkersRef.current = [];
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+        userMarkerRef.current = null;
+      }
+      if (userCircleRef.current) {
+        userCircleRef.current.setMap(null);
+        userCircleRef.current = null;
+      }
+      map.current = null;
+    };
+  }, []);
+
+  // Update map type when style toggle changes
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !window.google?.maps) return;
+    map.current.setMapTypeId(
+      mapStyle === "satellite" 
+        ? window.google.maps.MapTypeId.HYBRID 
+        : window.google.maps.MapTypeId.ROADMAP
+    );
+  }, [mapStyle, mapLoaded]);
+
+  // Load Route Data (Section 6 & 13)
+  const loadRoutesData = useCallback(() => {
     let orig: City = CITIES[fromLoc.toLowerCase()] || CITIES["chennai"];
     if (fromLat && fromLng) {
       orig = {
@@ -277,295 +394,250 @@ function LivingMapContent() {
       })
       .catch((err) => {
         console.error("Failed to calculate real Google routes for map:", err);
-        setRouteError(err.message || "Unable to calculate Google route for this location.");
+        setRouteError(formatMapErrorMessage(err));
         setRouteLoading(false);
       });
-  };
+  }, [fromLoc, toLoc, fromName, destName, fromLat, fromLng, destLat, destLng, fromAddress, destAddress, fromPlaceId, destPlaceId, travelMode, profileParam, priorityParam, routeIdParam, startNavParam, startNavigation]);
 
   useEffect(() => {
     loadRoutesData();
-  }, [fromLoc, toLoc, fromName, destName, fromLat, fromLng, destLat, destLng, fromAddress, destAddress, fromPlaceId, destPlaceId, travelMode, profileParam, priorityParam, routeIdParam]);
+  }, [loadRoutesData]);
 
-  // Mapbox Initialization
+  // Render Route Polyline & Origin/Destination Markers on Google Map
   useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
-    if (!token || token === "your_mapbox_public_token" || token === "your_mapbox_public_token_here" || token === "") {
-      setMapboxTokenMissing(true);
-      return;
+    if (!map.current || !mapLoaded || !selectedRoute || !window.google?.maps) return;
+
+    // 1. Draw or Update Route Polyline
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
     }
 
-    if (!mapContainer.current || !origin || !dest || !selectedRoute) return;
+    const path = selectedRoute.waypoints.map(pt => ({
+      lat: pt[1],
+      lng: pt[0]
+    }));
 
-    if (map.current) {
-      updateMapLayers();
-      return;
-    }
-
-    mapboxgl.accessToken = token;
-    
-    const styleUrl = mapStyle === "satellite" 
-      ? "mapbox://styles/mapbox/satellite-streets-v12" 
-      : "mapbox://styles/mapbox/streets-v12";
-
-    const newMap = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: styleUrl,
-      center: [
-        (origin.longitude + dest.longitude) / 2, 
-        (origin.latitude + dest.latitude) / 2
-      ],
-      zoom: 6,
-      preserveDrawingBuffer: true
+    routePolylineRef.current = new window.google.maps.Polyline({
+      path,
+      geodesic: true,
+      strokeColor: "#2563FF",
+      strokeOpacity: 0.9,
+      strokeWeight: 6,
+      map: map.current,
+      zIndex: 50
     });
 
-    newMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-right');
-
-    newMap.on('dragstart', () => {
-      setIsFollowMode(false);
+    // 2. Origin Marker
+    if (originMarkerRef.current) {
+      originMarkerRef.current.setMap(null);
+    }
+    originMarkerRef.current = new window.google.maps.Marker({
+      position: { lat: origin.latitude, lng: origin.longitude },
+      map: map.current,
+      title: `Origin: ${origin.name}`,
+      icon: {
+        path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+        fillColor: "#2563FF",
+        fillOpacity: 1,
+        strokeColor: "#FFFFFF",
+        strokeWeight: 2,
+        scale: 1.5,
+        anchor: new window.google.maps.Point(12, 22)
+      },
+      zIndex: 100
     });
 
-    newMap.on('load', () => {
-      map.current = newMap;
-      setMapLoaded(true);
-      updateMapLayers();
+    // 3. Destination Marker
+    if (destMarkerRef.current) {
+      destMarkerRef.current.setMap(null);
+    }
+    destMarkerRef.current = new window.google.maps.Marker({
+      position: { lat: dest.latitude, lng: dest.longitude },
+      map: map.current,
+      title: `Destination: ${dest.name}`,
+      icon: {
+        path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+        fillColor: "#10B981",
+        fillOpacity: 1,
+        strokeColor: "#FFFFFF",
+        strokeWeight: 2,
+        scale: 1.5,
+        anchor: new window.google.maps.Point(12, 22)
+      },
+      zIndex: 100
     });
 
-    return () => {
-      if (map.current) {
-        map.current.remove();
-        map.current = null;
-      }
-    };
-  }, [origin, dest, selectedRoute]);
+    // 4. Fit bounds to contain route
+    const bounds = new window.google.maps.LatLngBounds();
+    bounds.extend({ lat: origin.latitude, lng: origin.longitude });
+    bounds.extend({ lat: dest.latitude, lng: dest.longitude });
+    path.forEach(pt => bounds.extend(pt));
+    map.current.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
 
-  // Update map style if changed
+  }, [selectedRoute, origin, dest, mapLoaded]);
+
+  // Update POI & Incident Markers based on Active Layers
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
-    const styleUrl = mapStyle === "satellite" 
-      ? "mapbox://styles/mapbox/satellite-streets-v12" 
-      : "mapbox://styles/mapbox/streets-v12";
-    
-    map.current.setStyle(styleUrl);
-    map.current.once('style.load', () => {
-      updateMapLayers();
-    });
-  }, [mapStyle]);
+    if (!map.current || !mapLoaded || !selectedRoute || !window.google?.maps) return;
 
-  // Re-render markers whenever activeLayers changes
-  useEffect(() => {
-    if (map.current && mapLoaded) {
-      updateMapLayers();
-    }
-  }, [activeLayers]);
+    // Clear existing POI markers
+    poiMarkersRef.current.forEach(m => m.setMap(null));
+    poiMarkersRef.current = [];
 
-  // Live GPS User Position Marker update on Mapbox
-  useEffect(() => {
-    if (!map.current || !mapLoaded || !navPosition) return;
+    // Clear incident markers
+    incidentMarkersRef.current.forEach(m => m.setMap(null));
+    incidentMarkersRef.current = [];
 
-    if (userMarkerRef.current) {
-      userMarkerRef.current.setLngLat([navPosition.longitude, navPosition.latitude]);
-      const el = userMarkerRef.current.getElement();
-      const dot = el.querySelector(".tg-marker-dot") as HTMLElement;
-      if (dot && navPosition.heading !== null && navPosition.heading !== undefined) {
-        dot.style.transform = `rotate(${navPosition.heading}deg)`;
-        dot.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>`;
-      }
-    } else {
-      const container = document.createElement("div");
-      container.className = "tg-gps-user-marker";
-      container.style.width = "32px";
-      container.style.height = "32px";
-      container.style.display = "flex";
-      container.style.alignItems = "center";
-      container.style.justifyContent = "center";
-      container.style.position = "relative";
+    // Render POIs
+    if (selectedRoute.pois && selectedRoute.pois.length > 0) {
+      selectedRoute.pois.forEach((poi) => {
+        let isVisible = false;
+        let color = "#3b82f6";
 
-      const pulse = document.createElement("div");
-      pulse.style.position = "absolute";
-      pulse.style.inset = "0";
-      pulse.style.borderRadius = "50%";
-      pulse.style.backgroundColor = "rgba(99, 102, 241, 0.35)";
-      pulse.style.animation = "ping 2s cubic-bezier(0, 0, 0.2, 1) infinite";
-      container.appendChild(pulse);
+        if (poi.type === "hospital" && activeLayers.hospitals) {
+          isVisible = true;
+          color = "#ef4444";
+        } else if (poi.type === "police" && activeLayers.police) {
+          isVisible = true;
+          color = "#2563FF";
+        } else if (poi.type === "pharmacy" && activeLayers.pharmacies) {
+          isVisible = true;
+          color = "#a855f7";
+        } else if (poi.type === "petrol" && activeLayers.fuel) {
+          isVisible = true;
+          color = "#f59e0b";
+        } else if ((poi.type === "food" || poi.type === "rest") && activeLayers.rest) {
+          isVisible = true;
+          color = "#10b981";
+        }
 
-      const dot = document.createElement("div");
-      dot.className = "tg-marker-dot";
-      dot.style.width = "22px";
-      dot.style.height = "22px";
-      dot.style.borderRadius = "50%";
-      dot.style.backgroundColor = "#6366f1";
-      dot.style.border = "3px solid #ffffff";
-      dot.style.boxShadow = "0 0 12px rgba(99, 102, 241, 0.8)";
-      dot.style.display = "flex";
-      dot.style.alignItems = "center";
-      dot.style.justifyContent = "center";
-      dot.style.position = "relative";
-      dot.style.zIndex = "2";
-      dot.style.transition = "transform 0.3s ease";
+        if (isVisible) {
+          const marker = new window.google.maps.Marker({
+            position: { lat: poi.latitude, lng: poi.longitude },
+            map: map.current,
+            title: poi.name,
+            icon: {
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 6,
+              fillColor: color,
+              fillOpacity: 1,
+              strokeColor: "#FFFFFF",
+              strokeWeight: 1.5
+            },
+            zIndex: 80
+          });
 
-      if (navPosition.heading !== null && navPosition.heading !== undefined) {
-        dot.style.transform = `rotate(${navPosition.heading}deg)`;
-        dot.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>`;
-      } else {
-        dot.innerHTML = `<div style="width:6px; height:6px; background:white; border-radius:50%;"></div>`;
-      }
-      container.appendChild(dot);
+          marker.addListener("click", () => {
+            setActivePOI(poi);
+            setActiveIncident(null);
+            if (map.current) {
+              map.current.panTo({ lat: poi.latitude, lng: poi.longitude });
+            }
+          });
 
-      userMarkerRef.current = new mapboxgl.Marker({ element: container })
-        .setLngLat([navPosition.longitude, navPosition.latitude])
-        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<b>YOUR LIVE GPS POSITION</b><br/>Accuracy: ±${Math.round(navPosition.accuracy)}m`))
-        .addTo(map.current);
-    }
-
-    if (isFollowMode && navStatus === "ACTIVE") {
-      map.current.easeTo({
-        center: [navPosition.longitude, navPosition.latitude],
-        zoom: 15,
-        duration: 800
-      });
-    }
-  }, [navPosition, isFollowMode, navStatus, mapLoaded]);
-
-  const updateMapLayers = () => {
-    if (!map.current || !origin || !dest || !selectedRoute) return;
-
-    // Clear old markers
-    markersRef.current.forEach(m => m.remove());
-    markersRef.current = [];
-
-    // Origin Marker (Primary Blue #2563FF)
-    const originMarker = new mapboxgl.Marker({ color: "#2563FF" })
-      .setLngLat([origin.longitude, origin.latitude])
-      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<h4 style="font-weight:bold; color:#18181b;">Origin: ${origin.name}</h4><p style="color:#71717a; font-size:11px;">${origin.state}</p>`))
-      .addTo(map.current);
-    markersRef.current.push(originMarker);
-
-    // Destination Marker (Green)
-    const destMarker = new mapboxgl.Marker({ color: "#10b981" })
-      .setLngLat([dest.longitude, dest.latitude])
-      .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<h4 style="font-weight:bold; color:#18181b;">Destination: ${dest.name}</h4><p style="color:#71717a; font-size:11px;">${dest.state}</p>`))
-      .addTo(map.current);
-    markersRef.current.push(destMarker);
-
-    // Real POI Markers filtered by active toggles
-    if (selectedRoute.pois) {
-      selectedRoute.pois.forEach(poi => {
-        if (poi.type === "hospital" && !activeLayers.hospitals) return;
-        if (poi.type === "police" && !activeLayers.police) return;
-        if (poi.type === "pharmacy" && !activeLayers.pharmacies) return;
-        if (poi.type === "petrol" && !activeLayers.fuel) return;
-        if ((poi.type === "food" || poi.type === "rest") && !activeLayers.rest) return;
-
-        const color = poi.type === "hospital" ? "#ef4444" : 
-                      poi.type === "police" ? "#3b82f6" : 
-                      poi.type === "pharmacy" ? "#a855f7" :
-                      poi.type === "petrol" ? "#f59e0b" : "#10b981";
-
-        const poiMarker = new mapboxgl.Marker({ color })
-          .setLngLat([poi.longitude, poi.latitude])
-          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`
-            <div style="padding:4px; font-family:sans-serif; color:#18181b;">
-              <span style="font-size:9px; font-weight:bold; text-transform:uppercase; color:${color};">${poi.type.toUpperCase()} • VERIFIED GOOGLE PLACE</span>
-              <b style="font-size:12px; display:block; margin-top:2px;">${poi.name}</b>
-              <p style="margin:2px 0 0 0; font-size:10px; color:#64748b;">${poi.distanceAhead} • ${poi.status}</p>
-            </div>
-          `))
-          .addTo(map.current!);
-        
-        poiMarker.getElement().addEventListener('click', () => {
-          setActivePOI(poi);
-          setActiveIncident(null);
-        });
-        markersRef.current.push(poiMarker);
+          poiMarkersRef.current.push(marker);
+        }
       });
     }
 
-    // Community Incident Markers
+    // Render Incidents / Hazards
     if (activeLayers.incidents && communityIncidents.length > 0) {
-      communityIncidents.forEach(inc => {
-        const incMarker = new mapboxgl.Marker({ color: "#dc2626" })
-          .setLngLat([inc.longitude, inc.latitude])
-          .setPopup(new mapboxgl.Popup({ offset: 20 }).setHTML(`
-            <div style="padding:4px; font-family:sans-serif; color:#18181b;">
-              <span style="font-size:9px; font-weight:bold; text-transform:uppercase; color:#dc2626;">⚠️ USER REPORTED HAZARD</span>
-              <b style="font-size:12px; display:block; margin-top:2px;">${inc.type}</b>
-              <p style="margin:2px 0 0 0; font-size:10px; color:#64748b;">${inc.description}</p>
-              <span style="font-size:8px; color:#a1a1aa; margin-top:4px; display:block;">Reported: ${new Date(inc.timestamp).toLocaleTimeString()}</span>
-            </div>
-          `))
-          .addTo(map.current!);
+      communityIncidents.forEach((inc) => {
+        const marker = new window.google.maps.Marker({
+          position: { lat: inc.latitude, lng: inc.longitude },
+          map: map.current,
+          title: `Hazard: ${inc.type}`,
+          icon: {
+            path: "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z",
+            fillColor: "#DC2626",
+            fillOpacity: 1,
+            strokeColor: "#FFFFFF",
+            strokeWeight: 1.5,
+            scale: 1.1,
+            anchor: new window.google.maps.Point(12, 12)
+          },
+          zIndex: 90
+        });
 
-        incMarker.getElement().addEventListener('click', () => {
+        marker.addListener("click", () => {
           setActiveIncident(inc);
           setActivePOI(null);
-        });
-        markersRef.current.push(incMarker);
-      });
-    }
-
-    // Add or update GeoJSON route lines
-    if (map.current.getSource('route-line')) {
-      (map.current.getSource('route-line') as mapboxgl.GeoJSONSource).setData({
-        type: 'Feature',
-        properties: {},
-        geometry: {
-          type: 'LineString',
-          coordinates: selectedRoute.waypoints
-        }
-      });
-    } else {
-      map.current.addSource('route-line', {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: {
-            type: 'LineString',
-            coordinates: selectedRoute.waypoints
+          if (map.current) {
+            map.current.panTo({ lat: inc.latitude, lng: inc.longitude });
           }
-        }
-      });
+        });
 
-      map.current.addLayer({
-        id: 'route-line-layer',
-        type: 'line',
-        source: 'route-line',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': selectedRoute.safetyScore >= 85 ? '#10b981' : 
-                        selectedRoute.safetyScore >= 70 ? '#6366f1' : '#f59e0b',
-          'line-width': 6,
-          'line-opacity': 0.9
-        }
+        incidentMarkersRef.current.push(marker);
       });
     }
 
-    // Fit bounds to route
-    const bounds = new mapboxgl.LngLatBounds(
-      [origin.longitude, origin.latitude],
-      [origin.longitude, origin.latitude]
-    );
-    selectedRoute.waypoints.forEach(wp => bounds.extend([wp[0], wp[1]]));
-    bounds.extend([dest.longitude, dest.latitude]);
-    
-    map.current.fitBounds(bounds, { padding: 60 });
-  };
+  }, [selectedRoute, activeLayers, communityIncidents, mapLoaded]);
 
-  const handleReportHazard = (e: React.FormEvent) => {
+  // Live GPS User Position Marker update on Google Map
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !navPosition || !window.google?.maps) return;
+
+    const userLatLng = new window.google.maps.LatLng(navPosition.latitude, navPosition.longitude);
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setPosition(userLatLng);
+    } else {
+      userMarkerRef.current = new window.google.maps.Marker({
+        position: userLatLng,
+        map: map.current,
+        title: "Your Current Position",
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: "#2563FF",
+          fillOpacity: 1,
+          strokeColor: "#FFFFFF",
+          strokeWeight: 3
+        },
+        zIndex: 999
+      });
+    }
+
+    if (navPosition.accuracy && navPosition.accuracy > 0) {
+      if (userCircleRef.current) {
+        userCircleRef.current.setCenter(userLatLng);
+        userCircleRef.current.setRadius(navPosition.accuracy);
+      } else {
+        userCircleRef.current = new window.google.maps.Circle({
+          strokeColor: "#2563FF",
+          strokeOpacity: 0.35,
+          strokeWeight: 1,
+          fillColor: "#2563FF",
+          fillOpacity: 0.12,
+          map: map.current,
+          center: userLatLng,
+          radius: navPosition.accuracy,
+          zIndex: 998
+        });
+      }
+    }
+
+    // Follow camera if follow mode is active
+    if (isFollowMode && map.current) {
+      map.current.panTo(userLatLng);
+    }
+  }, [navPosition, isFollowMode, mapLoaded]);
+
+  // Report community incident handler
+  const handleReportIncident = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!incidentDesc.trim() || !selectedRoute) return;
+    if (!selectedRoute) return;
 
-    // Report at approximately route midpoint or origin
-    const midPoint = selectedRoute.waypoints[Math.floor(selectedRoute.waypoints.length / 2)] || [origin.longitude, origin.latitude];
+    const midIdx = Math.floor(selectedRoute.waypoints.length / 2);
+    const midPoint = selectedRoute.waypoints[midIdx] || [origin.longitude, origin.latitude];
+
     reportCommunityIncident(
       incidentType,
       midPoint[1],
       midPoint[0],
       incidentDesc,
-      selectedRoute.name
+      selectedRoute.id
     );
 
     const updated = getActiveIncidents();
@@ -575,18 +647,17 @@ function LivingMapContent() {
     setTimeout(() => {
       setShowIncidentModal(false);
       setIncidentReportSuccess(false);
-      loadRoutesData(); // Re-evaluate safety fit with newly reported community incident
+      loadRoutesData();
     }, 1200);
   };
 
-  // Generate PDF and save to localStorage
+  // Generate Offline Travel Pack PDF (Section 14)
   const handleDownloadOfflinePack = async () => {
     if (!selectedRoute || !origin || !dest) return;
     setIsDownloading(true);
     setDownloadSuccess(false);
 
     try {
-      // 1. Save to local storage
       const packData = {
         savedAt: new Date().toISOString(),
         routeId: selectedRoute.id,
@@ -597,108 +668,95 @@ function LivingMapContent() {
       localStorage.setItem("offline_travel_pack", JSON.stringify(packData));
       setOfflinePackInfo(packData);
 
-      // 2. Generate PDF
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageWidth = doc.internal.pageSize.getWidth();
       
       // Header
-      doc.setFillColor(24, 24, 27); // dark zinc
+      doc.setFillColor(15, 23, 42); // slate dark
       doc.rect(0, 0, pageWidth, 40, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(22);
       doc.text("TRAVEL GUARDIAN", 15, 20);
       doc.setFontSize(12);
-      doc.setTextColor(161, 161, 170); // muted
-      doc.text("OFFLINE TRAVEL PACK", 15, 30);
+      doc.setTextColor(148, 163, 184); // muted
+      doc.text("OFFLINE SURVIVAL TRAVEL PACK", 15, 30);
 
       // Route Info
-      doc.setTextColor(0, 0, 0);
+      doc.setTextColor(15, 23, 42);
       doc.setFontSize(16);
-      doc.text("ROUTE", 15, 55);
+      doc.text("ROUTE DETAILS", 15, 55);
       doc.setFontSize(14);
       doc.setFont("helvetica", "normal");
       doc.text(`${origin.name} to ${dest.name}`, 15, 65);
       doc.setFontSize(12);
-      doc.text(`Travel Mode: ${travelMode}`, 15, 72);
-      doc.text(`Route: ${selectedRoute.name}`, 15, 79);
+      doc.text(`Travel Mode: ${travelMode}`, 15, 73);
+      doc.text(`Corridor: ${selectedRoute.name}`, 15, 80);
       
-      let mapY = 100;
-      try {
-        if (map.current) {
-          const canvas = map.current.getCanvas();
-          const imgData = canvas.toDataURL("image/jpeg", 0.7);
-          doc.addImage(imgData, "JPEG", 15, 95, pageWidth - 30, 80);
-          mapY = 185;
-        }
-      } catch (err) {
-        doc.setFont("helvetica", "italic");
-        doc.text("Map Snapshot Unavailable", 15, 100);
-        mapY = 115;
-      }
-
-      // Summary
+      let curY = 95;
       doc.setFont("helvetica", "bold");
-      doc.text("ROUTE SUMMARY", 15, mapY);
+      doc.text("CORRIDOR SAFETY INTELLIGENCE", 15, curY);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      doc.text(`Distance: ${selectedRoute.distance}`, 15, mapY + 10);
-      doc.text(`Est. Travel Time: ${selectedRoute.time}`, 15, mapY + 16);
-      doc.text(`Safety Score: ${selectedRoute.safetyScore}/100`, 15, mapY + 22);
-      doc.text(`Traffic: ${selectedRoute.trafficScore}`, 15, mapY + 28);
-      doc.text(`Road Condition: ${selectedRoute.roadScore}`, 15, mapY + 34);
-      doc.text(`Night Safety: ${selectedRoute.nightSafety}`, 15, mapY + 40);
+      doc.text(`Distance: ${selectedRoute.distance}`, 15, curY + 8);
+      doc.text(`Est. Travel Time: ${selectedRoute.time}`, 15, curY + 15);
+      doc.text(`Safety Score: ${selectedRoute.safetyScore}/100`, 15, curY + 22);
+      doc.text(`Traffic: ${selectedRoute.trafficScore}`, 15, curY + 29);
+      doc.text(`Road Quality: ${selectedRoute.roadScore}`, 15, curY + 36);
       
-      doc.text(`Weather Risk: Low`, pageWidth / 2, mapY + 10);
-      doc.text(`Emergency Access: ${selectedRoute.emergencyAccessScore}/100`, pageWidth / 2, mapY + 16);
-      doc.text(`Rest Stops: ${selectedRoute.restStops}`, pageWidth / 2, mapY + 22);
-      doc.text(`Fuel Stops: ${selectedRoute.fuelStops}`, pageWidth / 2, mapY + 28);
+      doc.text(`Emergency Access: ${selectedRoute.emergencyAccessScore}/100`, pageWidth / 2, curY + 8);
+      doc.text(`Fuel Stops: ${selectedRoute.fuelStops}`, pageWidth / 2, curY + 15);
+      doc.text(`Rest & Food: ${selectedRoute.restStops}`, pageWidth / 2, curY + 22);
+      doc.text(`Toll Status: ${selectedRoute.tollInfo || "No Tolls"}`, pageWidth / 2, curY + 29);
       
-      doc.addPage();
-      
+      curY += 50;
+
+      // Emergency Contacts & Hotlines
+      doc.setFillColor(254, 242, 242);
+      doc.rect(15, curY, pageWidth - 30, 32, "F");
+      doc.setTextColor(220, 38, 38);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("EMERGENCY HOTLINES & PROTOCOL", 20, curY + 10);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text("• National Emergency Service: 112 (Police, Fire, Ambulance)", 20, curY + 18);
+      doc.text("• Highway Trauma / Medical Emergency: 108", 20, curY + 25);
+
+      curY += 45;
+
+      // Safe Havens
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
-      doc.text("IMPORTANT STOPS & POIS", 15, 20);
-      
-      let poiY = 30;
+      doc.text("VERIFIED SAFE HAVENS ALONG CORRIDOR", 15, curY);
+      curY += 10;
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      
+
       if (selectedRoute.pois && selectedRoute.pois.length > 0) {
-        selectedRoute.pois.forEach((poi) => {
-          if (poiY > 270) {
+        selectedRoute.pois.slice(0, 10).forEach((poi) => {
+          if (curY > 270) {
             doc.addPage();
-            poiY = 20;
+            curY = 20;
           }
           doc.setFont("helvetica", "bold");
-          doc.text(poi.name, 15, poiY);
+          doc.text(poi.name, 15, curY);
           doc.setFont("helvetica", "normal");
-          doc.text(`Type: ${poi.type.toUpperCase()} | Distance: ${poi.distanceAhead} | Status: ${poi.status}`, 15, poiY + 6);
-          poiY += 15;
+          doc.text(`Category: ${poi.type.toUpperCase()} | Location: ${poi.distanceAhead} | Status: ${poi.status}`, 15, curY + 5);
+          curY += 12;
         });
       } else {
-        doc.text("No POIs recorded for this route.", 15, 30);
-        poiY += 10;
+        doc.text("All regional emergency facilities accessible via National Hotline 112.", 15, curY);
+        curY += 10;
       }
 
-      poiY += 10;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(14);
-      doc.text("ROUTE WARNINGS & GUIDANCE", 15, poiY);
-      poiY += 10;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      
-      const splitNotes = doc.splitTextToSize(`Notes: ${selectedRoute.notes}`, pageWidth - 30);
-      doc.text(splitNotes, 15, poiY);
-      
       doc.save(`Travel_Guardian_Offline_Pack_${selectedRoute.name.replace(/\s+/g, '_')}.pdf`);
-      
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 5000);
     } catch (error) {
       console.error("PDF generation failed:", error);
-      alert("Failed to generate offline pack. Please try again.");
+      setRouteError("Failed to generate offline survival pack. Please check browser storage.");
     } finally {
       setIsDownloading(false);
     }
@@ -709,7 +767,7 @@ function LivingMapContent() {
     setGpsLoading(true);
     setGpsError(null);
 
-    if (!navigator.geolocation) {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
       setGpsError("Geolocation is not supported by your browser.");
       setGpsLoading(false);
       return;
@@ -717,263 +775,474 @@ function LivingMapContent() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        const coords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-        setUserLocation(coords);
+        const { latitude, longitude } = position.coords;
         setGpsLoading(false);
 
-        if (map.current) {
-          if (userMarkerRef.current) {
-            userMarkerRef.current.remove();
+        if (map.current && window.google?.maps) {
+          const userLatLng = new window.google.maps.LatLng(latitude, longitude);
+          map.current.panTo(userLatLng);
+          map.current.setZoom(15);
+
+          if (!userMarkerRef.current) {
+            userMarkerRef.current = new window.google.maps.Marker({
+              position: userLatLng,
+              map: map.current,
+              title: "Your Location",
+              icon: {
+                path: window.google.maps.SymbolPath.CIRCLE,
+                scale: 9,
+                fillColor: "#2563FF",
+                fillOpacity: 1,
+                strokeColor: "#FFFFFF",
+                strokeWeight: 3
+              },
+              zIndex: 999
+            });
+          } else {
+            userMarkerRef.current.setPosition(userLatLng);
           }
-
-          userMarkerRef.current = new mapboxgl.Marker({ color: "#ef4444" })
-            .setLngLat([coords.lng, coords.lat])
-            .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<b>YOUR LOCATION</b><br/>Lat: ${coords.lat.toFixed(4)}, Lng: ${coords.lng.toFixed(4)}`))
-            .addTo(map.current);
-
-          map.current.flyTo({
-            center: [coords.lng, coords.lat],
-            zoom: 12,
-            essential: true
-          });
         }
       },
-      (err) => {
+      (error) => {
         setGpsLoading(false);
-        setGpsError("GPS permission denied or coordinates unavailable. Enable location access in browser settings.");
+        setGpsError(
+          error.code === error.PERMISSION_DENIED
+            ? "Location permission was denied. Please allow location access."
+            : "Unable to retrieve current GPS location."
+        );
       },
       { timeout: 10000, enableHighAccuracy: true }
     );
   };
 
-  if (routeLoading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center text-xs font-bold text-muted gap-3">
-        <Loader2 className="h-7 w-7 animate-spin text-primary-accent" />
-        <span>Loading map...</span>
-      </div>
-    );
-  }
-
-  if (routeError || !selectedRoute) {
-    const formattedError = formatMapErrorMessage(routeError);
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center text-xs font-bold p-6 text-center">
-        <Header />
-        <div className="max-w-md w-full p-6 rounded-3xl bg-surface border border-warning/30 space-y-4 my-auto">
-          <AlertCircle className="h-10 w-10 text-warning mx-auto" />
-          <h3 className="text-lg font-black text-foreground">Map & Route Notice</h3>
-          <p className="text-xs text-muted font-semibold leading-relaxed">
-            {formattedError}
-          </p>
-          <button
-            onClick={() => router.push(`/plan?from=${fromLoc}&dest=${toLoc}`)}
-            className="w-full py-3 rounded-2xl bg-primary-accent text-white font-black hover:bg-primary-accent-hover transition-all"
-          >
-            Return to Journey Planner
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-8 flex flex-col items-center transition-colors duration-200">
+    <div 
+      className="h-dvh flex flex-col overflow-hidden bg-background text-foreground"
+      style={{ fontFamily: "'Poppins', sans-serif" }}
+    >
       <Header />
 
-      {isOffline && (
-        <div className="w-full bg-danger text-white py-2 px-4 text-center text-xs font-black flex items-center justify-center gap-2 shadow-md">
-          <WifiOff className="h-4 w-4" />
-          OFFLINE MODE — USING SAVED TRAVEL PACK
-        </div>
-      )}
-
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6">
+      {/* Main Viewport Map Container (Section 10: Map occupies most of viewport) */}
+      <main className="flex-1 min-h-0 relative w-full overflow-hidden flex flex-col">
         
-        {/* Header Breadcrumb */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4 text-left">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-primary-accent font-extrabold uppercase tracking-widest block">
-                SENSE Live Map Engine
-              </span>
-              <span className="text-[10px] text-muted font-bold bg-elevated-surface px-2 py-0.5 rounded-md border border-border">
-                {selectedRoute.name}
-              </span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-1">
-              {origin.name} ➔ {dest.name}
-            </h2>
-            <p className="text-xs text-muted font-bold mt-1">
-              Mode: {travelMode} • Distance: {selectedRoute.distance} • Est. Time: {selectedRoute.time}
-            </p>
-          </div>
-          
-          {/* Controls: Map/Satellite + GPS Button */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Offline Pack Button */}
-            <button
-              onClick={handleDownloadOfflinePack}
-              disabled={isDownloading}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black transition-all shadow-sm ${
-                downloadSuccess 
-                  ? "bg-success/20 text-success border border-success/30" 
-                  : "bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
-              }`}
-              title="Download Offline Travel Pack PDF"
-            >
-              {isDownloading ? (
-                <Loader className="h-4 w-4 animate-spin" />
-              ) : downloadSuccess ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">{isDownloading ? "Preparing Pack..." : downloadSuccess ? "Pack Ready" : "Download Offline Pack"}</span>
-              <span className="sm:hidden">{isDownloading ? "..." : downloadSuccess ? "Ready" : "Offline Pack"}</span>
-            </button>
-            {/* Style Selector */}
-            <div className="flex items-center rounded-2xl bg-surface border border-border p-1 shadow-sm">
-              <button
-                onClick={() => setMapStyle("streets")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                  mapStyle === "streets" ? "bg-primary-accent text-white shadow-sm" : "text-muted hover:text-foreground"
-                }`}
-              >
-                STREET
-              </button>
-              <button
-                onClick={() => setMapStyle("satellite")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                  mapStyle === "satellite" ? "bg-primary-accent text-white shadow-sm" : "text-muted hover:text-foreground"
-                }`}
-              >
-                SATELLITE
-              </button>
-            </div>
-
-            {/* GPS My Location Button */}
-            <button
-              onClick={handleShowMyLocation}
-              disabled={gpsLoading}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-surface border border-border hover:bg-elevated-surface text-foreground text-xs font-black transition-all shadow-sm active:scale-95"
-              title="Locate my position on map"
-            >
-              {gpsLoading ? <Loader className="h-4 w-4 animate-spin text-primary-accent" /> : <Crosshair className="h-4 w-4 text-primary-accent" />}
-              <span>Show My Location</span>
-            </button>
-
-            {/* Change route button */}
-            <button
-              onClick={() => router.push(`/plan?from=${fromLoc}&dest=${toLoc}`)}
-              className="px-4 py-2.5 rounded-2xl bg-primary-accent/10 hover:bg-primary-accent/20 border border-primary-accent/30 text-primary-accent text-xs font-black transition-all"
-            >
-              Change Route
-            </button>
-          </div>
-        </div>
-
-        {gpsError && (
-          <div className="p-3.5 rounded-2xl bg-warning/10 border border-warning/30 text-warning text-xs font-bold flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 flex-shrink-0" />
-              <span>{gpsError}</span>
-            </div>
-            <button onClick={() => setGpsError(null)} className="text-xs font-black hover:underline">Dismiss</button>
+        {/* Offline Banner */}
+        {isOffline && (
+          <div className="bg-amber-600 text-white text-[11px] py-1 px-4 text-center font-bold tracking-wide flex items-center justify-center gap-2 shrink-0 z-30 shadow-sm">
+            <WifiOff className="h-3.5 w-3.5" />
+            <span>OFFLINE MODE — USING LOCALLY SAVED TRAVEL PACK DATA</span>
           </div>
         )}
 
-        {/* Layer Filter Pills Bar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-          <span className="text-[10px] font-black text-muted uppercase tracking-widest flex items-center gap-1 shrink-0 mr-1">
-            <Layers className="h-3.5 w-3.5 text-primary-accent" /> Layers:
-          </span>
-          <button
-            onClick={() => setActiveLayers(prev => ({ ...prev, hospitals: !prev.hospitals }))}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-              activeLayers.hospitals 
-                ? "bg-red-500/15 text-red-400 border border-red-500/30" 
-                : "bg-surface text-muted border border-border opacity-60"
-            }`}
-          >
-            <Hospital className="h-3.5 w-3.5" />
-            Hospitals ({selectedRoute.pois?.filter(p => p.type === "hospital").length || 0})
-          </button>
-          <button
-            onClick={() => setActiveLayers(prev => ({ ...prev, police: !prev.police }))}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-              activeLayers.police 
-                ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" 
-                : "bg-surface text-muted border border-border opacity-60"
-            }`}
-          >
-            <ShieldAlert className="h-3.5 w-3.5" />
-            Police ({selectedRoute.pois?.filter(p => p.type === "police").length || 0})
-          </button>
-          <button
-            onClick={() => setActiveLayers(prev => ({ ...prev, pharmacies: !prev.pharmacies }))}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-              activeLayers.pharmacies 
-                ? "bg-purple-500/15 text-purple-400 border border-purple-500/30" 
-                : "bg-surface text-muted border border-border opacity-60"
-            }`}
-          >
-            <PlusSquare className="h-3.5 w-3.5" />
-            Pharmacies ({selectedRoute.pois?.filter(p => p.type === "pharmacy").length || 0})
-          </button>
-          <button
-            onClick={() => setActiveLayers(prev => ({ ...prev, fuel: !prev.fuel }))}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-              activeLayers.fuel 
-                ? "bg-amber-500/15 text-amber-400 border border-amber-500/30" 
-                : "bg-surface text-muted border border-border opacity-60"
-            }`}
-          >
-            <Fuel className="h-3.5 w-3.5" />
-            Fuel ({selectedRoute.pois?.filter(p => p.type === "petrol").length || 0})
-          </button>
-          <button
-            onClick={() => setActiveLayers(prev => ({ ...prev, rest: !prev.rest }))}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-              activeLayers.rest 
-                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" 
-                : "bg-surface text-muted border border-border opacity-60"
-            }`}
-          >
-            <Coffee className="h-3.5 w-3.5" />
-            Food & Rest ({selectedRoute.pois?.filter(p => p.type === "food" || p.type === "rest").length || 0})
-          </button>
-          <button
-            onClick={() => setActiveLayers(prev => ({ ...prev, incidents: !prev.incidents }))}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-              activeLayers.incidents 
-                ? "bg-rose-500/15 text-rose-400 border border-rose-500/30" 
-                : "bg-surface text-muted border border-border opacity-60"
-            }`}
-          >
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Hazards ({communityIncidents.length})
-          </button>
+        {/* The Google Maps Canvas */}
+        <div ref={mapContainer} className="w-full h-full relative" />
+
+        {/* Loading State Overlay */}
+        {(routeLoading || (!mapLoaded && !mapError)) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-(--background)/85 backdrop-blur-md z-40 animate-fadeIn">
+            <div className="p-4 rounded-3xl bg-(--primary)/10 text-(--primary) mb-3 border border-(--primary)/20 shadow-md">
+              <Loader2 className="h-9 w-9 animate-spin" />
+            </div>
+            <h3 className="text-base font-extrabold text-foreground">Connecting Google Maps Corridor...</h3>
+            <p className="text-xs text-(--muted-foreground) mt-1 max-w-sm">
+              Calculating real road geometry and verifying safe haven facilities along your corridor.
+            </p>
+          </div>
+        )}
+
+        {/* Error State Overlay (Never stuck in Loading, Section 12) */}
+        {(mapError || routeError) && !routeLoading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-(--background)/95 backdrop-blur-md z-40">
+            <div className="p-4 rounded-3xl bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-3 border border-amber-500/20">
+              <AlertTriangle className="h-10 w-10" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">Map Service Notice</h3>
+            <p className="text-xs text-(--muted-foreground) max-w-md mt-1 mb-4 leading-relaxed">
+              {mapError || routeError}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => {
+                  setMapError(null);
+                  setRouteError(null);
+                  loadRoutesData();
+                }}
+                className="px-4 py-2.5 rounded-xl bg-(--primary) text-white text-xs font-bold shadow-md hover:opacity-90 transition-opacity"
+              >
+                Retry Route
+              </button>
+              <button
+                onClick={() => router.push("/plan")}
+                className="px-4 py-2.5 rounded-xl bg-elevated-surface text-foreground border border-border text-xs font-bold hover:bg-surface transition-colors"
+              >
+                Back to Plan
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            FLOATING CONTROLS: TOP-LEFT HEADER CHIP
+            ============================================================ */}
+        <div className="absolute top-3 left-3 z-20 flex flex-col gap-2 max-w-[85vw] sm:max-w-md pointer-events-none">
+          <div className="p-3 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-lg text-left pointer-events-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => router.push("/plan")}
+                className="p-1.5 rounded-xl hover:bg-elevated-surface text-(--muted-foreground) transition-colors"
+                title="Back to Journey Planner"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-(--primary) uppercase tracking-wider">
+                    {selectedRoute ? selectedRoute.name : "Google Road Corridor"}
+                  </span>
+                  {selectedRoute && (
+                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Fit: {selectedRoute.safetyScore}/100
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xs sm:text-sm font-extrabold text-foreground truncate mt-0.5">
+                  {origin.name} ➔ {dest.name}
+                </h2>
+                {selectedRoute && (
+                  <p className="text-[10px] text-(--muted-foreground) font-medium">
+                    {travelMode} • {selectedRoute.distance} • {selectedRoute.time}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowDetailsPanel(v => !v)}
+              className="p-1.5 rounded-xl bg-elevated-surface text-foreground border border-border shrink-0 hover:bg-surface transition-colors"
+              title="Toggle Route Summary"
+            >
+              {showDetailsPanel ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+          </div>
+
+          {/* Expandable Details Drawer */}
+          {showDetailsPanel && selectedRoute && (
+            <div className="p-4 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-xl text-left pointer-events-auto text-xs space-y-2.5 animate-slideDown">
+              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-border text-[11px]">
+                <div>
+                  <span className="text-[10px] text-(--muted-foreground) font-semibold block">Emergency Access</span>
+                  <span className="font-bold text-foreground">{selectedRoute.emergencyAccessScore}/100</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-(--muted-foreground) font-semibold block">Toll Info</span>
+                  <span className="font-bold text-foreground">{selectedRoute.tollInfo || "Standard Highway"}</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-(--muted-foreground) leading-relaxed">
+                {selectedRoute.notes}
+              </p>
+              <div className="flex items-center justify-between pt-1">
+                <button
+                  onClick={() => setShowIncidentModal(true)}
+                  className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all"
+                >
+                  + Report Hazard
+                </button>
+                <button
+                  onClick={handleDownloadOfflinePack}
+                  disabled={isDownloading}
+                  className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-(--primary) bg-(--primary)/10 hover:bg-(--primary)/20 border border-(--primary)/30 transition-all flex items-center gap-1"
+                >
+                  <Download className="h-3 w-3" />
+                  <span>{isDownloading ? "Saving..." : downloadSuccess ? "Downloaded" : "Offline Pack"}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* ============================================================
+            FLOATING CONTROLS: TOP-RIGHT (Section 11: Compact ☰ Layers Menu)
+            ============================================================ */}
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-2 pointer-events-auto">
           
-          {/* Left Column: Route Safety Assessment Panel */}
-          <div className="lg:col-span-4 space-y-5">
-
-            {/* Start Live Navigation Action Button */}
+          {/* Map style toggle (Street vs Satellite) */}
+          <div className="flex items-center rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border p-1 shadow-md">
             <button
-              onClick={startNavigation}
-              className="w-full py-4 px-5 rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-black text-sm tracking-wide flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-500/20 transition-all active:scale-95"
+              onClick={() => setMapStyle("streets")}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                mapStyle === "streets" 
+                  ? "bg-(--primary) text-white shadow-sm" 
+                  : "text-(--muted-foreground) hover:text-foreground"
+              }`}
             >
-              <Navigation className="h-5 w-5 fill-white" />
-              <span>START LIVE NAVIGATION</span>
+              Street
+            </button>
+            <button
+              onClick={() => setMapStyle("satellite")}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                mapStyle === "satellite" 
+                  ? "bg-(--primary) text-white shadow-sm" 
+                  : "text-(--muted-foreground) hover:text-foreground"
+              }`}
+            >
+              Satellite
+            </button>
+          </div>
+
+          {/* Locate Me button */}
+          <button
+            onClick={handleShowMyLocation}
+            disabled={gpsLoading}
+            className="p-2.5 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border text-(--primary) hover:bg-elevated-surface shadow-md transition-all active:scale-95 disabled:opacity-50"
+            title="Locate Current Position"
+            aria-label="Locate Current Position"
+          >
+            {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
+          </button>
+
+          {/* Compact ☰ Layers Menu Button (Section 11) */}
+          <div className="relative" ref={layersMenuRef}>
+            <button
+              onClick={() => setShowLayersMenu(prev => !prev)}
+              className={`p-2.5 rounded-2xl backdrop-blur-md border shadow-md transition-all flex items-center gap-1.5 active:scale-95 ${
+                showLayersMenu 
+                  ? "bg-(--primary) text-white border-(--primary)" 
+                  : "bg-(--surface)/95 text-foreground border-border hover:bg-elevated-surface"
+              }`}
+              title="Map Safety Layers"
+              aria-label="Toggle map layers menu"
+              aria-expanded={showLayersMenu}
+            >
+              <Menu className="h-4 w-4" />
+              <span className="text-xs font-bold hidden sm:inline">Layers</span>
             </button>
 
-            {/* Safety Check-In Pre-Trip Card */}
+            {/* Clean Layers Dropdown Menu */}
+            {showLayersMenu && (
+              <div 
+                className="absolute right-0 top-12 w-64 p-3.5 rounded-3xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-2xl z-50 text-left space-y-2 animate-slideDown"
+                role="menu"
+                aria-label="Safety layers options"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-border">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-(--muted-foreground)">
+                    Corridor Safety Layers
+                  </span>
+                  <button
+                    onClick={() => setShowLayersMenu(false)}
+                    className="p-1 rounded-lg text-(--muted-foreground) hover:bg-elevated-surface"
+                    aria-label="Close layers menu"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  {[
+                    { key: "hospitals", label: "Hospitals", icon: Hospital, count: selectedRoute?.pois?.filter(p => p.type === "hospital").length || 0, color: "text-red-500", bg: "bg-red-500/10" },
+                    { key: "police", label: "Police", icon: ShieldAlert, count: selectedRoute?.pois?.filter(p => p.type === "police").length || 0, color: "text-blue-500", bg: "bg-blue-500/10" },
+                    { key: "pharmacies", label: "Pharmacies", icon: PlusSquare, count: selectedRoute?.pois?.filter(p => p.type === "pharmacy").length || 0, color: "text-purple-500", bg: "bg-purple-500/10" },
+                    { key: "fuel", label: "Fuel", icon: Fuel, count: selectedRoute?.pois?.filter(p => p.type === "petrol").length || 0, color: "text-amber-500", bg: "bg-amber-500/10" },
+                    { key: "rest", label: "Food & Rest", icon: Coffee, count: selectedRoute?.pois?.filter(p => p.type === "food" || p.type === "rest").length || 0, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+                    { key: "incidents", label: "Hazards", icon: AlertTriangle, count: communityIncidents.length, color: "text-rose-500", bg: "bg-rose-500/10" },
+                  ].map((layer) => {
+                    const Icon = layer.icon;
+                    const isChecked = activeLayers[layer.key as keyof typeof activeLayers];
+                    return (
+                      <label
+                        key={layer.key}
+                        className={`flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-colors text-xs font-semibold ${
+                          isChecked ? "bg-elevated-surface text-foreground" : "text-(--muted-foreground) hover:bg-surface"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`p-1.5 rounded-xl ${layer.bg} ${layer.color}`}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                          <span>{layer.label}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-(--muted-foreground)">
+                            ({layer.count})
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => setActiveLayers(prev => ({
+                              ...prev,
+                              [layer.key]: !prev[layer.key as keyof typeof activeLayers]
+                            }))}
+                            className="rounded accent-(--primary) h-4 w-4 cursor-pointer"
+                          />
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-2 border-t border-border flex justify-between items-center text-[10px] text-(--muted-foreground)">
+                  <span>Toggle pins visibility</span>
+                  <button
+                    onClick={() => setActiveLayers({
+                      hospitals: true,
+                      police: true,
+                      pharmacies: true,
+                      fuel: true,
+                      rest: true,
+                      incidents: true
+                    })}
+                    className="font-bold text-(--primary) hover:underline"
+                  >
+                    Reset All
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* GPS Error Notification */}
+        {gpsError && (
+          <div className="absolute top-16 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-md z-30 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{gpsError}</span>
+            </div>
+            <button onClick={() => setGpsError(null)} className="p-1 hover:opacity-70">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Selected POI Card */}
+        {activePOI && (
+          <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:w-80 p-4 rounded-3xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-xl z-20 text-left space-y-2 animate-slideUp">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-(--primary)/10 text-(--primary)">
+                  {activePOI.type === "hospital" && <Hospital className="h-4 w-4 text-red-500" />}
+                  {activePOI.type === "police" && <ShieldAlert className="h-4 w-4 text-blue-500" />}
+                  {activePOI.type === "pharmacy" && <PlusSquare className="h-4 w-4 text-purple-500" />}
+                  {activePOI.type === "petrol" && <Fuel className="h-4 w-4 text-amber-500" />}
+                  {(activePOI.type === "food" || activePOI.type === "rest") && <Coffee className="h-4 w-4 text-emerald-500" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs sm:text-sm text-foreground">{activePOI.name}</h4>
+                  <span className="text-[10px] font-semibold text-(--muted-foreground) capitalize">{activePOI.type}</span>
+                </div>
+              </div>
+              <button onClick={() => setActivePOI(null)} className="p-1 text-(--muted-foreground) hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-[11px] text-(--muted-foreground)">{activePOI.distanceAhead}</p>
+            <div className="pt-2 border-t border-border flex items-center justify-between">
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                {activePOI.status}
+              </span>
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${activePOI.latitude},${activePOI.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-bold text-(--primary) hover:underline flex items-center gap-1"
+              >
+                <span>Navigate</span>
+                <Navigation className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Selected Incident / Hazard Card */}
+        {activeIncident && (
+          <div className="absolute bottom-20 left-3 right-3 sm:left-4 sm:right-auto sm:w-80 p-4 rounded-3xl bg-rose-50 dark:bg-rose-950/90 backdrop-blur-md border border-rose-300 dark:border-rose-800 shadow-xl z-20 text-left space-y-2 animate-slideUp text-rose-900 dark:text-rose-100">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-xs sm:text-sm">{activeIncident.type}</h4>
+                  <span className="text-[10px] text-rose-700 dark:text-rose-300 font-semibold">Community Hazard Report</span>
+                </div>
+              </div>
+              <button onClick={() => setActiveIncident(null)} className="p-1 text-rose-700 dark:text-rose-300 hover:opacity-70">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-[11px] leading-relaxed">{activeIncident.description || "Active caution reported along this road corridor."}</p>
+            <span className="text-[9px] text-rose-600 dark:text-rose-400 block pt-1">
+              Reported: {new Date(activeIncident.timestamp).toLocaleTimeString()}
+            </span>
+          </div>
+        )}
+
+        {/* ============================================================
+            FLOATING BOTTOM BAR: CONTROLS & NAVIGATION LAUNCHER
+            ============================================================ */}
+        <div className="absolute bottom-3 left-3 right-3 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pointer-events-none">
+          
+          {/* Alternative Route Switcher (Left) */}
+          {allRoutes.length > 1 && (
+            <div className="p-1.5 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-lg flex items-center gap-1.5 pointer-events-auto">
+              <span className="text-[10px] font-black uppercase text-(--muted-foreground) px-2 hidden sm:inline">
+                Corridors:
+              </span>
+              {allRoutes.map((r) => {
+                const isSelected = selectedRoute?.id === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedRoute(r)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                      isSelected 
+                        ? "bg-(--primary) text-white shadow-sm" 
+                        : "bg-elevated-surface text-foreground hover:bg-surface border border-border"
+                    }`}
+                  >
+                    Route {r.id} ({r.safetyScore})
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Core Action: START LIVE NAVIGATION (Center/Right) */}
+          <div className="flex items-center gap-2 pointer-events-auto w-full sm:w-auto">
+            <button
+              onClick={() => setShowIncidentModal(true)}
+              className="px-3.5 py-3 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border hover:bg-elevated-surface text-foreground font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+              title="Report road hazard"
+            >
+              <AlertTriangle className="h-4 w-4 text-rose-500" />
+              <span className="hidden sm:inline">Report Hazard</span>
+            </button>
+
+            <button
+              onClick={startNavigation}
+              className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <Navigation className="h-4 w-4 fill-white" />
+              <span>START LIVE NAVIGATION</span>
+            </button>
+          </div>
+
+        </div>
+
+        {/* Phase 4 Live Navigation Overlay with Phase 5 Safety Check-In */}
+        <LiveNavigationOverlay
+          status={navStatus}
+          activeRoute={(navActiveRoute || selectedRoute || allRoutes[0]) as RouteOption}
+          currentPosition={navPosition}
+          progress={navProgress}
+          currentManeuver={navCurrentManeuver}
+          nextManeuver={navNextManeuver}
+          isFollowMode={isFollowMode}
+          gpsAccuracyWarning={navGpsAccuracyWarning}
+          rerouteProposal={rerouteProposal}
+          isRerouting={isRerouting}
+          safetyWidget={
             <SafetyCheckInWidget
               status={checkInStatus}
               config={checkInConfig}
@@ -988,416 +1257,111 @@ function LivingMapContent() {
               onRequestHelp={requestHelp}
               onCancel={cancelCheckIn}
             />
-            
-            {/* Safety Fit Card */}
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm text-left space-y-4 transition-colors">
-              <div className="flex items-center justify-between border-b border-border pb-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xs font-black text-muted uppercase tracking-widest">
-                      Safety Fit
-                    </h3>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                      selectedRoute.safetyAssessment?.confidence === "HIGH" ? "bg-success/15 text-success" :
-                      selectedRoute.safetyAssessment?.confidence === "MEDIUM" ? "bg-info/15 text-info" :
-                      "bg-warning/15 text-warning"
-                    }`}>
-                      {selectedRoute.safetyAssessment?.confidence || "MEDIUM"} Confidence
-                    </span>
+          }
+          onRecenter={() => {
+            setIsFollowMode(true);
+            if (map.current && navPosition && window.google?.maps) {
+              map.current.panTo({ lat: navPosition.latitude, lng: navPosition.longitude });
+              map.current.setZoom(16);
+            }
+          }}
+          onEndNavigation={endNavigation}
+          onRequestReroute={requestReroute}
+          onApproveReroute={approveReroute}
+          onRejectReroute={rejectReroute}
+        />
+
+        {/* Incident Reporting Modal */}
+        {showIncidentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+            <div className="w-full max-w-md rounded-3xl p-6 bg-surface border border-border shadow-2xl text-left space-y-4 animate-slideUp">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-rose-500/10 text-rose-500">
+                    <AlertTriangle className="h-5 w-5" />
                   </div>
-                  <p className="text-sm font-black text-foreground">{selectedRoute.name}</p>
-                </div>
-                
-                <div className={`flex h-16 w-16 items-center justify-center rounded-full border-4 font-black text-lg shadow-inner transition-colors ${
-                  selectedRoute.safetyScore >= 80 ? "border-success bg-success/10 text-success" : 
-                  selectedRoute.safetyScore >= 65 ? "border-info bg-info/10 text-info" : 
-                  "border-warning bg-warning/10 text-warning"
-                }`}>
-                  {selectedRoute.safetyScore}
-                </div>
-              </div>
-
-              {/* Factors Summary Grid */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
-                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
-                    <Hospital className="h-3 w-3 text-red-400" /> Medical Access
-                  </span>
-                  <p className="font-black text-foreground">
-                    {selectedRoute.safetyAssessment?.factors.medicalAccess.rating || "Moderate"}
-                  </p>
-                  <span className="text-[9px] text-muted block">
-                    {selectedRoute.safetyAssessment?.factors.medicalAccess.details || `${selectedRoute.pois?.filter(p => p.type === "hospital").length || 0} hospitals nearby`}
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
-                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
-                    <ShieldAlert className="h-3 w-3 text-blue-400" /> Police Access
-                  </span>
-                  <p className="font-black text-foreground">
-                    {selectedRoute.safetyAssessment?.factors.policeAccess.rating || "Moderate"}
-                  </p>
-                  <span className="text-[9px] text-muted block">
-                    {selectedRoute.safetyAssessment?.factors.policeAccess.details || `${selectedRoute.pois?.filter(p => p.type === "police").length || 0} police nodes nearby`}
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
-                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
-                    <Fuel className="h-3 w-3 text-amber-400" /> Fuel Access
-                  </span>
-                  <p className="font-black text-foreground">
-                    {selectedRoute.safetyAssessment?.factors.fuelAccess.rating || "Good"}
-                  </p>
-                  <span className="text-[9px] text-muted block">
-                    {selectedRoute.safetyAssessment?.factors.fuelAccess.details || `${selectedRoute.fuelStops} fuel plazas along corridor`}
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-2xl bg-elevated-surface border border-border space-y-1">
-                  <span className="text-[10px] text-muted font-bold flex items-center gap-1">
-                    <CloudRain className="h-3 w-3 text-cyan-400" /> Weather Telemetry
-                  </span>
-                  <p className="font-black text-muted">
-                    {selectedRoute.safetyAssessment?.factors.weather.rating || "Not Configured"}
-                  </p>
-                  <span className="text-[9px] text-muted block truncate" title="Live weather provider not configured">
-                    API Not Configured
-                  </span>
-                </div>
-              </div>
-
-              {/* Emergency Access Score Bar */}
-              <div className="space-y-1.5 pt-1">
-                <div className="flex justify-between text-xs font-bold text-muted">
-                  <span>Emergency Facility Accessibility</span>
-                  <span className="text-foreground">{selectedRoute.emergencyAccessScore}/100</span>
-                </div>
-                <div className="h-2 w-full bg-elevated-surface rounded-full overflow-hidden">
-                  <div className="h-full bg-primary-accent rounded-full" style={{ width: `${selectedRoute.emergencyAccessScore}%` }} />
-                </div>
-              </div>
-
-              {/* Why This Route Explanation */}
-              <div className="space-y-2 pt-2 border-t border-border">
-                <span className="text-[10px] font-black text-primary-accent uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="h-3.5 w-3.5" /> Why This Route?
-                </span>
-                <div className="space-y-1.5">
-                  {(selectedRoute.whyThisRoute && selectedRoute.whyThisRoute.length > 0 
-                    ? selectedRoute.whyThisRoute 
-                    : [selectedRoute.notes]
-                  ).map((bullet, idx) => (
-                    <div key={idx} className="flex items-start gap-2 text-xs text-muted font-semibold leading-relaxed">
-                      <span className="text-primary-accent font-black">•</span>
-                      <span>{bullet}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Report Community Incident Button */}
-              <button
-                onClick={() => setShowIncidentModal(true)}
-                className="w-full py-2.5 px-4 rounded-2xl bg-elevated-surface hover:bg-border border border-border text-foreground text-xs font-black flex items-center justify-center gap-2 transition-all shadow-sm"
-              >
-                <AlertTriangle className="h-4 w-4 text-warning" />
-                <span>Report Road Hazard / Incident</span>
-              </button>
-            </div>
-
-            {/* Selected POI Card */}
-            {activePOI && (
-              <div className="rounded-3xl border border-primary-accent/40 bg-surface p-5 text-left space-y-3 shadow-md animate-fadeIn">
-                <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-[9px] font-black text-primary-accent uppercase tracking-wider block">
-                      VERIFIED GOOGLE PLACE
-                    </span>
-                    <h4 className="font-black text-sm text-foreground mt-0.5">{activePOI.name}</h4>
+                    <h3 className="font-extrabold text-sm text-foreground">Report Road Hazard</h3>
+                    <p className="text-[10px] text-(--muted-foreground)">Alert fellow travelers on this corridor</p>
                   </div>
-                  <button onClick={() => setActivePOI(null)} className="text-muted hover:text-foreground text-xs p-1">✕</button>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted font-semibold">
-                  <span className="text-foreground font-bold">{activePOI.distanceAhead}</span>
-                  <span>•</span>
-                  <span className="text-success font-bold">{activePOI.status}</span>
-                </div>
-                <div className="text-[10px] text-muted">
-                  Source: Google Places along {selectedRoute.name} corridor
-                </div>
+                <button onClick={() => setShowIncidentModal(false)} className="p-1 rounded-lg text-(--muted-foreground) hover:bg-elevated-surface">
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-            )}
 
-            {/* Selected Community Incident Card */}
-            {activeIncident && (
-              <div className="rounded-3xl border border-rose-500/40 bg-surface p-5 text-left space-y-3 shadow-md animate-fadeIn">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider block">
-                      ⚠️ COMMUNITY REPORTED HAZARD
-                    </span>
-                    <h4 className="font-black text-sm text-foreground mt-0.5">{activeIncident.type}</h4>
-                  </div>
-                  <button onClick={() => setActiveIncident(null)} className="text-muted hover:text-foreground text-xs p-1">✕</button>
-                </div>
-                <p className="text-xs text-muted font-semibold leading-relaxed">
-                  {activeIncident.description}
-                </p>
-                <div className="flex items-center justify-between text-[10px] text-muted pt-1 border-t border-border">
-                  <span>Corridor: {activeIncident.corridorName || "Route"}</span>
-                  <span>Reported: {new Date(activeIncident.timestamp).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Offline Suggestions (Only when offline) */}
-            {isOffline && offlinePackInfo && (
-              <div className="rounded-3xl border border-warning/40 bg-warning/5 p-5 text-left space-y-3 shadow-md animate-fadeIn">
-                <div className="flex items-center gap-2 mb-2">
-                  <WifiOff className="h-4 w-4 text-warning" />
-                  <span className="text-[10px] font-black text-warning uppercase tracking-wider block">
-                    Offline Safety Information
-                  </span>
-                </div>
-                <div className="space-y-2 text-xs font-semibold text-muted">
-                  <p>Next Rest Stop: {offlinePackInfo.route.restStops}</p>
-                  <p>Next Fuel Stop: {offlinePackInfo.route.fuelStops}</p>
-                  <p>Emergency Services: {offlinePackInfo.route.emergencyAccessScore}/100</p>
-                </div>
-                <div className="text-[10px] text-muted italic mt-2">
-                  Last updated: {new Date(offlinePackInfo.savedAt).toLocaleString()}
-                </div>
-              </div>
-            )}
-
-          </div>
-
-          {/* Right Column: Mapbox GL JS Container */}
-          <div className="lg:col-span-8 space-y-4">
-            <div className="relative w-full aspect-[4/3] md:aspect-[16/10] rounded-[32px] border border-border bg-elevated-surface overflow-hidden shadow-lg">
-              
-              {mapboxTokenMissing ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center space-y-4 bg-surface">
-                  <div className="p-4 rounded-3xl bg-primary-accent/10 border border-primary-accent/20">
-                    <MapPin className="h-10 w-10 text-primary-accent" />
-                  </div>
-                  <h3 className="text-xl font-black text-foreground">MAP PREVIEW MODE</h3>
-                  <p className="text-xs md:text-sm text-muted max-w-md leading-relaxed">
-                    Interactive Mapbox GL service requires your public token. Configure <code className="bg-elevated-surface px-2 py-0.5 rounded text-primary-accent font-mono">NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN</code> in your environment variables.
-                  </p>
-                  <div className="p-4 rounded-2xl bg-elevated-surface border border-border text-left w-full max-w-md text-xs space-y-1 text-muted">
-                    <span className="font-bold text-foreground block">Active Real Google Route:</span>
-                    <div className="flex justify-between"><span>Origin:</span> <span className="font-bold text-foreground">{origin.name} ({origin.state})</span></div>
-                    <div className="flex justify-between"><span>Destination:</span> <span className="font-bold text-foreground">{dest.name} ({dest.state})</span></div>
-                    <div className="flex justify-between"><span>Safety Fit:</span> <span className="font-bold text-success">{selectedRoute.name} ({selectedRoute.safetyScore}/100)</span></div>
-                  </div>
+              {incidentReportSuccess ? (
+                <div className="py-6 text-center space-y-2">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto" />
+                  <h4 className="font-bold text-sm text-foreground">Hazard Reported!</h4>
+                  <p className="text-xs text-(--muted-foreground)">Corridor safety fit is updating automatically.</p>
                 </div>
               ) : (
-                <div ref={mapContainer} className="w-full h-full" />
+                <form onSubmit={handleReportIncident} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-(--muted-foreground) uppercase">Hazard Type</label>
+                    <select
+                      value={incidentType}
+                      onChange={(e) => setIncidentType(e.target.value as IncidentType)}
+                      className="w-full p-3 rounded-xl bg-elevated-surface border border-border text-xs font-semibold text-foreground outline-none"
+                    >
+                      <option value="Road blocked">Road Blocked / Tree Fall</option>
+                      <option value="Accident">Accident Ahead</option>
+                      <option value="Severe Weather">Severe Waterlogging / Fog</option>
+                      <option value="Unlit Area">Dangerously Dark Stretch</option>
+                      <option value="Suspicious Activity">Suspicious Activity / Checkpoint</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-bold text-(--muted-foreground) uppercase">Details (Optional)</label>
+                    <textarea
+                      value={incidentDesc}
+                      onChange={(e) => setIncidentDesc(e.target.value)}
+                      placeholder="e.g., Highway right lane blocked near toll plaza..."
+                      rows={3}
+                      className="w-full p-3 rounded-xl bg-elevated-surface border border-border text-xs text-foreground outline-none resize-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setShowIncidentModal(false)}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold text-(--muted-foreground) hover:bg-elevated-surface"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md transition-all"
+                    >
+                      Broadcast Hazard
+                    </button>
+                  </div>
+                </form>
               )}
-
-              {/* Phase 4 Live Navigation Overlay with Phase 5 Safety Check-In */}
-              <LiveNavigationOverlay
-                status={navStatus}
-                activeRoute={navActiveRoute || selectedRoute}
-                currentPosition={navPosition}
-                progress={navProgress}
-                currentManeuver={navCurrentManeuver}
-                nextManeuver={navNextManeuver}
-                isFollowMode={isFollowMode}
-                gpsAccuracyWarning={navGpsAccuracyWarning}
-                rerouteProposal={rerouteProposal}
-                isRerouting={isRerouting}
-                safetyWidget={
-                  <SafetyCheckInWidget
-                    status={checkInStatus}
-                    config={checkInConfig}
-                    activeCycle={checkInCycle}
-                    secondsRemaining={checkInSecondsRemaining}
-                    graceSecondsRemaining={checkInGraceSecondsRemaining}
-                    lastKnownSnapshot={checkInLocationSnapshot}
-                    escalationResult={checkInEscalationResult}
-                    trustedContacts={trustedContacts}
-                    onStart={startCheckIn}
-                    onConfirmSafe={confirmSafety}
-                    onRequestHelp={requestHelp}
-                    onCancel={cancelCheckIn}
-                  />
-                }
-                onRecenter={() => {
-                  setIsFollowMode(true);
-                  if (map.current && navPosition) {
-                    map.current.easeTo({
-                      center: [navPosition.longitude, navPosition.latitude],
-                      zoom: 15,
-                      duration: 800
-                    });
-                  }
-                }}
-                onEndNavigation={endNavigation}
-                onRequestReroute={requestReroute}
-                onApproveReroute={approveReroute}
-                onRejectReroute={rejectReroute}
-              />
-              
             </div>
-
-            {/* Route Selector Switcher */}
-            <div className={`rounded-2xl border border-border bg-surface p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm ${isOffline ? "opacity-50 pointer-events-none" : ""}`}>
-              <span className="text-xs font-black text-muted uppercase tracking-wider">
-                Select Alternative Google Route:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {allRoutes.map(r => (
-                  <button
-                    key={r.id}
-                    onClick={() => setSelectedRoute(r)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                      selectedRoute.id === r.id
-                        ? "bg-primary-accent text-white shadow-md"
-                        : "bg-elevated-surface hover:bg-border text-foreground border border-border"
-                    }`}
-                  >
-                    Route {r.id}: {r.name.split(" ")[0]} (Fit: {r.safetyScore}/100)
-                  </button>
-                ))}
-              </div>
-            </div>
-
           </div>
+        )}
 
-        </div>
-      </div>
-
-      {/* Community Incident Report Modal */}
-      {showIncidentModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-surface border border-border rounded-3xl p-6 space-y-5 shadow-2xl text-left animate-fadeIn">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-warning" />
-                <h3 className="font-black text-base text-foreground">Report Community Hazard</h3>
-              </div>
-              <button 
-                onClick={() => setShowIncidentModal(false)}
-                className="text-muted hover:text-foreground text-xs p-1 rounded-lg"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {incidentReportSuccess ? (
-              <div className="p-4 rounded-2xl bg-success/15 border border-success/30 text-success text-center space-y-2">
-                <CheckCircle2 className="h-8 w-8 mx-auto" />
-                <p className="font-black text-sm">Hazard Report Logged!</p>
-                <p className="text-xs font-semibold">Marked as USER REPORTED along corridor. Route safety fit updated.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleReportHazard} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-black text-muted uppercase tracking-wider block">
-                    Incident / Hazard Type
-                  </label>
-                  <select
-                    value={incidentType}
-                    onChange={(e) => setIncidentType(e.target.value as IncidentType)}
-                    className="w-full rounded-2xl bg-elevated-surface border border-border px-4 py-3 text-xs text-foreground font-bold focus:outline-none focus:border-primary-accent"
-                  >
-                    <option value="Road blocked">Road blocked / Obstruction</option>
-                    <option value="Accident">Accident reported</option>
-                    <option value="Heavy traffic">Heavy gridlock / Traffic</option>
-                    <option value="Flood / water">Flood / Water logging</option>
-                    <option value="Construction">Active road work / Construction</option>
-                    <option value="Other">Other road safety issue</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-black text-muted uppercase tracking-wider block">
-                    Description & Observations
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Describe the condition (e.g., lane partially closed after toll plaza)..."
-                    value={incidentDesc}
-                    onChange={(e) => setIncidentDesc(e.target.value)}
-                    required
-                    className="w-full rounded-2xl bg-elevated-surface border border-border p-3 text-xs text-foreground font-semibold focus:outline-none focus:border-primary-accent"
-                  />
-                </div>
-
-                <div className="p-3 rounded-2xl bg-elevated-surface border border-border text-[10px] text-muted space-y-1">
-                  <span className="font-black text-foreground block">⚠️ Truthful Data Label:</span>
-                  <span>Will be published as <strong className="text-warning font-black">USER REPORTED</strong> with a 6-hour automatic validity expiration.</span>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowIncidentModal(false)}
-                    className="flex-1 py-3 rounded-2xl bg-elevated-surface hover:bg-border text-muted font-black text-xs transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 rounded-2xl bg-primary-accent hover:bg-primary-accent-hover text-white font-black text-xs transition-all shadow-md"
-                  >
-                    Submit Report
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Floating Travel Assistant Button */}
-      <button
-        onClick={() => setShowAssistant(!showAssistant)}
-        className="fixed bottom-20 md:bottom-8 right-4 md:right-8 z-40 p-3.5 rounded-full bg-primary-accent hover:bg-primary-accent-hover text-white shadow-2xl shadow-primary-accent/40 flex items-center gap-2 border-2 border-white/20 transition-transform active:scale-95"
-        title="Open AI Travel Guardian Assistant"
-      >
-        <Bot className="h-6 w-6" />
-        <span className="font-black text-xs hidden md:inline">AI Assistant</span>
-      </button>
-
-      {/* Floating Travel Assistant Drawer/Modal */}
-      {showAssistant && (
-        <TravelAssistant
-          isOpen={showAssistant}
-          isFloating={true}
-          onClose={() => setShowAssistant(false)}
-          context={liveTravelContext}
-          onApplyInterval={(mins) => startCheckIn({ intervalMinutes: mins })}
-          onSelectRoute={(id) => {
-            const r = allRoutes.find(x => x.id === id);
-            if (r) setSelectedRoute(r);
-          }}
-          onTriggerAlert={() => requestHelp("Assistance requested via AI Assistant.")}
-        />
-      )}
+      </main>
 
       <div className="md:hidden">
         <BottomNav />
       </div>
-
     </div>
   );
 }
 
-export default function LivingMap() {
+export default function LivingMapScreen() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background text-muted flex flex-col items-center justify-center gap-3 text-xs font-bold">
-        <Loader className="h-6 w-6 animate-spin text-primary-accent" />
-        <span>Loading Safe Haven Living Map...</span>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader className="h-8 w-8 animate-spin text-(--primary)" />
       </div>
     }>
       <LivingMapContent />
     </Suspense>
   );
 }
-

@@ -5,6 +5,7 @@ import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import { 
   getTrustedContacts, 
+  saveTrustedContacts,
   addTrustedContact, 
   updateTrustedContact, 
   removeTrustedContact, 
@@ -12,6 +13,8 @@ import {
   MAX_TRUSTED_CONTACTS,
   MIN_TRUSTED_CONTACTS
 } from "../../services/trustedContactService";
+import { TravelGuardianAPI } from "../../services/api";
+import { reverseGeocodeCoordinates } from "../../services/googlePlaces";
 import { TrustedContact, LocationSnapshot } from "../../types/safetyCheckIn";
 import { 
   Phone, 
@@ -31,7 +34,12 @@ import {
   Radio, 
   X, 
   CheckCircle2,
-  Info
+  Info,
+  Loader2,
+  MessageSquare,
+  Send,
+  Sparkles,
+  RefreshCw
 } from "lucide-react";
 
 export default function EmergencyScreen() {
@@ -46,33 +54,79 @@ export default function EmergencyScreen() {
   const [contactRel, setContactRel] = useState("Family");
   const [contactFormError, setContactFormError] = useState<string | null>(null);
 
-  // Telemetry Location Snapshot
+  // Telemetry Location Snapshot (Section 17: Humanized Location)
   const [locationSnapshot, setLocationSnapshot] = useState<LocationSnapshot | null>(null);
+  const [humanLocation, setHumanLocation] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
 
+  // Exotel Emergency Communication States
+  const [isActionLoading, setIsActionLoading] = useState(false);
+  const [actionStatusText, setActionStatusText] = useState<string | null>(null);
+  const [smsStatus, setSmsStatus] = useState<"pending" | "sent" | "failed" | null>(null);
+  const [callStatus, setCallStatus] = useState<"pending" | "initiated" | "completed" | "failed" | null>(null);
+  const [overallStatus, setOverallStatus] = useState<"pending" | "partially_completed" | "completed" | "failed" | null>(null);
+
   useEffect(() => {
-    setContacts(getTrustedContacts());
+    const local = getTrustedContacts();
+    setContacts(local);
     fetchCurrentLocation();
+
+    // Synchronize with backend database contacts if available
+    TravelGuardianAPI.getEmergencyContacts()
+      .then((backendContacts) => {
+        if (backendContacts && backendContacts.length > 0) {
+          const mapped: TrustedContact[] = backendContacts.map((bc) => ({
+            id: `tc_${bc.id}`,
+            name: bc.name,
+            phone: bc.phone,
+            relationship: bc.relation,
+            enabled: true,
+            createdAt: Date.now()
+          }));
+          setContacts(mapped);
+          saveTrustedContacts(mapped);
+        }
+      })
+      .catch(() => {});
   }, []);
 
+  // Section 17: Fetch actual GPS and reverse geocode to human-readable address
   const fetchCurrentLocation = () => {
     if (typeof window !== "undefined" && navigator.geolocation) {
       setLocationLoading(true);
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           const acc = Math.round(pos.coords.accuracy || 0);
-          setLocationSnapshot({
-            latitude: lat,
-            longitude: lng,
-            accuracy: acc,
-            timestamp: pos.timestamp,
-            isStale: false,
-            googleMapsUrl: `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`,
-            formattedText: `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)} (±${acc}m)`
-          });
-          setLocationLoading(false);
+
+          try {
+            const locDetails = await reverseGeocodeCoordinates(lat, lng);
+            const addressString = locDetails.formattedAddress || locDetails.name;
+            setHumanLocation(addressString);
+            setLocationSnapshot({
+              latitude: lat,
+              longitude: lng,
+              accuracy: acc,
+              timestamp: pos.timestamp,
+              isStale: false,
+              googleMapsUrl: `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`,
+              formattedText: addressString
+            });
+          } catch {
+            setHumanLocation(null);
+            setLocationSnapshot({
+              latitude: lat,
+              longitude: lng,
+              accuracy: acc,
+              timestamp: pos.timestamp,
+              isStale: false,
+              googleMapsUrl: `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`,
+              formattedText: `Coordinates: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+            });
+          } finally {
+            setLocationLoading(false);
+          }
         },
         (err) => {
           console.warn("Could not fetch emergency location", err);
@@ -134,8 +188,15 @@ export default function EmergencyScreen() {
         setContactFormError(res.error || "Failed to add contact.");
         return;
       }
-      setAlertMessage({ text: `Added new trusted contact: ${contactName}`, type: "success" });
+      setAlertMessage({ text: `Added trusted contact: ${contactName}`, type: "success" });
     }
+
+    // Synchronize to backend SQLite database
+    TravelGuardianAPI.createEmergencyContact({
+      name: contactName,
+      phone: contactPhone,
+      relation: contactRel
+    }).catch(err => console.warn("Backend contact sync notice:", err));
 
     setContacts(getTrustedContacts());
     setShowContactModal(false);
@@ -144,7 +205,7 @@ export default function EmergencyScreen() {
   const handleDeleteContact = (id: string, name: string) => {
     const res = removeTrustedContact(id);
     if (!res.success) {
-      setAlertMessage({ text: res.error || "Could not delete contact.", type: "danger" });
+      setAlertMessage({ text: res.error || "Could not delete contact.", type: "warning" });
       return;
     }
     setContacts(getTrustedContacts());
@@ -152,117 +213,380 @@ export default function EmergencyScreen() {
   };
 
   const handleToggleContact = (id: string) => {
-    const res = toggleContactEnabled(id);
-    if (!res.success) {
-      setAlertMessage({ text: res.error || "Could not toggle contact.", type: "warning" });
-      return;
-    }
+    toggleContactEnabled(id);
     setContacts(getTrustedContacts());
   };
 
-  const handleAlertContacts = () => {
-    const active = contacts.filter(c => c.enabled);
-    setAlertMessage({
-      text: `[DEV_SIMULATED] Alert prepared for ${active.length} contact(s). SMS Gateway status: NOT_CONFIGURED. No real SMS sent without provider credentials.`,
-      type: "warning"
-    });
+  // Section 18: Destination must strictly resolve from the stored Trusted Contact
+  const activeContacts = contacts.filter(c => c.enabled);
+  const primaryContact = activeContacts.length > 0 ? activeContacts[0] : null;
+
+  // Exotel SMS Alert to Configured Contact
+  const handleAlertTrustedContactSMS = async () => {
+    if (!primaryContact) {
+      setAlertMessage({ text: "Please add a trusted contact before sending an alert.", type: "warning" });
+      return;
+    }
+
+    setIsActionLoading(true);
+    setActionStatusText(`Sending SMS alert to ${primaryContact.name} via Exotel...`);
+    setSmsStatus("pending");
+
+    try {
+      const res = await TravelGuardianAPI.sendEmergencySMS({
+        latitude: locationSnapshot?.latitude,
+        longitude: locationSnapshot?.longitude,
+        location_name: humanLocation || "Current GPS Location",
+        custom_message: "EMERGENCY: User requested immediate assistance via Travel Guardian.",
+        contact_name: primaryContact.name,
+        contact_phone: primaryContact.phone,
+        contact_relation: primaryContact.relationship
+      });
+
+      if (res && (res.status === "sent" || (res as any).status === "success" || res.success)) {
+        setSmsStatus("sent");
+        setAlertMessage({ text: `SMS alert dispatched to ${primaryContact.name} (${primaryContact.phone}).`, type: "success" });
+        setActionStatusText("SMS alert dispatched successfully.");
+      } else {
+        setSmsStatus("failed");
+        setAlertMessage({ text: res?.safe_message || "Exotel SMS alert could not be delivered. Please use voice dialer.", type: "warning" });
+        setActionStatusText("SMS dispatch failed.");
+      }
+    } catch {
+      setSmsStatus("failed");
+      setAlertMessage({ text: "SMS dispatch network error.", type: "danger" });
+      setActionStatusText("SMS dispatch failed.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // Exotel Voice Call to Configured Contact
+  const handleCallTrustedContact = async () => {
+    if (!primaryContact) {
+      setAlertMessage({ text: "Please add a trusted contact before making an emergency call.", type: "warning" });
+      return;
+    }
+
+    setIsActionLoading(true);
+    setActionStatusText(`Initiating emergency call to ${primaryContact.name} via Exotel...`);
+    setCallStatus("pending");
+
+    try {
+      const res = await TravelGuardianAPI.makeEmergencyCall({
+        latitude: locationSnapshot?.latitude,
+        longitude: locationSnapshot?.longitude,
+        location_name: humanLocation || "Current GPS Location",
+        voice_message: "Emergency alert from Travel Guardian. Your contact has requested assistance.",
+        contact_name: primaryContact.name,
+        contact_phone: primaryContact.phone,
+        contact_relation: primaryContact.relationship
+      });
+
+      if (res && (res.status === "initiated" || (res as any).status === "completed" || res.success)) {
+        setCallStatus("initiated");
+        setAlertMessage({ text: `Emergency call connected to ${primaryContact.name} (${primaryContact.phone}).`, type: "success" });
+        setActionStatusText("Call initiated successfully.");
+      } else {
+        setCallStatus("failed");
+        setAlertMessage({ text: res?.safe_message || "Unable to initiate Exotel call. Please dial directly.", type: "warning" });
+        setActionStatusText("Call initiation failed.");
+      }
+    } catch {
+      setCallStatus("failed");
+      setAlertMessage({ text: "Voice call network error.", type: "danger" });
+      setActionStatusText("Call initiation failed.");
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // SOS Broadcast to Configured Contact
+  const handleTriggerSOS = async () => {
+    if (!primaryContact) {
+      setAlertMessage({ text: "Please add a trusted contact before triggering SOS broadcast.", type: "warning" });
+      return;
+    }
+
+    setIsActionLoading(true);
+    setActionStatusText(`Broadcasting SOS alert to ${primaryContact.name}...`);
+    setOverallStatus("pending");
+
+    try {
+      const res = await TravelGuardianAPI.notifyTrustedContact({
+        latitude: locationSnapshot?.latitude,
+        longitude: locationSnapshot?.longitude,
+        location_name: humanLocation || "Current GPS Location",
+        include_sms: true,
+        include_call: true,
+        contact_name: primaryContact.name,
+        contact_phone: primaryContact.phone,
+        contact_relation: primaryContact.relationship
+      });
+
+      if (res && (res.overall_status === "completed" || (res as any).status === "success" || res.success)) {
+        setSmsStatus("sent");
+        setCallStatus("completed");
+        setOverallStatus("completed");
+        setAlertMessage({ text: `SOS alerts dispatched to ${primaryContact.name} (${primaryContact.phone}).`, type: "success" });
+        setActionStatusText("Emergency alerts sent successfully.");
+      } else if (res && res.overall_status === "partially_completed") {
+        setOverallStatus("partially_completed");
+        setAlertMessage({ text: res?.safe_message || "SOS alert partially delivered.", type: "warning" });
+        setActionStatusText("Partial delivery completed.");
+      } else {
+        setOverallStatus("failed");
+        setAlertMessage({ text: res?.safe_message || "Unable to contact trusted person via Exotel.", type: "danger" });
+        setActionStatusText("Unable to contact trusted person.");
+      }
+    } catch {
+      setSmsStatus("failed");
+      setCallStatus("failed");
+      setOverallStatus("failed");
+      setAlertMessage({ text: "Unable to contact trusted person.", type: "danger" });
+
+      setActionStatusText("Unable to contact trusted person.");
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
-      
-      {/* Header */}
+    <div 
+      className="min-h-screen pb-20 md:pb-8 bg-background text-foreground"
+      style={{ fontFamily: "'Poppins', sans-serif" }}
+    >
       <Header />
 
-      {/* Main Container */}
       <div className="w-full max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
         
         {/* Title Header */}
         <div className="text-center max-w-xl space-y-2">
-          <span style={{ fontSize: "11px", fontWeight: 700, color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
-            Safety &amp; Emergency Readiness
-          </span>
-          <h2 style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", color: "#0F172A" }}>
-            Emergency Portal &amp; Trusted Contacts
-          </h2>
-          <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, lineHeight: 1.6 }}>
-            Configure up to 5 trusted guardians, check GPS telemetry, or directly call emergency services.
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold tracking-wider uppercase">
+            <ShieldAlert className="h-3.5 w-3.5" />
+            <span>Emergency Readiness Protocol</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
+            Emergency Portal &amp; Trusted Guardians
+          </h1>
+          <p className="text-xs md:text-sm text-(--muted-foreground) leading-relaxed">
+            Dispatch instant alerts to your configured guardians, inspect verified GPS location telemetry, or directly dial 112 emergency services.
           </p>
         </div>
 
         {/* Global Feedback Banner */}
         {alertMessage && (
           <div
-            className="w-full max-w-2xl p-4 rounded-2xl flex items-center justify-between"
-            style={{
-              backgroundColor: alertMessage.type === "success" ? "#F0FDF4" : alertMessage.type === "danger" ? "#FEF2F2" : "#FFFBEB",
-              border: `1px solid ${alertMessage.type === "success" ? "rgba(34,197,94,0.25)" : alertMessage.type === "danger" ? "rgba(239,68,68,0.25)" : "rgba(245,158,11,0.25)"}`,
-              color: alertMessage.type === "success" ? "#16A34A" : alertMessage.type === "danger" ? "#DC2626" : "#D97706",
-              fontSize: "13px",
-              fontWeight: 600,
-            }}
+            className={`w-full max-w-2xl p-4 rounded-2xl flex items-center justify-between text-xs md:text-sm font-semibold shadow-md animate-slideDown ${
+              alertMessage.type === "success" 
+                ? "bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200" 
+                : alertMessage.type === "danger" 
+                ? "bg-red-50 dark:bg-red-950/80 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-200" 
+                : "bg-amber-50 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200"
+            }`}
           >
-            <div className="flex items-center gap-2">
-              {alertMessage.type === "success" ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" /> : <AlertTriangle className="h-4 w-4 flex-shrink-0" />}
+            <div className="flex items-center gap-2.5">
+              {alertMessage.type === "success" ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
               <span>{alertMessage.text}</span>
             </div>
-            <button onClick={() => setAlertMessage(null)} className="p-1">✕</button>
+            <button onClick={() => setAlertMessage(null)} className="p-1 hover:opacity-70">
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
 
         <div className="w-full max-w-2xl space-y-6">
 
-          {/* 1. PRIMARY EMERGENCY DIAL (112) */}
-          <div
-            className="rounded-3xl p-6 text-center space-y-4"
-            style={{ backgroundColor: "#FFFFFF", border: "1.5px solid rgba(239,68,68,0.25)", boxShadow: "0 4px 20px rgba(239,68,68,0.10)" }}
-          >
-            <div className="flex items-center justify-center gap-2" style={{ fontSize: "11px", fontWeight: 700, color: "#EF4444", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-              <ShieldAlert className="h-5 w-5 animate-pulse" />
-              <span>National Public Emergency Line (India)</span>
+          {/* ============================================================
+              CURRENT LOCATION & TELEMETRY (Section 17: Humanized Address)
+              ============================================================ */}
+          <div className="rounded-3xl p-6 bg-surface border border-border shadow-xl text-left space-y-3">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-(--primary)/10 text-(--primary)">
+                  <MapPin className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-xs uppercase tracking-wider text-(--muted-foreground)">
+                    Current Location Telemetry
+                  </h3>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                    GPS Synchronized
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={fetchCurrentLocation}
+                disabled={locationLoading}
+                className="p-2 rounded-xl bg-elevated-surface text-(--muted-foreground) hover:text-foreground border border-border transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-semibold"
+                title="Refresh GPS Location"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${locationLoading ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
             </div>
-            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400 }}>
-              Tap below to initiate a phone call to national emergency dispatch (Police, Fire, Ambulance).
-            </p>
-            <a
-              href="tel:112"
-              className="w-full py-4 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-3 transition-all active:scale-95"
-              style={{
-                background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
-                boxShadow: "0 6px 24px rgba(239,68,68,0.30)",
-                fontFamily: "'Poppins',sans-serif",
-                fontWeight: 700,
-                fontSize: "16px",
-                letterSpacing: "0.04em",
-              }}
-            >
-              <PhoneCall className="h-6 w-6" />
-              <span>CALL 112 NOW</span>
-            </a>
+
+            {locationSnapshot ? (
+              <div className="space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <div>
+                    <h4 className="font-extrabold text-sm sm:text-base text-foreground">
+                      {humanLocation || "Location Coordinates"}
+                    </h4>
+                    <p className="text-xs font-mono text-(--muted-foreground) mt-0.5">
+                      {locationSnapshot.latitude.toFixed(6)}, {locationSnapshot.longitude.toFixed(6)}
+                      <span className="ml-2 font-sans font-medium text-[11px]">
+                        (Accuracy: ±{locationSnapshot.accuracy}m)
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  <a
+                    href={locationSnapshot.googleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-(--primary) hover:underline"
+                  >
+                    <span>View on Google Maps</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <span className="text-[10px] text-(--muted-foreground)">
+                    Updated: {new Date(locationSnapshot.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-3 text-center text-xs text-(--muted-foreground)">
+                {locationLoading ? "Detecting real-time GPS location..." : "Location unavailable. Please enable browser location permissions."}
+              </div>
+            )}
           </div>
 
-          {/* 2. TRUSTED CONTACTS SECTION */}
-          <div
-            className="rounded-3xl p-6 space-y-4"
-            style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}
-          >
-            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+          {/* ============================================================
+              1. EMERGENCY ACTION CENTER
+              ============================================================ */}
+          <div className="rounded-3xl p-6 space-y-5 bg-surface border-2 border-red-500/30 shadow-xl text-left">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2 text-red-600 font-extrabold text-xs uppercase tracking-wider">
+                <ShieldAlert className="h-5 w-5 animate-pulse" />
+                <span>Emergency Action Center</span>
+              </div>
+              {primaryContact ? (
+                <span className="text-xs font-semibold text-(--muted-foreground)">
+                  Target: <strong className="text-foreground">{primaryContact.name}</strong> ({primaryContact.relationship || "Guardian"})
+                </span>
+              ) : (
+                <span className="text-xs font-bold text-red-500">
+                  No active trusted contact configured
+                </span>
+              )}
+            </div>
+
+            {/* In-Flight Status Text */}
+            {isActionLoading && (
+              <div className="p-3 rounded-2xl flex items-center justify-center gap-2 bg-blue-500/10 text-(--primary) text-xs font-bold animate-pulse">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{actionStatusText || "Processing emergency request..."}</span>
+              </div>
+            )}
+
+            {/* Action Buttons Grid */}
+            <div className="space-y-3">
+              
+              {/* PRIMARY EMERGENCY DIAL (112) - OFFICIAL 112 ONLY */}
+              <a
+                href="tel:112"
+                className="w-full py-4 rounded-2xl text-white font-black text-sm sm:text-base flex items-center justify-center gap-3 bg-linear-to-r from-red-600 to-rose-700 hover:opacity-95 shadow-xl shadow-red-600/30 transition-all active:scale-95 group"
+              >
+                <PhoneCall className="h-5 w-5 group-hover:animate-bounce" />
+                <span>Call Emergency Services — 112</span>
+              </a>
+
+              {/* SOS Broadcast to Configured Contact Only (SMS + Call) */}
+              <button
+                onClick={handleTriggerSOS}
+                disabled={isActionLoading || !primaryContact}
+                className="w-full py-3.5 rounded-2xl text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2.5 bg-linear-to-r from-rose-700 to-red-800 hover:opacity-95 shadow-lg shadow-red-700/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4 animate-pulse" />}
+                <span>SOS — Broadcast to Configured Contact (SMS + Call)</span>
+              </button>
+
+              {/* 2-Column Actions: SMS & Call to Configured Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <button
+                  onClick={handleAlertTrustedContactSMS}
+                  disabled={isActionLoading || !primaryContact}
+                  className="py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 bg-(--primary)/10 border border-(--primary)/30 text-(--primary) hover:bg-(--primary)/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Alert Contact (SMS)</span>
+                </button>
+
+                <button
+                  onClick={handleCallTrustedContact}
+                  disabled={isActionLoading || !primaryContact}
+                  className="py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>Call Contact (Voice)</span>
+                </button>
+              </div>
+
+            </div>
+
+            {/* Status Badges Section */}
+            {(smsStatus || callStatus || overallStatus) && (
+              <div className="pt-3 flex flex-wrap items-center gap-2 border-t border-border">
+                <span className="text-[11px] font-bold text-(--muted-foreground) uppercase">Dispatch Status:</span>
+                
+                {smsStatus && (
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                    smsStatus === "sent" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                    smsStatus === "failed" ? "bg-red-500/10 text-red-600 dark:text-red-400" : "bg-amber-500/10 text-amber-600"
+                  }`}>
+                    SMS: {smsStatus.toUpperCase()}
+                  </span>
+                )}
+
+                {callStatus && (
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                    callStatus === "initiated" || callStatus === "completed" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                    callStatus === "failed" ? "bg-red-500/10 text-red-600 dark:text-red-400" : "bg-amber-500/10 text-amber-600"
+                  }`}>
+                    Call: {callStatus.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!primaryContact && (
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center">
+                <p className="text-xs text-amber-800 dark:text-amber-300 font-semibold">
+                  No trusted emergency guardian configured. Please configure your guardian contact below to enable instant dispatch.
+                </p>
+              </div>
+            )}
+
+          </div>
+
+          {/* ============================================================
+              2. CONFIGURED TRUSTED GUARDIANS (Section 18 & 19: High Contrast)
+              ============================================================ */}
+          <div className="rounded-3xl p-6 space-y-4 bg-surface border border-border shadow-xl text-left">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div>
-                <h3 style={{ fontWeight: 700, fontSize: "15px", color: "#0F172A" }}>Trusted Guardian Contacts</h3>
-                <span style={{ fontSize: "11px", color: "#64748B", fontWeight: 500, display: "block", marginTop: "2px" }}>
-                  {contacts.length} of {MAX_TRUSTED_CONTACTS} contacts configured (Min: {MIN_TRUSTED_CONTACTS})
+                <h3 className="font-extrabold text-sm sm:text-base text-foreground">Trusted Guardian Contacts</h3>
+                <span className="text-[11px] text-(--muted-foreground) font-medium block mt-0.5">
+                  {contacts.length} of {MAX_TRUSTED_CONTACTS} configured • Emergency alerts dispatch exclusively here
                 </span>
               </div>
               <button
                 onClick={handleOpenAddContact}
                 disabled={contacts.length >= MAX_TRUSTED_CONTACTS}
-                className="py-2 px-4 rounded-xl text-white text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
-                  fontWeight: 600,
-                  fontSize: "12px",
-                  fontFamily: "'Poppins',sans-serif",
-                }}
+                className="py-2 px-4 rounded-xl text-white text-xs font-bold bg-(--primary) hover:opacity-90 shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <UserPlus className="h-3.5 w-3.5" />
                 <span>Add Contact</span>
@@ -270,239 +594,175 @@ export default function EmergencyScreen() {
             </div>
 
             {/* Contact List */}
-            <div className="space-y-2.5">
-              {contacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  className="p-3.5 rounded-2xl flex items-center justify-between transition-all"
-                  style={{
-                    backgroundColor: contact.enabled ? "#F8FAFC" : "#F1F5F9",
-                    border: `1px solid ${contact.enabled ? "rgba(15,23,42,0.07)" : "rgba(15,23,42,0.04)"}`,
-                    opacity: contact.enabled ? 1 : 0.65,
-                  }}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <button
-                      onClick={() => handleToggleContact(contact.id)}
-                      title={contact.enabled ? "Disable contact" : "Enable contact"}
-                      className="p-2 rounded-xl border transition-colors"
-                      style={{
-                        backgroundColor: contact.enabled ? "#DCFCE7" : "#F1F5F9",
-                        borderColor: contact.enabled ? "rgba(34,197,94,0.25)" : "rgba(15,23,42,0.08)",
-                        color: contact.enabled ? "#16A34A" : "#94A3B8",
-                      }}
-                    >
-                      <Power className="h-4 w-4" />
-                    </button>
-                    <div className="truncate">
-                      <div className="flex items-center gap-2">
-                        <h4 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }} className="truncate">{contact.name}</h4>
-                        <span style={{ fontSize: "10px", fontWeight: 600, padding: "2px 8px", borderRadius: "9999px", backgroundColor: "#EFF6FF", color: "#2563FF" }}>
-                          {contact.relationship || "Contact"}
+            {contacts.length > 0 ? (
+              <div className="space-y-2.5">
+                {contacts.map((contact) => (
+                  <div
+                    key={contact.id}
+                    className={`p-3.5 rounded-2xl flex items-center justify-between border transition-all ${
+                      contact.enabled 
+                        ? "bg-elevated-surface border-border" 
+                        : "bg-surface border-(--border)/50 opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <button
+                        onClick={() => handleToggleContact(contact.id)}
+                        title={contact.enabled ? "Disable contact" : "Enable contact"}
+                        className={`p-2 rounded-xl border transition-colors ${
+                          contact.enabled 
+                            ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400" 
+                            : "bg-surface border-border text-(--muted-foreground)"
+                        }`}
+                      >
+                        <Power className="h-4 w-4" />
+                      </button>
+                      <div className="truncate">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-extrabold text-xs sm:text-sm text-foreground truncate">{contact.name}</h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-(--primary)/10 text-(--primary)">
+                            {contact.relationship || "Guardian"}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-(--muted-foreground) block mt-0.5">
+                          {contact.phone}
                         </span>
                       </div>
-                      <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#64748B", display: "block", marginTop: "2px" }}>
-                        {contact.phone}
-                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      <button
+                        onClick={() => handleOpenEditContact(contact)}
+                        className="p-2 rounded-xl bg-surface text-(--muted-foreground) hover:text-foreground border border-border transition-colors"
+                        title="Edit Contact"
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteContact(contact.id, contact.name)}
+                        className="p-2 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 transition-colors"
+                        title="Delete Contact"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    <button
-                      onClick={() => handleOpenEditContact(contact)}
-                      className="p-2 rounded-xl transition-colors"
-                      style={{ backgroundColor: "#F1F5F9", color: "#64748B" }}
-                      title="Edit Contact"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteContact(contact.id, contact.name)}
-                      disabled={contacts.length <= MIN_TRUSTED_CONTACTS}
-                      className="p-2 rounded-xl transition-colors disabled:opacity-40"
-                      style={{ backgroundColor: "#FEF2F2", color: "#EF4444" }}
-                      title={contacts.length <= MIN_TRUSTED_CONTACTS ? "At least 1 contact required" : "Delete Contact"}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Quick Test Alert Button */}
-            <div className="pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)" }}>
-              <button
-                onClick={handleAlertContacts}
-                className="w-full py-3 rounded-2xl flex items-center justify-center gap-2 transition-all"
-                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.08)", fontSize: "12px", fontWeight: 600, color: "#374151", fontFamily: "'Poppins',sans-serif" }}
-                onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#EFF6FF"}
-                onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.backgroundColor = "#F8FAFC"}
-              >
-                <Phone className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
-                <span>Test Alert Notification to Active Guardians</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 3. LAST KNOWN LOCATION TELEMETRY */}
-          <div
-            className="rounded-3xl p-6 space-y-3"
-            style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}
-          >
-            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
-                <h3 style={{ fontWeight: 700, fontSize: "15px", color: "#0F172A" }}>Current / Last Known Location</h3>
-              </div>
-              <button
-                onClick={fetchCurrentLocation}
-                style={{ fontSize: "12px", fontWeight: 600, color: "#2563FF" }}
-              >
-                Refresh GPS
-              </button>
-            </div>
-
-            {locationSnapshot ? (
-              <div
-                className="p-3.5 rounded-2xl space-y-2"
-                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}
-              >
-                <div className="flex items-center justify-between" style={{ fontFamily: "monospace", fontSize: "12px", fontWeight: 600, color: "#0F172A" }}>
-                  <span>{locationSnapshot.formattedText}</span>
-                  <span style={{ fontSize: "10px", color: "#94A3B8" }}>
-                    Recorded {new Date(locationSnapshot.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                  </span>
-                </div>
-                {locationSnapshot.googleMapsUrl && (
-                  <a
-                    href={locationSnapshot.googleMapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5"
-                    style={{ fontSize: "12px", fontWeight: 600, color: "#2563FF" }}
-                  >
-                    <span>View Coordinates on Google Maps</span>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
+                ))}
               </div>
             ) : (
-              <div style={{ fontSize: "13px", color: "#94A3B8", fontWeight: 400 }}>
-                {locationLoading ? "Acquiring GPS coordinates..." : "Location snapshot unavailable. Tap refresh to acquire."}
+              <div className="py-6 text-center text-xs text-(--muted-foreground) space-y-2">
+                <p>No trusted guardian contacts added yet.</p>
+                <button
+                  onClick={handleOpenAddContact}
+                  className="px-4 py-2 rounded-xl bg-(--primary) text-white text-xs font-bold inline-flex items-center gap-1.5"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span>Configure Guardian Contact</span>
+                </button>
               </div>
             )}
-          </div>
-
-          {/* 4. NOTIFICATION STATUS NOTICE */}
-          <div
-            className="p-4 rounded-3xl space-y-2"
-            style={{ backgroundColor: "#FFFBEB", border: "1px solid rgba(245,158,11,0.2)" }}
-          >
-            <div className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>
-              <Info className="h-4 w-4 flex-shrink-0" style={{ color: "#F59E0B" }} />
-              <span>Notification Truthfulness Notice</span>
-            </div>
-            <p style={{ fontSize: "12px", color: "#64748B", lineHeight: 1.6 }}>
-              Travel Guardian operates with strict anti-fabrication standards. External SMS delivery requires configured provider credentials (Twilio or AWS SNS). In this environment, notification status is truthfully labelled as <strong style={{ color: "#D97706" }}>NOT_CONFIGURED / DEV_SIMULATED</strong>.
-            </p>
           </div>
 
         </div>
 
       </div>
 
-      {/* ADD / EDIT CONTACT MODAL */}
+      {/* Add / Edit Contact Modal */}
       {showContactModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn" style={{ backgroundColor: "rgba(15,23,42,0.5)", backdropFilter: "blur(8px)" }}>
-          <div
-            className="w-full max-w-md rounded-3xl p-6 text-left space-y-4 animate-slideUp"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 24px 64px rgba(15,23,42,0.20)" }}
-          >
-
-            <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}>
-              <h3 style={{ fontWeight: 700, fontSize: "16px", color: "#0F172A" }}>
-                {editingContactId ? "Edit Trusted Contact" : "Add Trusted Guardian"}
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+          style={{ fontFamily: "'Poppins', sans-serif" }}
+        >
+          <div className="w-full max-w-md rounded-3xl p-6 text-left space-y-4 shadow-2xl bg-surface border border-border animate-slideUp">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <h3 className="font-extrabold text-sm sm:text-base text-foreground">
+                {editingContactId ? "Edit Trusted Guardian" : "Add Trusted Guardian"}
               </h3>
-              <button
+              <button 
                 onClick={() => setShowContactModal(false)}
-                className="p-1.5 rounded-xl"
-                style={{ backgroundColor: "#F1F5F9", color: "#64748B" }}
+                className="p-1.5 rounded-lg text-(--muted-foreground) hover:bg-elevated-surface"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
             {contactFormError && (
-              <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: "#FEF2F2", color: "#DC2626", fontSize: "13px", fontWeight: 600 }}>
-                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                <span>{contactFormError}</span>
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold">
+                {contactFormError}
               </div>
             )}
 
-            <form onSubmit={handleSaveContact} className="space-y-3.5">
-              {[
-                { id: "name", label: "Contact Name", placeholder: "e.g. Mother / John Doe", type: "text", value: contactName, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setContactName(e.target.value) },
-                { id: "phone", label: "Phone Number", placeholder: "e.g. +91 98765 43210", type: "tel", value: contactPhone, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setContactPhone(e.target.value) },
-              ].map((field) => (
-                <div key={field.id} className="space-y-1">
-                  <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>{field.label}</label>
-                  <input
-                    type={field.type}
-                    required
-                    placeholder={field.placeholder}
-                    value={field.value}
-                    onChange={field.onChange}
-                    onFocus={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#2563FF"; (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(37,99,255,0.12)"; }}
-                    onBlur={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "#E2E8F0"; (e.currentTarget as HTMLElement).style.boxShadow = "none"; }}
-                    style={{ width: "100%", borderRadius: "12px", backgroundColor: "#F8FAFC", border: "1.5px solid #E2E8F0", padding: "11px 14px", fontSize: "13px", fontWeight: 500, color: "#0F172A", fontFamily: "'Poppins',sans-serif", outline: "none", transition: "border-color 0.2s, box-shadow 0.2s" }}
-                  />
-                </div>
-              ))}
+            <form onSubmit={handleSaveContact} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">
+                  Contact Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Priya Sharma / Family Guardian"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-elevated-surface border border-border text-xs text-foreground outline-none"
+                />
+              </div>
 
-              <div className="space-y-1">
-                <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Relationship / Label</label>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">
+                  Mobile Phone Number
+                </label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="+91 98765 43210"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-elevated-surface border border-border text-xs text-foreground outline-none font-mono"
+                />
+                <span className="text-[10px] text-(--muted-foreground) block">
+                  Include country code (e.g. +91 for India).
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">
+                  Relationship
+                </label>
                 <select
                   value={contactRel}
                   onChange={(e) => setContactRel(e.target.value)}
-                  style={{ width: "100%", borderRadius: "12px", backgroundColor: "#F8FAFC", border: "1.5px solid #E2E8F0", padding: "11px 14px", fontSize: "13px", fontWeight: 500, color: "#0F172A", fontFamily: "'Poppins',sans-serif", outline: "none" }}
+                  className="w-full p-3 rounded-xl bg-elevated-surface border border-border text-xs text-foreground outline-none"
                 >
-                  <option value="Family">Family</option>
-                  <option value="Friend">Friend</option>
-                  <option value="Colleague">Colleague</option>
-                  <option value="Emergency Contact">Emergency Contact</option>
-                  <option value="Other">Other</option>
+                  <option value="Family">Family Member / Parent / Spouse</option>
+                  <option value="Friend">Close Friend / Companion</option>
+                  <option value="Colleague">Colleague / Work</option>
+                  <option value="Emergency Contact">Other Emergency Contact</option>
                 </select>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setShowContactModal(false)}
-                  className="flex-1 py-3 rounded-2xl transition-all"
-                  style={{ backgroundColor: "#F1F5F9", color: "#64748B", fontSize: "13px", fontWeight: 600, fontFamily: "'Poppins',sans-serif" }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-(--muted-foreground) hover:bg-elevated-surface"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 rounded-2xl text-white transition-all"
-                  style={{ background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)", fontSize: "13px", fontWeight: 600, fontFamily: "'Poppins',sans-serif", boxShadow: "0 4px 12px rgba(37,99,255,0.25)" }}
+                  className="px-5 py-2.5 rounded-xl bg-(--primary) text-white text-xs font-extrabold shadow-md hover:opacity-90"
                 >
-                  Save Contact
+                  {editingContactId ? "Save Changes" : "Save Guardian"}
                 </button>
               </div>
             </form>
-
           </div>
         </div>
       )}
 
-      {/* Bottom Nav */}
       <div className="md:hidden">
         <BottomNav />
       </div>
-
     </div>
   );
 }

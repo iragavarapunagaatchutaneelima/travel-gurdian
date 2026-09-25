@@ -28,6 +28,8 @@ app.include_router(alerts.router, prefix=f"{settings.API_V1_STR}/alerts", tags=[
 app.include_router(assess.router, prefix=f"{settings.API_V1_STR}/assess", tags=["Assessment / ASSESS"])
 app.include_router(guide.router, prefix=f"{settings.API_V1_STR}/guide", tags=["Guidance / GUIDE"])
 app.include_router(assist.router, prefix=f"{settings.API_V1_STR}/assist", tags=["Assistance / ASSIST"])
+app.include_router(assist.router, prefix=f"{settings.API_V1_STR}/emergency", tags=["Emergency / EXOTEL"])
+
 
 @app.get("/")
 def read_root():

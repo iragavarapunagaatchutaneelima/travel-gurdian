@@ -125,6 +125,88 @@ def run_timer_check(db: Session = Depends(get_db)):
 @router.post("/sos", response_model=schemas.SOSResponse)
 def trigger_sos_broadcast(request: schemas.SOSRequest, user_id: str = "default_user", db: Session = Depends(get_db)):
     """
-    Activate immediate SOS Broadcast alerts, notify guardians, and identify safe havens.
+    Activate immediate SOS Broadcast alerts, notify guardians via Exotel SMS/call, and identify safe havens.
     """
     return assist.trigger_sos(db, request, user_id)
+
+
+# --- EXOTEL EMERGENCY COMMUNICATION ENDPOINTS ---
+
+@router.post("/emergency/sms", response_model=schemas.EmergencySMSResponse)
+@router.post("/sms", response_model=schemas.EmergencySMSResponse)
+def send_emergency_sms_to_trusted_contact(
+    request: schemas.EmergencyActionRequest,
+    user_id: str = "default_user",
+    db: Session = Depends(get_db)
+):
+    """
+    Sends an Exotel emergency SMS strictly to the user's registered Trusted Contact.
+    Destination numbers supplied by frontend are ignored/rejected.
+    """
+    return assist.send_trusted_contact_sms(db, request, user_id)
+
+
+@router.post("/emergency/call", response_model=schemas.EmergencyCallResponse)
+@router.post("/call", response_model=schemas.EmergencyCallResponse)
+def make_emergency_call_to_trusted_contact(
+    request: schemas.EmergencyActionRequest,
+    user_id: str = "default_user",
+    db: Session = Depends(get_db)
+):
+    """
+    Initiates an Exotel outbound voice call strictly to the user's registered Trusted Contact.
+    Destination numbers supplied by frontend are ignored/rejected.
+    """
+    return assist.make_trusted_contact_call(db, request, user_id)
+
+
+@router.post("/emergency/notify-trusted-contact", response_model=schemas.EmergencyNotificationResponse)
+@router.post("/notify-trusted-contact", response_model=schemas.EmergencyNotificationResponse)
+def notify_trusted_contact(
+    request: schemas.EmergencyActionRequest,
+    user_id: str = "default_user",
+    db: Session = Depends(get_db)
+):
+    """
+    Unified endpoint: sends emergency SMS and initiates emergency voice call to registered Trusted Contact.
+    """
+    return assist.notify_trusted_contact(db, request, user_id)
+
+
+@router.get("/emergency/config-status")
+@router.get("/config-status")
+def get_exotel_config_status():
+    """
+    Returns boolean indicating whether Exotel server-side credentials are configured.
+    Never exposes keys, tokens, or SIDs.
+    """
+    from app.services.exotel_service import validate_exotel_configuration
+    is_valid, _ = validate_exotel_configuration()
+    return {"is_configured": is_valid}
+
+
+@router.get("/emergency/diagnostic", response_model=schemas.ExotelDiagnosticResponse)
+@router.get("/diagnostic", response_model=schemas.ExotelDiagnosticResponse)
+def get_exotel_diagnostic():
+    """
+    Safe diagnostic inspection: checks Singapore API host, Account SID,
+    and runs a live ping against Exotel's Balance API without initiating any calls or SMS.
+    Never exposes keys or tokens.
+    """
+    from app.services.exotel_service import test_exotel_authentication
+    return test_exotel_authentication()
+
+
+@router.get("/emergency/logs", response_model=List[schemas.EmergencyEventLogResponse])
+@router.get("/logs", response_model=List[schemas.EmergencyEventLogResponse])
+def get_emergency_logs(
+    limit: int = 50,
+    user_id: str = "default_user",
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieves recent audit logs of emergency calls and SMS alerts from the database.
+    """
+    return assist.get_emergency_event_logs(db, user_id=user_id, limit=limit)
+
+

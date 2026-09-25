@@ -84,3 +84,19 @@ class SafeCheckIn(Base):
     is_completed = Column(Boolean, default=False)
     is_triggered = Column(Boolean, default=False)  # SOS triggered because user failed to check in
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class EmergencyEventLog(Base):
+    __tablename__ = "emergency_event_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(50), default="default_user", index=True)
+    event_type = Column(String(50), nullable=False)  # "sos_broadcast", "voice_call", "sms_alert"
+    recipient_name = Column(String(100), nullable=True)
+    recipient_phone_masked = Column(String(30), nullable=True)
+    status = Column(String(50), nullable=False)  # "initiated", "sent", "failed", "completed"
+    sid = Column(String(100), nullable=True)  # Exotel Call SID or SMS SID
+    error_message = Column(String(255), nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+

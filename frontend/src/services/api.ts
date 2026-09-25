@@ -1,5 +1,19 @@
 // Travel Guardian Frontend API Service with graceful mock fallback
-import { type AlertResponse, type RiskRequest, type RiskReportResponse, type DestinationResponse, type EmergencyContactResponse, type SafeCheckInResponse, type SOSRequest, type SOSResponse } from "../types/api";
+import { 
+  type AlertResponse, 
+  type RiskRequest, 
+  type RiskReportResponse, 
+  type DestinationResponse, 
+  type EmergencyContactResponse, 
+  type SafeCheckInResponse, 
+  type SOSRequest, 
+  type SOSResponse,
+  type EmergencyActionParams,
+  type EmergencySMSResponse,
+  type EmergencyCallResponse,
+  type EmergencyNotificationResponse
+} from "../types/api";
+
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -452,5 +466,58 @@ export const TravelGuardianAPI = {
       method: "POST",
       body: JSON.stringify(request)
     }, fallbackResponse);
+  },
+
+  // 5. EXOTEL EMERGENCY COMMUNICATION (Strict destination restriction: Trusted Contact only)
+  async sendEmergencySMS(params: EmergencyActionParams): Promise<EmergencySMSResponse> {
+    const fallbackResponse: EmergencySMSResponse = {
+      success: false,
+      status: "failed",
+      message: "Emergency SMS could not be sent.",
+      safe_message: "Backend emergency service unreachable. Please dial 112 directly if in immediate danger.",
+      error: "Service unavailable"
+    };
+
+    return this.callAPI<EmergencySMSResponse>("/emergency/sms", {
+      method: "POST",
+      body: JSON.stringify(params)
+    }, fallbackResponse);
+  },
+
+  async makeEmergencyCall(params: EmergencyActionParams): Promise<EmergencyCallResponse> {
+    const fallbackResponse: EmergencyCallResponse = {
+      success: false,
+      status: "failed",
+      message: "Emergency call could not be initiated.",
+      safe_message: "Backend emergency voice service unreachable. Please dial 112 directly if in immediate danger.",
+      error: "Service unavailable"
+    };
+
+    return this.callAPI<EmergencyCallResponse>("/emergency/call", {
+      method: "POST",
+      body: JSON.stringify(params)
+    }, fallbackResponse);
+  },
+
+  async notifyTrustedContact(params: EmergencyActionParams): Promise<EmergencyNotificationResponse> {
+    const fallbackResponse: EmergencyNotificationResponse = {
+      success: false,
+      overall_status: "failed",
+      sms_status: "failed",
+      call_status: "failed",
+      message: "Emergency communication failed.",
+      safe_message: "Backend emergency service unreachable. Please dial 112 directly if in immediate danger.",
+      timestamp: new Date().toISOString()
+    };
+
+    return this.callAPI<EmergencyNotificationResponse>("/emergency/notify-trusted-contact", {
+      method: "POST",
+      body: JSON.stringify(params)
+    }, fallbackResponse);
+  },
+
+  async getExotelConfigStatus(): Promise<{ is_configured: boolean }> {
+    return this.callAPI<{ is_configured: boolean }>("/emergency/config-status", undefined, { is_configured: false });
   }
 };
+

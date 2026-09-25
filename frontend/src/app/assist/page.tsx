@@ -1,30 +1,39 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import TravelAssistant from "../components/TravelAssistant";
+import GuardianMapSync, { PinnedPlace } from "../components/GuardianMapSync";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
 import { useSafetyCheckIn } from "../../hooks/useSafetyCheckIn";
+import { useSharedLocation } from "../../hooks/useSharedLocation";
 import { getTrustedContacts } from "../../services/trustedContactService";
+import { searchNearbyPlaces } from "../../services/googlePlaces";
 import { TrustedContact } from "../../types/safetyCheckIn";
 import { LiveTravelContext } from "../../types/gemini";
 import { 
   Bot, 
   ShieldCheck, 
-  Clock, 
   MapPin, 
-  Sparkles, 
   Users, 
   LifeBuoy, 
-  ChevronRight,
-  Shield,
+  MessageSquare,
+  Compass,
+  Layers,
+  Sparkles,
   Info
 } from "lucide-react";
 import Link from "next/link";
 
 export default function AssistHub() {
   const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
+  const [pinnedPlaces, setPinnedPlaces] = useState<PinnedPlace[]>([]);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<"chat" | "map" | "safety">("chat");
+
+  // Shared Location Hook
+  const { latitude, longitude, accuracy, address, locate, hasLocation, permissionStatus } = useSharedLocation();
 
   // Safety Check-In Controller
   const {
@@ -40,17 +49,58 @@ export default function AssistHub() {
     requestHelp,
     cancelCheckIn
   } = useSafetyCheckIn({
-    destinationName: "Regional Destination"
+    destinationName: "Regional Destination Corridor"
   });
 
   useEffect(() => {
     setTrustedContacts(getTrustedContacts());
   }, []);
 
+  // When GPS location is available and no places pinned yet, discover initial safe havens
+  useEffect(() => {
+    if (latitude && longitude && pinnedPlaces.length === 0) {
+      searchNearbyPlaces({ lat: latitude, lng: longitude }, "all", 6000)
+        .then(places => {
+          if (places && places.length > 0) {
+            setPinnedPlaces(places.map(p => ({
+              id: p.id,
+              name: p.name,
+              type: p.type,
+              category: p.category,
+              distance: p.distanceFormatted,
+              distanceKm: p.distanceMeters / 1000,
+              latitude: p.latitude,
+              longitude: p.longitude,
+              address: p.address,
+              phone: p.phone
+            })));
+          }
+        })
+        .catch(err => console.warn("Failed to load initial nearby safe havens:", err));
+    }
+  }, [latitude, longitude]);
+
   // Aggregated live context for Gemini Tool Router
   const liveContext: LiveTravelContext = {
     navStatus: "READY",
-    safetyScore: 88,
+    safetyScore: 89,
+    currentPosition: latitude && longitude ? {
+      latitude,
+      longitude,
+      accuracy: accuracy || 15,
+      altitude: null,
+      heading: null,
+      speed: null,
+      timestamp: Date.now()
+    } : null,
+    locationSnapshot: latitude && longitude ? {
+      latitude,
+      longitude,
+      accuracy: accuracy || 15,
+      timestamp: Date.now(),
+      isStale: false,
+      formattedText: address
+    } : null,
     checkInStatus,
     activeCheckInCycle: checkInCycle,
     checkInSecondsRemaining,
@@ -67,141 +117,151 @@ export default function AssistHub() {
     requestHelp("User requested assistance via Travel Assistant.");
   };
 
+  // Callback when AI discovers places from tool results
+  const handlePlacesDiscovered = useCallback((places: any[]) => {
+    if (!places || places.length === 0) return;
+    const mapped: PinnedPlace[] = places.map((p, idx) => ({
+      id: p.id || `ai_place_${idx}`,
+      name: p.name,
+      type: p.type || "Safe Haven",
+      category: (p.category || "general").toLowerCase(),
+      distance: p.distance,
+      distanceKm: p.distanceKm,
+      latitude: p.latitude,
+      longitude: p.longitude,
+      address: p.address || p.amenities || "Nearby",
+      phone: p.phone,
+      amenities: p.amenities
+    }));
+    setPinnedPlaces(mapped);
+  }, []);
+
+  const handleSelectPlaceOnMap = (place: PinnedPlace) => {
+    setSelectedPlaceId(place.id);
+  };
+
   return (
-    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
-      
+    <div 
+      className="h-dvh flex flex-col overflow-hidden bg-background text-foreground"
+      style={{ fontFamily: "'Poppins', sans-serif" }}
+    >
       <Header />
 
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
+      {/* Main Container: Exact Viewport Fitting without Whole-Page Scrolling */}
+      <main className="flex-1 min-h-0 flex flex-col p-3 md:p-5 max-w-7xl w-full mx-auto">
         
-        {/* Page Title Header */}
-        <div 
-          className="pb-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
-          style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}
-        >
-          <div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
-              AI GUARDIAN ASSISTANT
-            </span>
-            <h1 style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", color: "#0F172A", marginTop: "4px", letterSpacing: "-0.01em" }}>
-              Travel Assistant &amp; Tool Calling
-            </h1>
-            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "4px" }}>
-              Ask contextual journey questions. Inspect safety scores. Confirm action proposals.
-            </p>
+        {/* Sub-header Banner */}
+        <div className="flex items-center justify-between pb-3 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-(--primary)/10 text-(--primary)">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-base md:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                <span>AI Guardian Assistant</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  REAL GPS ACTIVE
+                </span>
+              </h1>
+              <p className="text-xs text-(--muted-foreground) hidden sm:block">
+                Synchronized Map &amp; Chat. Ask &quot;What&apos;s near me?&quot; or inspect verified safety havens.
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span 
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-              style={{ fontSize: "11px", fontWeight: 700, backgroundColor: "#F0FDF4", color: "#16A34A", border: "1px solid rgba(34,197,94,0.2)" }}
+          {/* Mobile Tab Switcher */}
+          <div className="flex lg:hidden items-center p-1 rounded-2xl bg-elevated-surface border border-border text-xs font-semibold">
+            <button
+              onClick={() => setMobileTab("chat")}
+              className={`py-1.5 px-3 rounded-xl transition-all ${mobileTab === "chat" ? "bg-(--primary) text-white shadow-sm" : "text-(--muted-foreground)"}`}
             >
-              AI: OBSERVER &amp; ASSISTANT
-            </span>
+              Chat
+            </button>
+            <button
+              onClick={() => setMobileTab("map")}
+              className={`py-1.5 px-3 rounded-xl transition-all ${mobileTab === "map" ? "bg-(--primary) text-white shadow-sm" : "text-(--muted-foreground)"}`}
+            >
+              Live Map
+            </button>
+            <button
+              onClick={() => setMobileTab("safety")}
+              className={`py-1.5 px-3 rounded-xl transition-all ${mobileTab === "safety" ? "bg-(--primary) text-white shadow-sm" : "text-(--muted-foreground)"}`}
+            >
+              Check-In
+            </button>
           </div>
         </div>
 
-        {/* 2-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Desktop Split View / Mobile Tab View */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-4">
           
-          {/* Left Column: Full-Height Travel Assistant Window */}
-          <div className="lg:col-span-7">
+          {/* Left Column: AI Guardian Chat (50% on Desktop) */}
+          <div className={`h-full min-h-0 flex flex-col lg:col-span-6 xl:col-span-7 ${mobileTab !== "chat" ? "hidden lg:flex" : "flex"}`}>
             <TravelAssistant
               context={liveContext}
               isOpen={true}
               isFloating={false}
               onApplyInterval={handleApplyInterval}
               onTriggerAlert={handleTriggerAlert}
+              onPlacesDiscovered={handlePlacesDiscovered}
+              onSelectPlace={(p) => {
+                setSelectedPlaceId(p.id);
+                setMobileTab("map");
+              }}
             />
           </div>
 
-          {/* Right Column: Safety Check-In Hub & Quick Context Cards */}
-          <div className="lg:col-span-5 space-y-5">
+          {/* Right Column: Live Synchronized Map & Safety Hub (50% on Desktop) */}
+          <div className={`h-full min-h-0 flex flex-col gap-3 lg:col-span-6 xl:col-span-5 ${mobileTab === "chat" ? "hidden lg:flex" : "flex"}`}>
             
-            {/* Safety Check-In Controller Card */}
-            <SafetyCheckInWidget
-              status={checkInStatus}
-              config={checkInConfig}
-              activeCycle={checkInCycle}
-              secondsRemaining={checkInSecondsRemaining}
-              graceSecondsRemaining={checkInGraceSecondsRemaining}
-              lastKnownSnapshot={checkInLocationSnapshot}
-              escalationResult={checkInEscalationResult}
-              trustedContacts={trustedContacts}
-              onStart={startCheckIn}
-              onConfirmSafe={confirmSafety}
-              onRequestHelp={requestHelp}
-              onCancel={cancelCheckIn}
-            />
-
-            {/* AI Safety Boundary Card */}
-            <div 
-              className="p-5 rounded-3xl space-y-3"
-              style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-2xl" style={{ backgroundColor: "#EFF6FF" }}>
-                  <ShieldCheck className="h-5 w-5" style={{ color: "#2563FF" }} />
-                </div>
-                <div>
-                  <h3 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>AI Safety Rules &amp; Governance</h3>
-                  <span style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>Strict Ethical Boundaries</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {[
-                  { bold: "AI Observes & Explains:", rest: "Uses deterministic tools to read live telemetry without inventing scores." },
-                  { bold: "No Autonomous Emergency Actions:", rest: "The AI cannot independently call 112 or fire SOS." },
-                  { bold: "Explicit Confirmation:", rest: "Any safety proposal requires direct user button confirmation." },
-                ].map((rule, i) => (
-                  <div key={i} className="flex items-start gap-2" style={{ fontSize: "12px", color: "#374151" }}>
-                    <span style={{ color: "#2563FF", fontWeight: 700, flexShrink: 0 }}>•</span>
-                    <span><strong>{rule.bold}</strong> {rule.rest}</span>
-                  </div>
-                ))}
-              </div>
+            {/* Upper Half: Live Synchronized Map */}
+            <div className={`rounded-3xl overflow-hidden border border-border shadow-sm shrink-0 ${mobileTab === "map" ? "h-full" : "h-70 lg:h-[48%]"}`}>
+              <GuardianMapSync
+                pinnedPlaces={pinnedPlaces}
+                selectedPlaceId={selectedPlaceId}
+                onSelectPlace={handleSelectPlaceOnMap}
+                className="w-full h-full"
+              />
             </div>
 
-            {/* Quick Links */}
-            <div className="grid grid-cols-2 gap-3">
-              <Link
-                href="/map"
-                className="p-4 rounded-3xl text-left space-y-1 transition-all group"
-                style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.05)" }}
-              >
-                <div className="flex items-center justify-between">
-                  <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
-                  <ChevronRight className="h-4 w-4 opacity-30 group-hover:opacity-70 transition-opacity" style={{ color: "#2563FF" }} />
-                </div>
-                <h4 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>Live Map &amp; Nav</h4>
-                <p style={{ fontSize: "11px", color: "#94A3B8", fontWeight: 400 }}>Track GPS corridor</p>
-              </Link>
+            {/* Lower Half: Safety Check-In Widget & Context Details (Scrollable Container) */}
+            <div className={`flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 ${mobileTab === "map" ? "hidden lg:block" : "block"}`}>
+              <SafetyCheckInWidget
+                status={checkInStatus}
+                config={checkInConfig}
+                activeCycle={checkInCycle}
+                secondsRemaining={checkInSecondsRemaining}
+                graceSecondsRemaining={checkInGraceSecondsRemaining}
+                lastKnownSnapshot={checkInLocationSnapshot}
+                escalationResult={checkInEscalationResult}
+                trustedContacts={trustedContacts}
+                onStart={startCheckIn}
+                onConfirmSafe={confirmSafety}
+                onRequestHelp={requestHelp}
+                onCancel={cancelCheckIn}
+              />
 
-              <Link
-                href="/emergency"
-                className="p-4 rounded-3xl text-left space-y-1 transition-all group"
-                style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.05)" }}
-              >
-                <div className="flex items-center justify-between">
-                  <LifeBuoy className="h-4 w-4" style={{ color: "#EF4444" }} />
-                  <ChevronRight className="h-4 w-4 opacity-30 group-hover:opacity-70 transition-opacity" style={{ color: "#EF4444" }} />
+              {/* Verified Corridor Security Rules */}
+              <div className="p-4 rounded-2xl bg-surface border border-border text-xs text-(--muted-foreground) space-y-2">
+                <div className="flex items-center gap-2 text-foreground font-bold text-xs">
+                  <ShieldCheck className="h-4 w-4 text-(--primary)" />
+                  <span>Real-time Safety Rules</span>
                 </div>
-                <h4 style={{ fontWeight: 700, fontSize: "13px", color: "#0F172A" }}>Emergency Hub</h4>
-                <p style={{ fontSize: "11px", color: "#94A3B8", fontWeight: 400 }}>112 dial &amp; contacts</p>
-              </Link>
+                <p>
+                  AI tools strictly query verified coordinates without hallucinating places. Emergency calls (112) and SOS require manual user confirmation.
+                </p>
+              </div>
             </div>
 
           </div>
 
         </div>
 
-      </div>
+      </main>
 
       <div className="md:hidden">
         <BottomNav />
       </div>
-
     </div>
   );
 }

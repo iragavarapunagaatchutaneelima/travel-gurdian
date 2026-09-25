@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
-  MapPin, Search, Loader, Crosshair, X, AlertCircle, 
+  MapPin, Loader, Crosshair, X, AlertCircle, 
   Plane, Train, Building2, Landmark, Navigation2, Check
 } from "lucide-react";
 import { LocationDetails, PlaceSuggestion } from "../../types/location";
@@ -193,7 +193,7 @@ export default function LocationSearchInput({
           onSelectLocation(locDetails);
           setInputValue(locDetails.name);
           setIsOpen(false);
-        } catch (err: any) {
+        } catch {
           // Fallback location
           const fallbackLoc: LocationDetails = {
             placeId: `gps_${latitude.toFixed(4)}_${longitude.toFixed(4)}`,
@@ -272,9 +272,9 @@ export default function LocationSearchInput({
       <div className="relative">
         <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
           {isOrigin ? (
-            <Navigation2 className="h-4 w-4" style={{ color: "#2563FF" }} />
+            <Navigation2 className="h-4 w-4" style={{ color: "var(--primary)" }} />
           ) : (
-            <MapPin className="h-4 w-4" style={{ color: "#22C55E" }} />
+            <MapPin className="h-4 w-4" style={{ color: "var(--success)" }} />
           )}
         </div>
 
@@ -286,11 +286,11 @@ export default function LocationSearchInput({
           onChange={handleInputChange}
           onFocus={(e) => {
             if (suggestions.length > 0 || searchError) setIsOpen(true);
-            (e.currentTarget as HTMLElement).style.borderColor = "#2563FF";
-            (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(37,99,255,0.12)";
+            (e.currentTarget as HTMLElement).style.borderColor = "var(--primary)";
+            (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 3px rgba(37,99,255,0.15)";
           }}
           onBlur={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = error ? "#EF4444" : "#E2E8F0";
+            (e.currentTarget as HTMLElement).style.borderColor = error ? "var(--danger)" : "var(--border)";
             (e.currentTarget as HTMLElement).style.boxShadow = "none";
           }}
           onKeyDown={handleKeyDown}
@@ -298,8 +298,8 @@ export default function LocationSearchInput({
           autoComplete="off"
           style={{
             width: "100%",
-            backgroundColor: "#FFFFFF",
-            border: `1.5px solid ${error ? "#EF4444" : "#E2E8F0"}`,
+            backgroundColor: "var(--elevated-surface)",
+            border: `1.5px solid ${error ? "var(--danger)" : "var(--border)"}`,
             borderRadius: "14px",
             paddingLeft: "40px",
             paddingRight: "40px",
@@ -307,7 +307,7 @@ export default function LocationSearchInput({
             paddingBottom: "13px",
             fontSize: "13px",
             fontWeight: 500,
-            color: "#0F172A",
+            color: "var(--foreground)",
             fontFamily: "'Poppins', sans-serif",
             outline: "none",
             transition: "border-color 0.2s, box-shadow 0.2s",
@@ -317,16 +317,13 @@ export default function LocationSearchInput({
         {/* Right side status / clear icon */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
           {isLoading && (
-            <Loader className="h-4 w-4 animate-spin" style={{ color: "#2563FF" }} />
+            <Loader className="h-4 w-4 animate-spin text-(--primary)" />
           )}
           {inputValue && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 rounded-full transition-colors"
-              style={{ color: "#94A3B8" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "#F1F5F9"; (e.currentTarget as HTMLElement).style.color = "#374151"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; (e.currentTarget as HTMLElement).style.color = "#94A3B8"; }}
+              className="p-1 rounded-full text-(--muted-foreground) hover:bg-surface hover:text-foreground transition-colors"
               title="Clear input"
             >
               <X className="h-3.5 w-3.5" />
@@ -337,28 +334,28 @@ export default function LocationSearchInput({
 
       {/* GPS Error alert */}
       {gpsError && (
-        <div className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: "#FEF2F2", border: "1px solid rgba(239,68,68,0.2)", color: "#EF4444", fontSize: "12px", fontWeight: 600 }}>
+        <div className="flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold">
           <div className="flex items-center gap-1.5">
-            <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
             <span>{gpsError}</span>
           </div>
-          <button type="button" onClick={() => setGpsError(null)} style={{ fontSize: "11px", fontWeight: 700 }}>✕</button>
+          <button type="button" onClick={() => setGpsError(null)} className="font-bold">✕</button>
         </div>
       )}
 
       {/* Selected place badge */}
       {selectedLocation && (
-        <div className="flex items-center justify-between p-3 rounded-2xl animate-fadeIn" style={{ backgroundColor: "#F0FDF4", border: "1px solid rgba(34,197,94,0.2)" }}>
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 animate-fadeIn">
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="p-1 rounded-lg flex-shrink-0" style={{ backgroundColor: "#DCFCE7" }}>
-              <Check className="h-3.5 w-3.5" style={{ color: "#16A34A" }} />
+            <div className="p-1 rounded-lg shrink-0 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+              <Check className="h-3.5 w-3.5" />
             </div>
             <div className="truncate">
-              <span className="block truncate" style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{selectedLocation.name}</span>
-              <span className="block truncate" style={{ fontSize: "11px", fontWeight: 400, color: "#64748B" }}>{selectedLocation.formattedAddress}</span>
+              <span className="block truncate text-xs font-bold text-foreground">{selectedLocation.name}</span>
+              <span className="block truncate text-[11px] text-(--muted-foreground)">{selectedLocation.formattedAddress}</span>
             </div>
           </div>
-          <div className="flex-shrink-0 ml-2" style={{ fontSize: "10px", fontWeight: 600, color: "#94A3B8", fontFamily: "monospace" }}>
+          <div className="shrink-0 ml-2 text-[10px] font-mono text-(--muted-foreground)">
             {selectedLocation.latitude.toFixed(3)}, {selectedLocation.longitude.toFixed(3)}
           </div>
         </div>
@@ -367,22 +364,16 @@ export default function LocationSearchInput({
       {/* Autocomplete dropdown */}
       {isOpen && (
         <div
-          className="absolute left-0 right-0 top-full mt-2 z-50 overflow-hidden max-h-64 overflow-y-auto animate-slideUp"
-          style={{
-            backgroundColor: "#FFFFFF",
-            border: "1.5px solid rgba(37,99,255,0.15)",
-            borderRadius: "16px",
-            boxShadow: "0 12px 40px rgba(37,99,255,0.12), 0 4px 12px rgba(15,23,42,0.08)",
-          }}
+          className="absolute left-0 right-0 top-full mt-2 z-50 overflow-hidden max-h-64 overflow-y-auto rounded-2xl bg-surface border border-border shadow-2xl animate-slideDown"
           role="listbox"
         >
           {searchError ? (
             <div className="p-4 space-y-1">
-              <div className="flex items-center gap-2" style={{ fontSize: "12px", fontWeight: 700, color: "#F59E0B" }}>
-                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-500">
+                <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>Notice</span>
               </div>
-              <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>{searchError}</p>
+              <p className="text-xs text-(--muted-foreground) leading-relaxed">{searchError}</p>
             </div>
           ) : suggestions.length > 0 ? (
             <div className="py-1">
@@ -391,30 +382,26 @@ export default function LocationSearchInput({
                   key={sug.placeId || idx}
                   type="button"
                   onClick={() => handleSelectSuggestion(sug)}
-                  className="w-full px-4 py-3 flex items-start gap-3 text-left transition-colors"
-                  style={{
-                    backgroundColor: selectedIndex === idx ? "#EFF6FF" : "transparent",
-                    borderBottom: idx < suggestions.length - 1 ? "1px solid rgba(15,23,42,0.05)" : "none",
-                  }}
-                  onMouseEnter={(e) => { if (selectedIndex !== idx) (e.currentTarget as HTMLElement).style.backgroundColor = "#F8FAFC"; }}
-                  onMouseLeave={(e) => { if (selectedIndex !== idx) (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                  className={`w-full px-4 py-3 flex items-start gap-3 text-left transition-colors border-b border-(--border)/40 last:border-b-0 ${
+                    selectedIndex === idx ? "bg-(--primary)/10" : "hover:bg-elevated-surface"
+                  }`}
                   role="option"
                   aria-selected={selectedIndex === idx}
                 >
-                  <div className="p-1.5 rounded-xl mt-0.5 flex-shrink-0" style={{ backgroundColor: "#F1F5F9" }}>
+                  <div className="p-1.5 rounded-xl mt-0.5 shrink-0 bg-elevated-surface text-(--primary)">
                     {getPlaceIcon(sug.types)}
                   </div>
                   <div className="flex-1 overflow-hidden">
-                    <span className="block truncate" style={{ fontSize: "13px", fontWeight: 600, color: "#0F172A" }}>{sug.mainText}</span>
+                    <span className="block truncate text-xs font-bold text-foreground">{sug.mainText}</span>
                     {sug.secondaryText && (
-                      <span className="block truncate mt-0.5" style={{ fontSize: "11px", fontWeight: 400, color: "#94A3B8" }}>{sug.secondaryText}</span>
+                      <span className="block truncate text-[11px] text-(--muted-foreground) mt-0.5">{sug.secondaryText}</span>
                     )}
                   </div>
                 </button>
               ))}
             </div>
           ) : inputValue.trim() && !isLoading ? (
-            <div className="p-4 text-center" style={{ fontSize: "12px", color: "#94A3B8", fontWeight: 500 }}>
+            <div className="p-4 text-center text-xs text-(--muted-foreground) font-medium">
               No matching places found. Try another landmark or city.
             </div>
           ) : null}

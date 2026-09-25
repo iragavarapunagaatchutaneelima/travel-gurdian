@@ -75,7 +75,7 @@ export async function POST(req: Request) {
               systemInstruction: {
                 parts: [
                   {
-                    text: "You are Travel Guardian AI, an expert travel safety assistant. You observe navigation, check-in, and safety state. You can explain information and suggest actions via tool calls, but you CANNOT autonomously execute safety-critical actions. Always explain clearly and truthfully using verified tool data."
+                    text: "You are Travel Guardian AI, an expert travel safety assistant. You observe navigation, check-in, and safety state. You can explain information and suggest actions via tool calls, but you CANNOT autonomously execute safety-critical actions. Always explain clearly and truthfully using verified tool data. Whenever the user asks about nearby places, safe havens, cafes, hospitals, pharmacies, police stations, fuel stations/petrol bunks, 'what is the next petrol bunk', or 'what is near me', you MUST call the 'findNearbyPlace' tool with the appropriate placeType ('fuel', 'hospital', 'pharmacy', 'police', 'cafe', 'rest', 'all')."
                   }
                 ]
               }
@@ -103,7 +103,20 @@ export async function POST(req: Request) {
               const mins = context.checkInSecondsRemaining ? Math.ceil(context.checkInSecondsRemaining / 60) : 15;
               replyText = `Your Safety Check-In is active (Cycle #${context.activeCheckInCycle?.cycleNumber || 1}). Next check-in is due in ~${mins} minute(s).`;
             } else if (funcName === "findNearbyPlace") {
-              replyText = `I found verified safe havens along your corridor. You can view nearby hospital and emergency nodes in your map overlay.`;
+              const res = toolResults[toolResults.length - 1];
+              if (!res?.success && res?.data?.locationRequired) {
+                replyText = "Location access is required to find places near you. Please enable location permissions or tap 'Locate Me' in the map panel so I can find verified safe havens near your exact position.";
+              } else if (res?.data?.places && res.data.places.length > 0) {
+                const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+                const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+                const listStr = res.data.places
+                  .slice(0, 4)
+                  .map((p: any) => `• ${p.name} (${p.distance})${p.phone ? ` [Tel: ${p.phone}]` : ""}${p.amenities ? ` [Amenities: ${p.amenities}]` : ""}`)
+                  .join("\n");
+                replyText = `Found verified places near your position (${userLat?.toFixed(3)}, ${userLng?.toFixed(3)}):\n${listStr}\n\nThese locations are pinned on your live map.`;
+              } else {
+                replyText = `No verified safe places found within your immediate corridor. Stay on the main highway corridor and keep your check-in active.`;
+              }
             } else if (funcName.startsWith("propose")) {
               replyText = `I have prepared a proposal for this action. Please confirm below to proceed.`;
             } else {
@@ -121,13 +134,63 @@ export async function POST(req: Request) {
           }
 
           if (candidate?.text) {
+            // Guard: If candidate text did not call findNearbyPlace tool but user asked about nearby havens
+            const lowerP = sanitizedPrompt.toLowerCase();
+            if (
+              lowerP.includes("near me") ||
+              lowerP.includes("nearby") ||
+              lowerP.includes("petrol") ||
+              lowerP.includes("bunk") ||
+              lowerP.includes("fuel") ||
+              lowerP.includes("gas") ||
+              lowerP.includes("pharmacy") ||
+              lowerP.includes("chemist") ||
+              lowerP.includes("hospital") ||
+              lowerP.includes("police") ||
+              lowerP.includes("cafe") ||
+              lowerP.includes("safe haven")
+            ) {
+              let pType = "all";
+              if (lowerP.includes("petrol") || lowerP.includes("bunk") || lowerP.includes("fuel") || lowerP.includes("gas")) pType = "fuel";
+              else if (lowerP.includes("pharmacy") || lowerP.includes("chemist")) pType = "pharmacy";
+              else if (lowerP.includes("hospital") || lowerP.includes("medical")) pType = "hospital";
+              else if (lowerP.includes("police")) pType = "police";
+              else if (lowerP.includes("cafe") || lowerP.includes("coffee")) pType = "cafe";
+
+              const res = runTool("findNearbyPlace", { placeType: pType });
+              if (!res?.success && res?.data?.locationRequired) {
+                return NextResponse.json({
+                  reply: "Location access is required to find places near you. Please enable location permissions or tap 'Locate Me' in the map panel so I can find verified safe havens near your exact position.",
+                  toolCalls: toolCallsExecuted,
+                  toolResults,
+                  proposals,
+                  mode: "CONNECTED",
+                  model: geminiModel
+                });
+              } else if (res?.data?.places && res.data.places.length > 0) {
+                const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+                const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+                const listStr = res.data.places
+                  .slice(0, 4)
+                  .map((p: any) => `• ${p.name} (${p.distance})${p.phone ? ` [Tel: ${p.phone}]` : ""}${p.amenities ? ` [Amenities: ${p.amenities}]` : ""}`)
+                  .join("\n");
+                return NextResponse.json({
+                  reply: `Found verified places near your position (${userLat?.toFixed(3)}, ${userLng?.toFixed(3)}):\n${listStr}\n\nThese locations are pinned on your live map.`,
+                  toolCalls: toolCallsExecuted,
+                  toolResults,
+                  proposals,
+                  mode: "CONNECTED",
+                  model: geminiModel
+                });
+              }
+            }
+
             return NextResponse.json({
               reply: candidate.text,
               toolCalls: [],
               toolResults: [],
               proposals: [],
               mode: "CONNECTED",
-              model: geminiModel
             });
           }
         }
@@ -168,23 +231,68 @@ export async function POST(req: Request) {
         reply = `You are currently marked as OFF_ROUTE. A real Google route recalculation proposal is ready on your map.`;
       }
     }
-    // Intent: Find Hospital / Medical
-    else if (lower.includes("hospital") || lower.includes("medical") || lower.includes("doctor") || lower.includes("clinic")) {
-      const res = runTool("findNearbyPlace", { placeType: "hospital" });
-      const topPlaces = res.data.places.map((p: any) => `${p.name} (${p.distance})`).join(", ");
-      reply = `Verified medical havens nearby: ${topPlaces}. You can dial or navigate directly from your emergency tab.`;
-    }
-    // Intent: Police / Highway Patrol
-    else if (lower.includes("police") || lower.includes("patrol") || lower.includes("cops")) {
-      const res = runTool("findNearbyPlace", { placeType: "police" });
-      const topPlaces = res.data.places.map((p: any) => `${p.name} (${p.distance})`).join(", ");
-      reply = `Nearby police control posts: ${topPlaces}.`;
-    }
-    // Intent: Fuel / Rest Stop
-    else if (lower.includes("fuel") || lower.includes("petrol") || lower.includes("gas") || lower.includes("rest stop")) {
-      const res = runTool("findNearbyPlace", { placeType: "fuel" });
-      const topPlaces = res.data.places.map((p: any) => `${p.name} (${p.distance})`).join(", ");
-      reply = `24/7 Verified highway fuel plazas: ${topPlaces}.`;
+    // Intent: Find Nearby Places ("near me", petrol bunk, fuel, hospital, pharmacy, police, cafe, rest stop)
+    else if (
+      lower.includes("near me") ||
+      lower.includes("nearby") ||
+      lower.includes("petrol") ||
+      lower.includes("bunk") ||
+      lower.includes("fuel") ||
+      lower.includes("gas") ||
+      lower.includes("pharmacy") ||
+      lower.includes("chemist") ||
+      lower.includes("medicine") ||
+      lower.includes("hospital") ||
+      lower.includes("medical") ||
+      lower.includes("doctor") ||
+      lower.includes("clinic") ||
+      lower.includes("police") ||
+      lower.includes("patrol") ||
+      lower.includes("cafe") ||
+      lower.includes("coffee") ||
+      lower.includes("rest stop") ||
+      lower.includes("safe haven")
+    ) {
+      const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+      const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+
+      if (userLat === undefined || userLng === undefined || userLat === null || userLng === null) {
+        reply = "Location access is required to find places near you. Please enable location permissions or tap 'Locate Me' in the map panel so I can find verified safe havens near your exact position.";
+      } else {
+        let pType = "all";
+        let typeLabel = "safe havens";
+
+        if (lower.includes("petrol") || lower.includes("bunk") || lower.includes("fuel") || lower.includes("gas")) {
+          pType = "fuel";
+          typeLabel = "petrol bunks & fuel stations";
+        } else if (lower.includes("pharmacy") || lower.includes("chemist") || lower.includes("medicine")) {
+          pType = "pharmacy";
+          typeLabel = "pharmacies & medical dispensaries";
+        } else if (lower.includes("hospital") || lower.includes("medical") || lower.includes("clinic")) {
+          pType = "hospital";
+          typeLabel = "emergency hospitals & trauma centers";
+        } else if (lower.includes("police") || lower.includes("patrol")) {
+          pType = "police";
+          typeLabel = "police stations & highway patrol posts";
+        } else if (lower.includes("cafe") || lower.includes("coffee")) {
+          pType = "cafe";
+          typeLabel = "safe cafes & rest stops";
+        } else if (lower.includes("rest")) {
+          pType = "rest";
+          typeLabel = "verified rest stops";
+        }
+
+        const res = runTool("findNearbyPlace", { placeType: pType });
+        if (res.success && res.data?.places?.length > 0) {
+          const listStr = res.data.places
+            .slice(0, 4)
+            .map((p: any) => `• ${p.name} (${p.distance})${p.phone ? ` [Tel: ${p.phone}]` : ""}${p.amenities ? ` [Amenities: ${p.amenities}]` : ""}`)
+            .join("\n");
+          reply = `Found verified ${typeLabel} near your current position (${userLat.toFixed(3)}, ${userLng.toFixed(3)}):\n${listStr}\n\nThese locations are pinned on your live map.`;
+        } else {
+          reply = `No verified ${typeLabel} found within your immediate corridor. Stay on the main highway corridor and keep your check-in active.`;
+        }
+      }
     }
     // Intent: Propose Call 112
     else if (lower.includes("call 112") || lower.includes("dial 112") || lower.includes("call police") || lower.includes("call ambulance")) {

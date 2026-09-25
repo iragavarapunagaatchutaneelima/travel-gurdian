@@ -9,7 +9,8 @@ import {
   ShieldCheck, ArrowRight, CheckCircle2, 
   AlertTriangle, Coffee, Fuel, 
   Car, Bike, Footprints, ArrowLeftRight, 
-  Loader2, Hospital, Navigation
+  Loader2, Hospital, Navigation, Compass,
+  ShieldAlert, Sparkles, MapPin, Download
 } from "lucide-react";
 import { LocationDetails } from "@/types/location";
 import { QUICK_HUBS, RouteOption, TravelMode } from "@/data/routeData";
@@ -20,11 +21,11 @@ import { formatMapErrorMessage } from "@/services/googlePlaces";
 export default function PlanJourneyScreen() {
   const router = useRouter();
 
-  // Canonical LocationDetails states
-  const [origin, setOrigin] = useState<LocationDetails | null>(QUICK_HUBS.chennai);
-  const [destination, setDestination] = useState<LocationDetails | null>(QUICK_HUBS.bangalore);
+  // Canonical LocationDetails states: Default is null (NO PRESETS, Section 5)
+  const [origin, setOrigin] = useState<LocationDetails | null>(null);
+  const [destination, setDestination] = useState<LocationDetails | null>(null);
 
-  // Target Travel Modes: Car, Bike, Walk (Bus intentionally removed per product roadmap)
+  // Target Travel Modes: Car, Bike, Walk
   const [travelMode, setTravelMode] = useState<TravelMode>("Car"); 
   const [travelerProfile, setTravelerProfile] = useState<TravelerProfile>("Solo");
   const [routePriority, setRoutePriority] = useState<RoutePriority>("Balanced");
@@ -46,7 +47,7 @@ export default function PlanJourneyScreen() {
     setRoutingError("");
   };
 
-  // Quick select hub handler
+  // Quick select hub handler (optional assistance, not preset)
   const handleQuickSelectHub = (hubKey: string, target: "origin" | "destination") => {
     const hub = QUICK_HUBS[hubKey];
     if (!hub) return;
@@ -66,7 +67,7 @@ export default function PlanJourneyScreen() {
     if (loadingRoutes) return;
 
     if (!origin || !destination) {
-      setValidationError("Please select both a valid origin and destination location.");
+      setValidationError("Please select both an origin and destination location.");
       return;
     }
 
@@ -136,66 +137,69 @@ export default function PlanJourneyScreen() {
   ];
 
   return (
-    <div className="min-h-screen pb-20 md:pb-8" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
+    <div 
+      className="min-h-screen pb-20 md:pb-8 bg-background text-foreground"
+      style={{ fontFamily: "'Poppins', sans-serif" }}
+    >
       <Header />
 
       <div className="w-full max-w-7xl mx-auto px-4 md:px-8 py-6 space-y-6 animate-slideUp">
 
         {!showRoutes ? (
           <>
-            <div className="text-left">
-              <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
-                Real Google Routing
-              </span>
-              <h2 style={{ fontWeight: 800, fontSize: "clamp(20px,4vw,28px)", color: "#0F172A", marginTop: "4px" }}>
+            <div className="text-left space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-(--primary)/10 text-(--primary) text-xs font-bold tracking-wider uppercase">
+                <Compass className="h-3.5 w-3.5" />
+                <span>Real-Time Route Intelligence</span>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
                 Plan Your Journey
-              </h2>
-              <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "4px" }}>
-                Calculate real road network routes across India using Google Directions with safety-first corridor scoring.
+              </h1>
+              <p className="text-xs md:text-sm text-(--muted-foreground) max-w-2xl leading-relaxed">
+                Calculate real road corridors across India using Google Directions with deterministic safety scoring and emergency haven verification.
               </p>
             </div>
 
+            {/* Validation Error Banner */}
             {validationError && (
-              <div
-                className="p-4 rounded-2xl flex items-center gap-2"
-                style={{ backgroundColor: "#FEF2F2", border: "1px solid rgba(239,68,68,0.25)", color: "#DC2626", fontSize: "13px", fontWeight: 600 }}
-              >
-                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                <span>{validationError}</span>
+              <div className="p-4 rounded-2xl flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-xs font-semibold animate-slideDown">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{validationError}</span>
+                </div>
+                <button onClick={() => setValidationError("")} className="font-bold text-xs hover:underline">Dismiss</button>
               </div>
             )}
 
+            {/* Routing Error Banner */}
             {routingError && (
-              <div
-                className="p-4 rounded-2xl flex items-center justify-between gap-2"
-                style={{ backgroundColor: "#FFFBEB", border: "1px solid rgba(245,158,11,0.25)", color: "#D97706", fontSize: "13px", fontWeight: 600 }}
-              >
+              <div className="p-4 rounded-2xl flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-semibold animate-slideDown">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span>{routingError}</span>
                 </div>
-                <button type="button" onClick={() => setRoutingError("")} style={{ fontSize: "12px", fontWeight: 700 }}>Dismiss</button>
+                <button onClick={() => setRoutingError("")} className="font-bold text-xs hover:underline">Dismiss</button>
               </div>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
+              {/* Main Planning Form (High Contrast & Clear Hierarchy) */}
               <div className="lg:col-span-8">
                 <form
                   onSubmit={handleFindRoute}
-                  className="rounded-3xl p-6 md:p-8 space-y-6 text-left"
-                  style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 4px 20px rgba(37,99,255,0.08)" }}
+                  className="rounded-3xl p-6 md:p-8 space-y-6 text-left bg-surface border border-border shadow-xl"
                 >
                   
-                  {/* Real Location Search Inputs with Swap Control */}
+                  {/* Location Search Inputs with Swap Control */}
                   <div className="space-y-4">
                     
-                    {/* Origin Input */}
+                    {/* Origin Input (Section 5: Clear Placeholder "Select location") */}
                     <div className="space-y-2">
                       <LocationSearchInput
                         idPrefix="origin"
-                        label="From Location (Origin)"
-                        placeholder="Search address, landmark, airport, railway station, city..."
+                        label="From Location"
+                        placeholder="Select location (city, landmark, station, or current GPS)..."
                         selectedLocation={origin}
                         onSelectLocation={(loc) => {
                           setOrigin(loc);
@@ -205,24 +209,19 @@ export default function PlanJourneyScreen() {
                         isOrigin={true}
                       />
 
-                      {/* Origin Quick-Select Hubs */}
+                      {/* Optional Hub suggestions */}
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span style={{ fontSize: "10px", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", marginRight: "4px" }}>Quick Select:</span>
+                        <span className="text-[10px] font-bold text-(--muted-foreground) uppercase mr-1">Quick Select:</span>
                         {hubsList.map(h => (
                           <button
                             key={`origin-hub-${h.key}`}
                             type="button"
                             onClick={() => handleQuickSelectHub(h.key, "origin")}
-                            className="px-2.5 py-1 rounded-lg transition-all"
-                            style={{
-                              fontSize: "10px",
-                              fontWeight: 700,
-                              fontFamily: "'Poppins',sans-serif",
-                              ...(origin?.name === h.name || (h.key === "vizag" && origin?.name === "Visakhapatnam")
-                                ? { backgroundColor: "#2563FF", color: "#FFFFFF" }
-                                : { backgroundColor: "#F1F5F9", color: "#64748B", border: "1px solid rgba(15,23,42,0.07)" }
-                              ),
-                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                              origin?.name === h.name || (h.key === "vizag" && origin?.name === "Visakhapatnam")
+                                ? "bg-(--primary) text-white shadow-sm"
+                                : "bg-elevated-surface text-(--muted-foreground) hover:text-foreground border border-border"
+                            }`}
                           >
                             {h.name}
                           </button>
@@ -235,8 +234,7 @@ export default function PlanJourneyScreen() {
                       <button
                         type="button"
                         onClick={handleSwapLocations}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all active:scale-95"
-                        style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", fontSize: "11px", fontWeight: 700, color: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-elevated-surface border border-border hover:bg-surface text-(--primary) text-xs font-bold shadow-sm transition-all active:scale-95"
                         title="Swap Origin and Destination"
                       >
                         <ArrowLeftRight className="h-3.5 w-3.5" />
@@ -244,12 +242,12 @@ export default function PlanJourneyScreen() {
                       </button>
                     </div>
 
-                    {/* Destination Input */}
+                    {/* Destination Input (Section 5: Clear Placeholder "Select location") */}
                     <div className="space-y-2">
                       <LocationSearchInput
                         idPrefix="destination"
                         label="To Destination"
-                        placeholder="Search destination address, hotel, city, hospital..."
+                        placeholder="Select destination (city, hotel, address, corridor)..."
                         selectedLocation={destination}
                         onSelectLocation={(loc) => {
                           setDestination(loc);
@@ -259,24 +257,19 @@ export default function PlanJourneyScreen() {
                         isOrigin={false}
                       />
 
-                      {/* Destination Quick-Select Hubs */}
+                      {/* Optional Hub suggestions */}
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span style={{ fontSize: "10px", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", marginRight: "4px" }}>Quick Select:</span>
+                        <span className="text-[10px] font-bold text-(--muted-foreground) uppercase mr-1">Quick Select:</span>
                         {hubsList.map(h => (
                           <button
                             key={`dest-hub-${h.key}`}
                             type="button"
                             onClick={() => handleQuickSelectHub(h.key, "destination")}
-                            className="px-2.5 py-1 rounded-lg transition-all"
-                            style={{
-                              fontSize: "10px",
-                              fontWeight: 700,
-                              fontFamily: "'Poppins',sans-serif",
-                              ...(destination?.name === h.name || (h.key === "vizag" && destination?.name === "Visakhapatnam")
-                                ? { backgroundColor: "#22C55E", color: "#FFFFFF" }
-                                : { backgroundColor: "#F1F5F9", color: "#64748B", border: "1px solid rgba(15,23,42,0.07)" }
-                              ),
-                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                              destination?.name === h.name || (h.key === "vizag" && destination?.name === "Visakhapatnam")
+                                ? "bg-emerald-600 text-white shadow-sm"
+                                : "bg-elevated-surface text-(--muted-foreground) hover:text-foreground border border-border"
+                            }`}
                           >
                             {h.name}
                           </button>
@@ -286,14 +279,16 @@ export default function PlanJourneyScreen() {
 
                   </div>
 
-                  {/* Travel Mode (Car, Bike, Walk) */}
-                  <div className="space-y-2 pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.07)" }}>
-                    <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Travel Mode</label>
+                  {/* Travel Mode (Car, Bike, Walk) - Strong High-Contrast Buttons */}
+                  <div className="space-y-2 pt-3 border-t border-border">
+                    <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">
+                      Travel Mode
+                    </label>
                     <div className="grid grid-cols-3 gap-3 max-w-md">
                       {[
-                        { mode: "Car", icon: Car, desc: "Driving Route" },
-                        { mode: "Bike", icon: Bike, desc: "Two-Wheeler Route" },
-                        { mode: "Walk", icon: Footprints, desc: "Walking Route" }
+                        { mode: "Car", icon: Car, desc: "Highway Drive" },
+                        { mode: "Bike", icon: Bike, desc: "Two-Wheeler" },
+                        { mode: "Walk", icon: Footprints, desc: "Pedestrian" }
                       ].map((item) => {
                         const isActive = travelMode === item.mode;
                         const Icon = item.icon;
@@ -302,20 +297,17 @@ export default function PlanJourneyScreen() {
                             key={item.mode}
                             type="button"
                             onClick={() => { setTravelMode(item.mode as TravelMode); setRoutingError(""); }}
-                            className="rounded-2xl p-3 flex flex-col items-center justify-center gap-1 transition-all"
-                            style={{
-                              backgroundColor: isActive ? "#2563FF" : "#F8FAFC",
-                              border: `1.5px solid ${isActive ? "#1E40AF" : "rgba(15,23,42,0.08)"}`,
-                              color: isActive ? "#FFFFFF" : "#374151",
-                              boxShadow: isActive ? "0 4px 12px rgba(37,99,255,0.25)" : "none",
-                              fontFamily: "'Poppins',sans-serif",
-                              fontWeight: 700,
-                              fontSize: "12px",
-                            }}
+                            className={`rounded-2xl p-3 flex flex-col items-center justify-center gap-1.5 transition-all text-xs font-bold ${
+                              isActive 
+                                ? "bg-(--primary) text-white shadow-lg shadow-blue-500/25 border-2 border-blue-400" 
+                                : "bg-elevated-surface text-foreground border border-border hover:bg-surface"
+                            }`}
                           >
                             <Icon className="h-5 w-5" />
                             <span>{item.mode}</span>
-                            <span style={{ fontSize: "9px", fontWeight: 400, opacity: 0.8 }}>{item.desc}</span>
+                            <span className={`text-[10px] font-medium ${isActive ? "text-blue-100" : "text-(--muted-foreground)"}`}>
+                              {item.desc}
+                            </span>
                           </button>
                         );
                       })}
@@ -323,13 +315,15 @@ export default function PlanJourneyScreen() {
                   </div>
 
                   {/* Safety & Traveler Preferences */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4" style={{ borderTop: "1px solid rgba(15,23,42,0.07)" }}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-border">
                     <div className="space-y-1.5">
-                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Traveler Profile</label>
+                      <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">
+                        Traveler Profile
+                      </label>
                       <select
                         value={travelerProfile}
                         onChange={(e) => setTravelerProfile(e.target.value as TravelerProfile)}
-                        style={{ width: "100%", borderRadius: "12px", backgroundColor: "#F8FAFC", border: "1.5px solid #E2E8F0", padding: "12px 16px", fontSize: "13px", fontWeight: 500, color: "#0F172A", fontFamily: "'Poppins',sans-serif", outline: "none" }}
+                        className="w-full rounded-2xl bg-elevated-surface border border-border p-3 text-xs font-semibold text-foreground outline-none"
                       >
                         <option value="Solo">Solo Traveler</option>
                         <option value="Family">Family with Children (Medical &amp; Rest Priority)</option>
@@ -339,11 +333,13 @@ export default function PlanJourneyScreen() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label style={{ fontSize: "11px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", display: "block" }}>Route Optimization Priority</label>
+                      <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">
+                        Route Priority
+                      </label>
                       <select
                         value={routePriority}
                         onChange={(e) => setRoutePriority(e.target.value as RoutePriority)}
-                        style={{ width: "100%", borderRadius: "12px", backgroundColor: "#F8FAFC", border: "1.5px solid #E2E8F0", padding: "12px 16px", fontSize: "13px", fontWeight: 500, color: "#0F172A", fontFamily: "'Poppins',sans-serif", outline: "none" }}
+                        className="w-full rounded-2xl bg-elevated-surface border border-border p-3 text-xs font-semibold text-foreground outline-none"
                       >
                         <option value="Balanced">Balanced (Optimal Safety &amp; Transit Time)</option>
                         <option value="Maximum Safety">Maximum Safety (Prioritize High Service Density)</option>
@@ -352,26 +348,20 @@ export default function PlanJourneyScreen() {
                     </div>
                   </div>
 
-                  {/* Primary CTA */}
+                  {/* Primary Calculate Button (Section 3: High Contrast, Strong Background, clearly looks clickable) */}
                   <button
                     type="submit"
                     disabled={loadingRoutes}
-                    className="w-full rounded-2xl py-4 text-sm font-bold text-white transition-all mt-6 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{
-                      background: "linear-gradient(135deg, #2563FF 0%, #1E40AF 100%)",
-                      boxShadow: "0 6px 24px rgba(37,99,255,0.30)",
-                      fontFamily: "'Poppins',sans-serif",
-                      fontSize: "15px",
-                    }}
+                    className="w-full rounded-2xl py-4 text-sm font-extrabold text-white transition-all mt-4 flex items-center justify-center gap-2 bg-linear-to-r from-blue-600 via-blue-700 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 shadow-xl shadow-blue-600/30 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed focus:ring-4 focus:ring-blue-500/30"
                   >
                     {loadingRoutes ? (
                       <>
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>ANALYZING REAL ROUTE SAFETY...</span>
+                        <span>CALCULATING SAFEST ROUTE...</span>
                       </>
                     ) : (
                       <>
-                        <span>CALCULATE SAFETY FIT</span>
+                        <span>CALCULATE SAFEST ROUTE</span>
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}
@@ -380,47 +370,49 @@ export default function PlanJourneyScreen() {
               </div>
 
               {/* Right Panel: Intelligence Info */}
-              <div className="lg:col-span-4 space-y-6">
-                <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm text-left space-y-4 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-primary-accent/10 text-primary-accent">
+              <div className="lg:col-span-4 space-y-5">
+                <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm text-left space-y-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-2xl bg-(--primary)/10 text-(--primary)">
                       <ShieldCheck className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-black text-foreground uppercase tracking-wider">
-                        Safety Intelligence Layer
+                      <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider">
+                        Safety Intelligence
                       </h3>
-                      <span className="text-[9px] font-bold text-success uppercase">Phase 3 Active</span>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">
+                        Deterministic Safety Engine
+                      </span>
                     </div>
                   </div>
                   
-                  <p className="text-xs text-muted leading-relaxed font-semibold">
-                    Evaluates verified Google Places POIs (Hospitals, Police, Pharmacies, Fuel Plazas), active community-reported incidents, and objective profile weighting.
+                  <p className="text-xs text-(--muted-foreground) leading-relaxed font-medium">
+                    Evaluates verified Google Places POIs (Hospitals, Police, Pharmacies, Fuel Plazas), active community-reported hazards, and objective traveler profile weighting.
                   </p>
 
-                  <div className="pt-3 border-t border-border space-y-2.5 text-xs font-bold text-muted">
+                  <div className="pt-3 border-t border-border space-y-2 text-xs font-semibold text-(--muted-foreground)">
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                       <span>Real Google Places corridor verification</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
-                      <span>Deterministic Safety Fit scoring (0-100)</span>
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span>Deterministic Safety Score (0-100)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                       <span>Active community hazard detection</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                       <span>Zero fabricated data or fake statistics</span>
                     </div>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border text-[11px] text-muted space-y-1">
-                    <span className="font-black text-foreground block">Active Selection:</span>
-                    <div className="truncate"><b>From:</b> {origin ? `${origin.name} (${origin.latitude.toFixed(3)}, ${origin.longitude.toFixed(3)})` : "Not selected"}</div>
-                    <div className="truncate"><b>To:</b> {destination ? `${destination.name} (${destination.latitude.toFixed(3)}, ${destination.longitude.toFixed(3)})` : "Not selected"}</div>
+                  <div className="p-3.5 rounded-2xl bg-elevated-surface border border-border text-[11px] text-(--muted-foreground) space-y-1">
+                    <span className="font-extrabold text-foreground block">Active Status:</span>
+                    <div className="truncate"><b>From:</b> {origin ? origin.name : "Select location"}</div>
+                    <div className="truncate"><b>To:</b> {destination ? destination.name : "Select location"}</div>
                     <div><b>Profile:</b> {travelerProfile} • <b>Priority:</b> {routePriority}</div>
                   </div>
                 </div>
@@ -429,160 +421,139 @@ export default function PlanJourneyScreen() {
             </div>
           </>
         ) : (
-          <div className="space-y-8 animate-slideUp">
+          /* ============================================================
+             ROUTE RESULT PRESENTATION (Section 7: Clear Visual Hierarchy)
+             ============================================================ */
+          <div className="space-y-6 animate-slideUp text-left">
+            
             {/* Results Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4 text-left">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
               <div>
                 <button 
                   onClick={() => setShowRoutes(false)} 
-                  className="text-[10px] font-black text-primary-accent hover:underline uppercase tracking-widest flex items-center gap-1 mb-1 transition-colors"
+                  className="text-xs font-bold text-(--primary) hover:underline uppercase tracking-wider flex items-center gap-1 mb-1 transition-colors"
                 >
-                  ← Back to Location Search
+                  ← Edit Locations
                 </button>
-                <h2 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
-                  SAFETY FIT CORRIDORS ({routes.length} {routes.length === 1 ? "OPTION" : "OPTIONS"} ASSESSED)
+                <h2 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
+                  Calculated Safe Corridors ({routes.length} Available)
                 </h2>
-                <p className="text-xs text-muted font-bold mt-1">
-                  Corridor from {origin?.name} to {destination?.name} • {travelMode} Mode • Profile: {travelerProfile} • Priority: {routePriority}
+                <p className="text-xs text-(--muted-foreground) font-semibold mt-1">
+                  From {origin?.name} to {destination?.name} • Mode: {travelMode} • Profile: {travelerProfile}
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-success uppercase bg-success/10 text-success px-3 py-1.5 rounded-full border border-success/30">
-                  Safety Engine Active
+                <span className="text-[10px] font-extrabold uppercase px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  Google Directions &amp; Safety Active
                 </span>
               </div>
             </div>
 
-            {/* Real Route Cards */}
-            <div className={`grid grid-cols-1 ${routes.length === 1 ? "md:grid-cols-1 max-w-xl" : routes.length === 2 ? "md:grid-cols-2 max-w-5xl" : "md:grid-cols-2 lg:grid-cols-3"} gap-5`}>
-              {routes.map((route) => {
-                const isRecommended = route.recommendation === "HIGHLY RECOMMENDED" || route.safetyScore >= 88;
-                const isCaution = route.recommendation === "USE CAUTION" || route.safetyScore < 65;
+            {/* Route Cards Grid (Section 7: Clear Hierarchy & Integrated Safety Score) */}
+            <div className={`grid grid-cols-1 ${routes.length === 1 ? "md:grid-cols-1 max-w-2xl" : routes.length === 2 ? "md:grid-cols-2 max-w-5xl" : "md:grid-cols-2 lg:grid-cols-3"} gap-5`}>
+              {routes.map((route, idx) => {
+                const isSafest = idx === 0 || route.safetyScore >= 88;
                 const assessment = route.safetyAssessment;
                 
                 return (
                   <div 
                     key={route.id} 
-                    className={`rounded-3xl border ${
-                      isRecommended 
-                        ? "border-success bg-success/5 shadow-md ring-1 ring-success/30" 
-                        : isCaution 
-                        ? "border-warning/60 bg-surface" 
-                        : "border-border bg-surface"
-                    } p-6 shadow-sm flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-lg text-left`}
+                    className={`rounded-3xl border p-6 flex flex-col justify-between shadow-md transition-all hover:-translate-y-1 hover:shadow-xl ${
+                      isSafest 
+                        ? "bg-linear-to-b from-blue-500/10 via-surface to-surface border-(--primary) ring-2 ring-(--primary)/20" 
+                        : "bg-surface border-border"
+                    }`}
                   >
                     <div className="space-y-4">
-                      {/* Top Badges */}
-                      <div className="flex justify-between items-start">
+                      
+                      {/* Top Header & Safest Route Indicator */}
+                      <div className="flex justify-between items-start gap-2">
                         <div>
-                          <span className="text-[10px] font-black uppercase tracking-wider text-muted">
-                            Route {route.id} • Google Road Corridor
-                          </span>
-                          <h3 className="font-black text-foreground text-base mt-0.5 leading-tight">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground)">
+                              Route {route.id}
+                            </span>
+                            {isSafest && (
+                              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-sm">
+                                ★ SAFEST ROUTE
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="font-extrabold text-base md:text-lg text-foreground mt-1">
                             {route.name}
                           </h3>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
-                            isRecommended ? "bg-success text-white" :
-                            isCaution ? "bg-warning text-white" : "bg-info text-white"
+
+                        {/* Prominently Presented Safety Score (Section 7: e.g. 94 clearly presented) */}
+                        <div className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-elevated-surface border border-border shrink-0 min-w-17.5">
+                          <span className="text-[9px] font-black uppercase text-(--muted-foreground)">Safety</span>
+                          <span className={`text-xl font-black ${
+                            route.safetyScore >= 85 ? "text-emerald-600 dark:text-emerald-400" :
+                            route.safetyScore >= 70 ? "text-(--primary)" : "text-amber-500"
                           }`}>
-                            {assessment?.recommendation || route.recommendation}
+                            {route.safetyScore}
                           </span>
-                          {assessment && (
-                            <span className="text-[8px] font-bold text-muted uppercase">
-                              Confidence: {assessment.confidence}
-                            </span>
-                          )}
+                          <span className="text-[8px] font-bold text-(--muted-foreground)">/ 100</span>
                         </div>
                       </div>
 
-                      <p className="text-[11px] text-muted font-semibold leading-relaxed">
+                      <p className="text-xs text-(--muted-foreground) font-medium leading-relaxed">
                         {route.subtitle}
                       </p>
 
-                      {/* Primary Metrics */}
-                      <div className="grid grid-cols-3 gap-2 py-3 border-y border-border">
-                        <div>
-                          <span className="text-muted text-[8px] font-extrabold uppercase block">Safety Fit</span>
-                          <span className={`text-base font-black ${
-                            route.safetyScore >= 85 ? "text-success" : route.safetyScore >= 70 ? "text-info" : "text-warning"
-                          }`}>
-                            {route.safetyScore}/100
-                          </span>
+                      {/* Primary Metrics: Distance & Duration */}
+                      <div className="grid grid-cols-3 gap-2 py-3 border-y border-border text-center">
+                        <div className="p-2 rounded-xl bg-elevated-surface">
+                          <span className="text-[9px] font-extrabold uppercase text-(--muted-foreground) block">Duration</span>
+                          <span className="text-xs font-black text-foreground mt-0.5 block">{route.time}</span>
                         </div>
-                        <div>
-                          <span className="text-muted text-[8px] font-extrabold uppercase block">Time</span>
-                          <span className="text-xs font-black text-foreground">{route.time}</span>
+                        <div className="p-2 rounded-xl bg-elevated-surface">
+                          <span className="text-[9px] font-extrabold uppercase text-(--muted-foreground) block">Distance</span>
+                          <span className="text-xs font-black text-foreground mt-0.5 block">{route.distance}</span>
                         </div>
-                        <div>
-                          <span className="text-muted text-[8px] font-extrabold uppercase block">Distance</span>
-                          <span className="text-xs font-black text-foreground">{route.distance}</span>
+                        <div className="p-2 rounded-xl bg-elevated-surface">
+                          <span className="text-[9px] font-extrabold uppercase text-(--muted-foreground) block">Traffic</span>
+                          <span className="text-xs font-black text-foreground mt-0.5 block">{route.trafficScore}</span>
                         </div>
                       </div>
 
-                      {/* Verifiable Safety Factors Summary */}
-                      <div className="space-y-1.5 text-xs font-semibold text-muted">
+                      {/* Verified Factors */}
+                      <div className="space-y-1.5 text-xs text-(--muted-foreground) font-semibold">
                         <div className="flex justify-between">
                           <span>Emergency Access:</span> 
                           <span className="font-bold text-foreground">
-                            {assessment?.factors.emergencyAccess.rating || "Available"} ({assessment?.factors.emergencyAccess.score || 85}/100)
+                            {assessment?.factors.emergencyAccess.rating || "Available"} ({route.emergencyAccessScore}/100)
                           </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Traffic:</span> 
-                          <span className="font-bold text-foreground">{route.trafficDuration ? `${route.trafficScore} (${route.trafficDuration})` : route.trafficScore}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Toll Status:</span> 
-                          <span className="font-bold text-foreground">{route.tollInfo || "No Tolls"}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Weather:</span> 
-                          <span className="font-bold text-muted italic">Not Configured</span>
+                          <span className="font-bold text-foreground">{route.tollInfo || "Standard Highway"}</span>
                         </div>
                       </div>
 
-                      {/* "Why This Route?" Explanation */}
-                      {assessment?.explanation && (
-                        <div className="p-3 bg-elevated-surface rounded-2xl border border-border space-y-1.5">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-muted block">
-                            Why This Route?
-                          </span>
-                          <ul className="text-[10px] text-muted space-y-1 font-semibold">
-                            {assessment.explanation.slice(0, 3).map((exp, i) => (
-                              <li key={i} className="flex items-start gap-1.5">
-                                <span className="text-primary-accent">•</span>
-                                <span>{exp}</span>
-                              </li>
-                            ))}
-                          </ul>
+                      {/* POI Highlights */}
+                      <div className="pt-2 border-t border-border flex items-center justify-around text-(--muted-foreground) text-center">
+                        <div title="Hospitals">
+                          <Hospital className="h-4 w-4 mx-auto mb-0.5 text-rose-500" />
+                          <span className="text-[10px] font-bold">{route.pois?.filter(p => p.type === "hospital").length || 0} Med</span>
                         </div>
-                      )}
-                      
-                      {/* POI Counts */}
-                      <div className="pt-3 border-t border-border flex items-center justify-around text-muted">
-                        <div className="flex flex-col items-center" title="Hospitals">
-                          <Hospital className="h-4 w-4 mb-0.5 text-danger" />
-                          <span className="text-[9px] font-bold">{route.pois?.filter(p => p.type === "hospital").length || 0} Med</span>
+                        <div title="Police">
+                          <ShieldAlert className="h-4 w-4 mx-auto mb-0.5 text-blue-500" />
+                          <span className="text-[10px] font-bold">{route.pois?.filter(p => p.type === "police").length || 0} Police</span>
                         </div>
-                        <div className="flex flex-col items-center" title="Police Nodes">
-                          <ShieldCheck className="h-4 w-4 mb-0.5 text-primary-accent" />
-                          <span className="text-[9px] font-bold">{route.pois?.filter(p => p.type === "police").length || 0} Police</span>
+                        <div title="Fuel">
+                          <Fuel className="h-4 w-4 mx-auto mb-0.5 text-amber-500" />
+                          <span className="text-[10px] font-bold">{route.fuelStops} Fuel</span>
                         </div>
-                        <div className="flex flex-col items-center" title="Fuel Stations">
-                          <Fuel className="h-4 w-4 mb-0.5 text-warning" />
-                          <span className="text-[9px] font-bold">{route.fuelStops} Fuel</span>
-                        </div>
-                        <div className="flex flex-col items-center" title="Rest Stops">
-                          <Coffee className="h-4 w-4 mb-0.5 text-info" />
-                          <span className="text-[9px] font-bold">{route.restStops} Rest</span>
+                        <div title="Food & Rest">
+                          <Coffee className="h-4 w-4 mx-auto mb-0.5 text-emerald-500" />
+                          <span className="text-[10px] font-bold">{route.restStops} Rest</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action buttons */}
+                    {/* Action Buttons (Section 7 & 3: High Contrast, Clear Hierarchy) */}
                     <div className="pt-5 space-y-2">
                       <button
                         onClick={() => {
@@ -611,22 +582,43 @@ export default function PlanJourneyScreen() {
                           }
                           router.push(`/map?${params.toString()}`);
                         }}
-                        className="w-full rounded-xl py-3 text-xs font-black transition-all flex items-center justify-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-600/20"
+                        className="w-full rounded-2xl py-3 text-xs font-extrabold transition-all flex items-center justify-center gap-2 bg-linear-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:opacity-95 text-white shadow-lg shadow-emerald-600/25 active:scale-95"
                       >
-                        <Navigation className="h-3.5 w-3.5 fill-white" />
+                        <Navigation className="h-4 w-4 fill-white" />
                         <span>START LIVE NAVIGATION</span>
                       </button>
 
                       <button
                         onClick={() => handleSelectRoute(route.id)}
-                        className={`w-full rounded-xl py-2.5 text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-                          isRecommended 
-                            ? "bg-primary-accent/15 hover:bg-primary-accent/25 text-primary-accent border border-primary-accent/30" 
-                            : "bg-elevated-surface hover:bg-border text-foreground border border-border"
-                        }`}
+                        className="w-full rounded-2xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-(--primary) text-white hover:opacity-90 shadow-md shadow-blue-500/20 active:scale-95"
                       >
-                        <span>VIEW LIVING MAP & POIs</span>
+                        <span>VIEW ON LIVING MAP</span>
                         <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const params = new URLSearchParams({
+                            from: origin?.name.toLowerCase() || "chennai",
+                            dest: destination?.name.toLowerCase() || "bangalore",
+                            mode: travelMode,
+                          });
+                          if (origin) {
+                            params.set("fromLat", origin.latitude.toString());
+                            params.set("fromLng", origin.longitude.toString());
+                            params.set("fromName", origin.name);
+                          }
+                          if (destination) {
+                            params.set("destLat", destination.latitude.toString());
+                            params.set("destLng", destination.longitude.toString());
+                            params.set("destName", destination.name);
+                          }
+                          router.push(`/offline?${params.toString()}`);
+                        }}
+                        className="w-full rounded-2xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-elevated-surface text-foreground border border-border hover:bg-surface active:scale-95"
+                      >
+                        <Download className="h-3.5 w-3.5 text-(--primary)" />
+                        <span>DOWNLOAD OFFLINE PACK</span>
                       </button>
                     </div>
                   </div>
@@ -634,83 +626,11 @@ export default function PlanJourneyScreen() {
               })}
             </div>
 
-            {/* Route Comparison Matrix */}
-            <div className="rounded-3xl border border-border bg-surface p-6 shadow-sm overflow-x-auto text-left transition-colors">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xs font-black text-muted uppercase tracking-widest">
-                  Side-by-Side Safety Intelligence Matrix
-                </h3>
-                <span className="text-[10px] font-bold text-success">Phase 3 Verifiable Safety Factors</span>
-              </div>
-
-              <table className="w-full text-left text-xs min-w-[500px]">
-                <thead>
-                  <tr className="border-b border-border text-muted font-black uppercase tracking-wider text-[10px]">
-                    <th className="py-3 px-3">Verifiable Factor</th>
-                    {routes.map(r => (
-                      <th key={r.id} className="py-3 px-3">
-                        Route {r.id} ({r.name.split(" ")[0]})
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="font-semibold text-foreground divide-y divide-border">
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Safety Fit Score</td>
-                    {routes.map(r => (
-                      <td key={r.id} className="py-2.5 px-3 font-black text-primary-accent">
-                        {r.safetyScore}/100 ({r.safetyAssessment?.confidence || "Medium"} Confidence)
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Travel Time</td>
-                    {routes.map(r => <td key={r.id} className="py-2.5 px-3">{r.time}</td>)}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Distance</td>
-                    {routes.map(r => <td key={r.id} className="py-2.5 px-3">{r.distance}</td>)}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Medical Facilities (Corridor)</td>
-                    {routes.map(r => (
-                      <td key={r.id} className="py-2.5 px-3">
-                        {r.pois?.filter(p => p.type === "hospital").length || 0} Verified
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Police / Patrol Nodes</td>
-                    {routes.map(r => (
-                      <td key={r.id} className="py-2.5 px-3">
-                        {r.pois?.filter(p => p.type === "police").length || 0} Nodes
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Fuel & Service Plazas</td>
-                    {routes.map(r => <td key={r.id} className="py-2.5 px-3">{r.fuelStops} Plazas</td>)}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Community Incidents</td>
-                    {routes.map(r => (
-                      <td key={r.id} className="py-2.5 px-3">
-                        {r.safetyAssessment?.factors.incidents.count === 0 ? "None Reported" : `${r.safetyAssessment?.factors.incidents.count} Active`}
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <td className="py-2.5 px-3 text-muted font-bold">Weather Risk</td>
-                    {routes.map(r => <td key={r.id} className="py-2.5 px-3 text-muted italic">Not Configured</td>)}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
           </div>
         )}
 
       </div>
+
       <div className="md:hidden">
         <BottomNav />
       </div>
