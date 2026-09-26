@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { 
-  ALLOWLISTED_TOOLS, 
-  executeToolCall, 
-  sanitizeInput 
+import {
+  ALLOWLISTED_TOOLS,
+  executeToolCall,
+  sanitizeInput,
+  fetchLiveNearbyPlaces
 } from "../../../services/geminiToolRouter";
 import { 
   ToolCallRequest, 
@@ -24,6 +25,30 @@ export async function POST(req: Request) {
     const sanitizedPrompt = sanitizeInput(rawPrompt);
     const geminiKey = process.env.GEMINI_API_KEY;
     const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const placesApiKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    // Real, live-data nearby-places lookup: prefers already-known route POIs
+    // (from the tool router), and only if there are none falls back to a
+    // genuine Google Places API (New) server-side call. Never fabricates a
+    // place; returns an empty array (and callers must say so honestly) if
+    // both sources come up empty.
+    const resolveNearbyPlaces = async (pType: string, lat?: number, lng?: number) => {
+      const res = runTool("findNearbyPlace", { placeType: pType });
+      if (!res?.success) return res;
+      if (res.data?.places?.length > 0) return res;
+      if (lat === undefined || lng === undefined) return res;
+
+      const livePlaces = await fetchLiveNearbyPlaces(lat, lng, pType, placesApiKey);
+      return {
+        ...res,
+        data: {
+          ...res.data,
+          places: livePlaces,
+          count: livePlaces.length,
+          source: livePlaces.length > 0 ? "GOOGLE_PLACES_LIVE" : "NONE"
+        }
+      };
+    };
 
     const toolCallsExecuted: ToolCallRequest[] = [];
     const toolResults: ToolExecutionResult[] = [];
@@ -96,12 +121,19 @@ export async function POST(req: Request) {
             // Generate contextual summary based on tool result
             let replyText = "";
             if (funcName === "readSafetyState") {
-              replyText = `Your current Safety Fit score is ${context.safetyScore ?? context.activeRoute?.safetyScore ?? 85}/100 with ${(context.safetyAssessment?.confidence ?? "MEDIUM")} confidence.`;
+              const realScore = context.safetyScore ?? context.activeRoute?.safetyScore;
+              replyText = realScore !== undefined && realScore !== null
+                ? `Your current Safety Fit score is ${realScore}/100 with ${(context.safetyAssessment?.confidence ?? "MEDIUM")} confidence.`
+                : "No route has been calculated and assessed yet, so there is no Safety Fit score to report.";
             } else if (funcName === "readNavigationState") {
-              replyText = `Navigation status is ${context.navStatus || "ACTIVE"}. Route progress is ${context.progress?.progressPercent || 0}% complete with dynamic ETA ${context.progress?.etaString || context.activeRoute?.time || "--:--"}.`;
+              replyText = `Navigation status is ${context.navStatus || "READY"}. Route progress is ${context.progress?.progressPercent || 0}% complete with dynamic ETA ${context.progress?.etaString || context.activeRoute?.time || "--:--"}.`;
             } else if (funcName === "readCheckInState") {
-              const mins = context.checkInSecondsRemaining ? Math.ceil(context.checkInSecondsRemaining / 60) : 15;
-              replyText = `Your Safety Check-In is active (Cycle #${context.activeCheckInCycle?.cycleNumber || 1}). Next check-in is due in ~${mins} minute(s).`;
+              if (context.checkInStatus && context.checkInStatus !== "DISABLED") {
+                const mins = context.checkInSecondsRemaining ? Math.ceil(context.checkInSecondsRemaining / 60) : null;
+                replyText = `Your Safety Check-In is ${context.checkInStatus} (Cycle #${context.activeCheckInCycle?.cycleNumber || 1}).${mins !== null ? ` Next check-in is due in ~${mins} minute(s).` : ""}`;
+              } else {
+                replyText = "Safety Check-In is not currently active.";
+              }
             } else if (funcName === "findNearbyPlace") {
               const res = toolResults[toolResults.length - 1];
               if (!res?.success && res?.data?.locationRequired) {
@@ -134,8 +166,35 @@ export async function POST(req: Request) {
           }
 
           if (candidate?.text) {
-            // Guard: If candidate text did not call findNearbyPlace tool but user asked about nearby havens
             const lowerP = sanitizedPrompt.toLowerCase();
+
+            // Guard: "Where am I?" must be answered from actual GPS state,
+            // never from Gemini's freeform text (which could name any city
+            // it likes) and never from navigation/route status.
+            if (
+              lowerP.includes("where am i") ||
+              lowerP.includes("my location") ||
+              lowerP.includes("current location") ||
+              lowerP.includes("what is my location") ||
+              lowerP.includes("what's my location")
+            ) {
+              const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+              const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+              const locationText = context.locationSnapshot?.formattedText;
+              const reply = (userLat !== undefined && userLat !== null && userLng !== undefined && userLng !== null)
+                ? `Your last known GPS position is ${locationText ? `${locationText} ` : ""}(${userLat.toFixed(5)}, ${userLng.toFixed(5)}).`
+                : "I can't determine your current location because live GPS is unavailable. Please enable location permissions.";
+              return NextResponse.json({
+                reply,
+                toolCalls: toolCallsExecuted,
+                toolResults,
+                proposals,
+                mode: "CONNECTED",
+                model: geminiModel
+              });
+            }
+
+            // Guard: If candidate text did not call findNearbyPlace tool but user asked about nearby havens
             if (
               lowerP.includes("near me") ||
               lowerP.includes("nearby") ||
@@ -157,7 +216,9 @@ export async function POST(req: Request) {
               else if (lowerP.includes("police")) pType = "police";
               else if (lowerP.includes("cafe") || lowerP.includes("coffee")) pType = "cafe";
 
-              const res = runTool("findNearbyPlace", { placeType: pType });
+              const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+              const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+              const res = await resolveNearbyPlaces(pType, userLat, userLng);
               if (!res?.success && res?.data?.locationRequired) {
                 return NextResponse.json({
                   reply: "Location access is required to find places near you. Please enable location permissions or tap 'Locate Me' in the map panel so I can find verified safe havens near your exact position.",
@@ -168,14 +229,21 @@ export async function POST(req: Request) {
                   model: geminiModel
                 });
               } else if (res?.data?.places && res.data.places.length > 0) {
-                const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
-                const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
                 const listStr = res.data.places
                   .slice(0, 4)
                   .map((p: any) => `• ${p.name} (${p.distance})${p.phone ? ` [Tel: ${p.phone}]` : ""}${p.amenities ? ` [Amenities: ${p.amenities}]` : ""}`)
                   .join("\n");
                 return NextResponse.json({
                   reply: `Found verified places near your position (${userLat?.toFixed(3)}, ${userLng?.toFixed(3)}):\n${listStr}\n\nThese locations are pinned on your live map.`,
+                  toolCalls: toolCallsExecuted,
+                  toolResults,
+                  proposals,
+                  mode: "CONNECTED",
+                  model: geminiModel
+                });
+              } else {
+                return NextResponse.json({
+                  reply: "No verified nearby places were found for that search. Google Places returned no results in your immediate area for this category.",
                   toolCalls: toolCallsExecuted,
                   toolResults,
                   proposals,
@@ -203,10 +271,21 @@ export async function POST(req: Request) {
     const lower = sanitizedPrompt.toLowerCase();
     let reply = "";
 
+    // Intent: "Where am I?" -- answered strictly from actual GPS state.
+    if (lower.includes("where am i") || lower.includes("my location") || lower.includes("current location")) {
+      const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+      const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+      const locationText = context.locationSnapshot?.formattedText;
+      reply = (userLat !== undefined && userLat !== null && userLng !== undefined && userLng !== null)
+        ? `Your last known GPS position is ${locationText ? `${locationText} ` : ""}(${userLat.toFixed(5)}, ${userLng.toFixed(5)}).`
+        : "I can't determine your current location because live GPS is unavailable. Please enable location permissions.";
+    }
     // Intent: Safety Score / Safety State
-    if (lower.includes("safety") || lower.includes("score") || lower.includes("fit") || lower.includes("safe status")) {
+    else if (lower.includes("safety") || lower.includes("score") || lower.includes("fit") || lower.includes("safe status")) {
       const res = runTool("readSafetyState");
-      reply = `Your current Safety Fit score is ${res.data.safetyScore}/100 (${res.data.confidence} Confidence). Key factors include: ${res.data.factors.map((f: any) => f.explanation).join(". ")}.`;
+      reply = res.data.available
+        ? `Your current Safety Fit score is ${res.data.safetyScore}/100 (${res.data.confidence} Confidence).${res.data.factors.length > 0 ? ` Key factors include: ${res.data.factors.map((f: any) => f.explanation).join(". ")}.` : ""}`
+        : res.data.message;
     }
     // Intent: ETA / Arrival / Progress / Route status
     else if (lower.includes("eta") || lower.includes("how long") || lower.includes("arrival") || lower.includes("reach") || lower.includes("time left")) {
@@ -217,7 +296,10 @@ export async function POST(req: Request) {
     else if (lower.includes("check-in") || lower.includes("checkin") || lower.includes("countdown") || lower.includes("timer")) {
       const res = runTool("readCheckInState");
       if (res.data.status === "ACTIVE") {
-        reply = `Safety Check-In is currently ACTIVE (Cycle #${res.data.cycleNumber}). Your next check-in is scheduled in approximately ${res.data.minutesRemaining} minute(s). ${res.data.configuredContactsCount} guardian contacts are linked.`;
+        const contactsPart = res.data.configuredContactsCount !== null
+          ? ` ${res.data.configuredContactsCount} guardian contact(s) are linked.`
+          : "";
+        reply = `Safety Check-In is currently ACTIVE (Cycle #${res.data.cycleNumber}). Your next check-in is scheduled in approximately ${res.data.minutesRemaining} minute(s).${contactsPart}`;
       } else {
         reply = `Safety Check-In is currently in ${res.data.status} state. You can configure and start it anytime from the navigation overlay.`;
       }
@@ -282,7 +364,7 @@ export async function POST(req: Request) {
           typeLabel = "verified rest stops";
         }
 
-        const res = runTool("findNearbyPlace", { placeType: pType });
+        const res = await resolveNearbyPlaces(pType, userLat, userLng);
         if (res.success && res.data?.places?.length > 0) {
           const listStr = res.data.places
             .slice(0, 4)
@@ -319,7 +401,9 @@ export async function POST(req: Request) {
     // Intent: Offline Map / Vector Corridor Status
     else if (lower.includes("offline map") || lower.includes("cached map") || lower.includes("map data") || lower.includes("available offline") || lower.includes("how much of my route is cached")) {
       const res = runTool("readOfflineMapState");
-      reply = `Offline Vector Map: Active corridor is ${res.data.packName} with ${res.data.tileCount} cached vector tiles (Zoom ${res.data.zoomRange[0]}-${res.data.zoomRange[1]}, ~${res.data.approxSizeMb} MB). ${res.data.disclaimer}`;
+      reply = res.data.hasActivePack
+        ? `Offline Vector Map: Active corridor is ${res.data.packName} with ${res.data.tileCount} cached vector tiles (Zoom ${res.data.zoomRange[0]}-${res.data.zoomRange[1]}, ~${res.data.approxSizeMb} MB). ${res.data.disclaimer}`
+        : `No offline map pack has been downloaded yet. ${res.data.disclaimer}`;
     }
     // Intent: Offline Reroute (Truthful constraint)
     else if ((lower.includes("reroute") || lower.includes("new route") || lower.includes("different route")) && (lower.includes("offline") || lower.includes("no internet") || lower.includes("without internet"))) {

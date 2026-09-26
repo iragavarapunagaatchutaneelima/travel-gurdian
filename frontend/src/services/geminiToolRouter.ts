@@ -9,28 +9,6 @@ import {
   LiveTravelContext 
 } from "../types/gemini";
 
-export const VERIFIED_HOSPITALS = [
-  { name: "Apollo Emergency Care Center", type: "Hospital", distance: "1.2 km", phone: "044-28290200" },
-  { name: "Government General Hospital & Trauma Center", type: "Hospital", distance: "3.5 km", phone: "108" },
-  { name: "Manipal Highway Medical Haven", type: "Hospital", distance: "12.0 km", phone: "080-25024444" },
-  { name: "Fortis Emergency & Critical Care", type: "Hospital", distance: "18.4 km", phone: "080-66214444" }
-];
-
-export const VERIFIED_POLICE_STATIONS = [
-  { name: "Highway Patrol Control Post #4", type: "Police Station", distance: "0.8 km", phone: "112" },
-  { name: "Central Police Sub-Station", type: "Police Station", distance: "2.4 km", phone: "100" },
-  { name: "District Traffic & Safety Booth", type: "Police Station", distance: "9.5 km", phone: "112" }
-];
-
-export const VERIFIED_FUEL_STOPS = [
-  { name: "HP 24/7 National Highway Oasis", type: "Fuel Stop", distance: "4.5 km", amenities: "Fuel, Clean Restrooms, Food Court, EV Fast Charger" },
-  { name: "IndianOil COCO Highway Plaza", type: "Fuel Stop", distance: "14.2 km", amenities: "24/7 CCTV, Rest Area, Air/Nitrogen" }
-];
-
-export const VERIFIED_REST_STOPS = [
-  { name: "Highway Travelers Safe Plaza", type: "Rest Stop", distance: "8.0 km", amenities: "24/7 Security, Food Court, Well-lit Parking" }
-];
-
 export const READ_ONLY_TOOLS: ReadOnlyToolName[] = [
   "readNavigationState",
   "readSafetyState",
@@ -219,15 +197,29 @@ export function executeToolCall(
       }
 
       case "readSafetyState": {
-        const safetyData = {
-          safetyScore: context.safetyScore ?? context.activeRoute?.safetyScore ?? 85,
-          confidence: context.safetyAssessment?.confidence ?? context.activeRoute?.safetyAssessment?.confidence ?? "MEDIUM",
-          safetyLevel: (context.safetyScore ?? context.activeRoute?.safetyScore ?? 85) >= 80 ? "HIGH" : "MODERATE",
-          factors: context.activeRoute?.safetyAssessment?.factors ?? [
-            { category: "Lighting", score: 85, explanation: "Adequate national corridor lighting" },
-            { category: "Emergency Haven Proximity", score: 90, explanation: "Verified hospitals within 25km" }
-          ]
-        };
+        // Never fabricate a score or safety factors when no route has been
+        // assessed yet -- an invented "85/100, adequate lighting" answer for
+        // a route that doesn't exist is exactly the kind of made-up data
+        // this assistant must not produce.
+        const realScore = context.safetyScore ?? context.activeRoute?.safetyScore;
+        const realFactors = context.activeRoute?.safetyAssessment?.factors;
+        const hasRealData = realScore !== undefined && realScore !== null;
+        const safetyData = hasRealData
+          ? {
+              available: true,
+              safetyScore: realScore,
+              confidence: context.safetyAssessment?.confidence ?? context.activeRoute?.safetyAssessment?.confidence ?? "MEDIUM",
+              safetyLevel: realScore >= 80 ? "HIGH" : realScore >= 60 ? "MODERATE" : "LOW",
+              factors: realFactors ?? []
+            }
+          : {
+              available: false,
+              safetyScore: null,
+              confidence: "NONE",
+              safetyLevel: "NOT_AVAILABLE",
+              factors: [],
+              message: "No route has been calculated and assessed yet, so there is no Safety Fit score to report."
+            };
         return {
           result: {
             toolCallId: id,
@@ -240,12 +232,14 @@ export function executeToolCall(
       }
 
       case "readCheckInState": {
+        // configuredContactsCount reflects only a real number the caller
+        // supplied; it is never guessed.
         const checkInData = {
           status: context.checkInStatus || "DISABLED",
           cycleNumber: context.activeCheckInCycle?.cycleNumber ?? 1,
           secondsRemaining: context.checkInSecondsRemaining ?? 0,
           minutesRemaining: context.checkInSecondsRemaining ? Math.ceil(context.checkInSecondsRemaining / 60) : 0,
-          configuredContactsCount: context.trustedContactsCount ?? 2,
+          configuredContactsCount: context.trustedContactsCount ?? null,
           isDueSoon: (context.checkInSecondsRemaining ?? 999) < 120
         };
         return {
@@ -375,82 +369,15 @@ export function executeToolCall(
           }
         }
 
-        // 2. Verified landmarks relative to user's actual GPS position
-        const offsetConfigs: Record<string, Array<{ name: string; dLat: number; dLng: number; type: string; category: string; phone?: string; amenities?: string }>> = {
-          hospital: [
-            { name: "Emergency Trauma & Critical Care Center", dLat: 0.009, dLng: 0.008, type: "Hospital", category: "hospital", phone: "108" },
-            { name: "Apex Regional Medical Center", dLat: -0.015, dLng: 0.012, type: "Hospital", category: "hospital", phone: "080-25024444" },
-            { name: "Highway Emergency First-Aid Post", dLat: 0.022, dLng: -0.010, type: "Hospital", category: "hospital", phone: "112" }
-          ],
-          pharmacy: [
-            { name: "Apollo 24/7 Pharmacy & Emergency Chemist", dLat: 0.005, dLng: 0.006, type: "Pharmacy", category: "pharmacy", phone: "044-28290200" },
-            { name: "MedPlus Highway Medicals & First Aid", dLat: -0.009, dLng: 0.007, type: "Pharmacy", category: "pharmacy", phone: "044-49004900" },
-            { name: "Lifeline Critical Care Pharmacy", dLat: 0.014, dLng: -0.011, type: "Pharmacy", category: "pharmacy", phone: "108" }
-          ],
-          police: [
-            { name: "Highway Patrol Control Post", dLat: 0.006, dLng: -0.005, type: "Police Station", category: "police", phone: "112" },
-            { name: "Central Police Station & Transit Security", dLat: -0.018, dLng: -0.014, type: "Police Station", category: "police", phone: "100" }
-          ],
-          fuel: [
-            { name: "Indian Oil COCO Highway Plaza", dLat: 0.008, dLng: 0.011, type: "Petrol Bunk", category: "fuel", amenities: "24/7 Fuel, Restrooms, Air/Nitrogen, EV Fast Charger" },
-            { name: "HP 24/7 National Highway Oasis", dLat: -0.012, dLng: 0.014, type: "Petrol Bunk", category: "fuel", amenities: "High-Speed Diesel, Clean Restrooms, Food Court" },
-            { name: "Bharat Petroleum Highway Star", dLat: 0.018, dLng: -0.013, type: "Petrol Bunk", category: "fuel", amenities: "24/7 Nitrogen, Water, Cafe, Rest Area" }
-          ],
-          cafe: [
-            { name: "Safe Haven Traveler's Cafe & Rest Lounge", dLat: 0.004, dLng: 0.005, type: "Cafe", category: "cafe", amenities: "Well-lit Seating, Free WiFi, Clean Restrooms" },
-            { name: "Artisan Route Coffee & Bakery", dLat: -0.007, dLng: 0.006, type: "Cafe", category: "cafe", amenities: "Takeaway, 24/7 Service" }
-          ],
-          rest: [
-            { name: "Highway Travelers Safe Rest Plaza", dLat: 0.015, dLng: 0.018, type: "Rest Stop", category: "rest", amenities: "24/7 Guarded Parking, Food Court" }
-          ]
-        };
-
-        let candidateNodes: any[] = [];
-        if (placeType.includes("hospital") || placeType.includes("medical") || placeType === "all") {
-          candidateNodes = [...candidateNodes, ...offsetConfigs.hospital];
-        }
-        if (placeType.includes("pharmacy") || placeType.includes("chemist") || placeType === "all") {
-          candidateNodes = [...candidateNodes, ...offsetConfigs.pharmacy];
-        }
-        if (placeType.includes("police") || placeType === "all") {
-          candidateNodes = [...candidateNodes, ...offsetConfigs.police];
-        }
-        if (placeType.includes("fuel") || placeType.includes("petrol") || placeType.includes("gas") || placeType.includes("bunk") || placeType === "all") {
-          candidateNodes = [...candidateNodes, ...offsetConfigs.fuel];
-        }
-        if (placeType.includes("cafe") || placeType.includes("coffee") || placeType === "all") {
-          candidateNodes = [...candidateNodes, ...offsetConfigs.cafe];
-        }
-        if (placeType.includes("rest") || placeType === "all") {
-          candidateNodes = [...candidateNodes, ...offsetConfigs.rest];
-        }
-
-        if (candidateNodes.length === 0) {
-          candidateNodes = [...offsetConfigs.fuel, ...offsetConfigs.hospital, ...offsetConfigs.police, ...offsetConfigs.pharmacy];
-        }
-
-        // Calculate real haversine distance from actual user GPS coordinates
-        const calculatedPlaces = candidateNodes.map((n, idx) => {
-          const pLat = userLat + n.dLat;
-          const pLng = userLng + n.dLng;
-          const distKm = computeDistanceKm(userLat, userLng, pLat, pLng);
-
-          return {
-            id: `place_${n.category}_${idx}`,
-            name: n.name,
-            type: n.type,
-            category: n.category,
-            distance: formatDist(distKm),
-            distanceKm: Number(distKm.toFixed(2)),
-            phone: n.phone,
-            amenities: n.amenities,
-            latitude: Number(pLat.toFixed(5)),
-            longitude: Number(pLng.toFixed(5)),
-            isAlongRoute: false
-          };
-        });
-
-        const combined = [...routeMatches, ...calculatedPlaces].sort((a, b) => a.distanceKm - b.distanceKm);
+        // NOTE: this only returns places drawn from the already-computed,
+        // Google-sourced POIs along the active route (real data). It
+        // deliberately does NOT invent any place: if there is no active
+        // route or nothing matches, `places` is empty and callers (see
+        // app/api/ai/route.ts) must either say so honestly or perform a
+        // real live Places lookup via fetchLiveNearbyPlaces() below --
+        // never synthesize a "verified" business at a fake coordinate
+        // offset.
+        const combined = routeMatches.sort((a, b) => a.distanceKm - b.distanceKm);
 
         return {
           result: {
@@ -461,24 +388,39 @@ export function executeToolCall(
             data: {
               count: combined.length,
               userLocation: { latitude: userLat, longitude: userLng },
-              places: combined.slice(0, 6)
+              places: combined.slice(0, 6),
+              source: combined.length > 0 ? "ACTIVE_ROUTE_POIS" : "NONE"
             }
           }
         };
       }
 
       case "readOfflineMapState": {
+        // Reports ONLY what was actually downloaded. No pack means no
+        // fabricated "example corridor" or invented tile count -- a
+        // 420-tile pack that was never downloaded is a lie, not a demo.
         const pack = context.activeOfflinePack;
-        const offlineData = {
-          hasActivePack: !!pack,
-          packName: pack?.packName || "Chennai ➔ Bangalore (NH 48 Corridor)",
-          provenance: pack?.provenance || "CACHED",
-          tileCount: pack?.mapPack?.tileCount || context.offlineMapTilesCount || 420,
-          zoomRange: pack?.mapPack?.zoomRange || [10, 13],
-          coverageStatus: pack?.mapPack?.status || "READY",
-          approxSizeMb: pack?.mapPack ? (pack.mapPack.totalSizeBytes / (1024 * 1024)).toFixed(2) : "1.05",
-          disclaimer: "Cached vector map corridor. Real-time updates & cloud traffic are unavailable while offline."
-        };
+        const offlineData = pack
+          ? {
+              hasActivePack: true,
+              packName: pack.packName,
+              provenance: pack.provenance,
+              tileCount: pack.mapPack?.tileCount ?? 0,
+              zoomRange: pack.mapPack?.zoomRange || [0, 0],
+              coverageStatus: pack.mapPack?.status || "UNKNOWN",
+              approxSizeMb: pack.mapPack ? (pack.mapPack.totalSizeBytes / (1024 * 1024)).toFixed(2) : "0.00",
+              disclaimer: "Cached vector map corridor. Real-time updates & cloud traffic are unavailable while offline."
+            }
+          : {
+              hasActivePack: false,
+              packName: null,
+              provenance: null,
+              tileCount: 0,
+              zoomRange: null,
+              coverageStatus: "NOT_DOWNLOADED",
+              approxSizeMb: "0.00",
+              disclaimer: "No offline map pack has been downloaded for this device yet."
+            };
         return {
           result: {
             toolCallId: id,
@@ -561,4 +503,122 @@ export function executeToolCall(
       error: `Unhandled tool '${name}'.`
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// Live (real) nearby-places lookup, server-side only.
+// ---------------------------------------------------------------------------
+// Used by app/api/ai/route.ts when findNearbyPlace's route-POI match above
+// comes back empty (no active route, or nothing of that category on it).
+// Calls the actual Google Places API (New) Nearby Search from the server
+// using a server-side key, so it works even though this code runs in a
+// Next.js Route Handler with no `window.google.maps` available. Returns an
+// empty array -- never a fabricated place -- on any failure or zero results.
+export interface LiveNearbyPlace {
+  id: string;
+  name: string;
+  type: string;
+  category: string;
+  distanceKm: number;
+  distance: string;
+  latitude: number;
+  longitude: number;
+  phone?: string;
+  isAlongRoute: false;
+}
+
+const PLACE_TYPE_MAP: Record<string, string[]> = {
+  hospital: ["hospital"],
+  medical: ["hospital"],
+  pharmacy: ["pharmacy"],
+  chemist: ["pharmacy"],
+  police: ["police"],
+  fuel: ["gas_station"],
+  petrol: ["gas_station"],
+  gas: ["gas_station"],
+  bunk: ["gas_station"],
+  cafe: ["cafe"],
+  coffee: ["cafe"],
+  rest: ["restaurant"],
+  oasis: ["restaurant"],
+  all: ["hospital", "police", "gas_station"]
+};
+
+function formatKm(distKm: number): string {
+  return distKm < 1 ? `${Math.round(distKm * 1000)} m` : `${distKm.toFixed(1)} km`;
+}
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function fetchLiveNearbyPlaces(
+  lat: number,
+  lng: number,
+  placeType: string,
+  apiKey: string | undefined,
+  radiusMeters: number = 6000
+): Promise<LiveNearbyPlace[]> {
+  if (!apiKey) return [];
+
+  const includedTypes = PLACE_TYPE_MAP[placeType.toLowerCase()] || PLACE_TYPE_MAP.all;
+
+  try {
+    const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.nationalPhoneNumber,places.types"
+      },
+      body: JSON.stringify({
+        includedTypes,
+        maxResultCount: 8,
+        locationRestriction: {
+          circle: {
+            center: { latitude: lat, longitude: lng },
+            radius: radiusMeters
+          }
+        }
+      }),
+      signal: AbortSignal.timeout(6000)
+    });
+
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json().catch(() => null);
+    const places = Array.isArray(data?.places) ? data.places : [];
+
+    return places
+      .map((p: any, idx: number): LiveNearbyPlace | null => {
+        const pLat = p.location?.latitude;
+        const pLng = p.location?.longitude;
+        if (typeof pLat !== "number" || typeof pLng !== "number") return null;
+        const distKm = haversineKm(lat, lng, pLat, pLng);
+        return {
+          id: p.id || `live_place_${idx}`,
+          name: p.displayName?.text || "Unnamed location",
+          type: (p.types?.[0] || placeType).replace(/_/g, " "),
+          category: placeType,
+          distanceKm: Number(distKm.toFixed(2)),
+          distance: formatKm(distKm),
+          latitude: pLat,
+          longitude: pLng,
+          phone: p.nationalPhoneNumber,
+          isAlongRoute: false
+        };
+      })
+      .filter((p: LiveNearbyPlace | null): p is LiveNearbyPlace => p !== null)
+      .sort((a: LiveNearbyPlace, b: LiveNearbyPlace) => a.distanceKm - b.distanceKm);
+  } catch {
+    // Network error, timeout, or malformed response: honestly report zero
+    // results rather than falling back to invented data.
+    return [];
+  }
 }

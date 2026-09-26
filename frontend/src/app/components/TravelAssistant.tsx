@@ -72,6 +72,9 @@ export default function TravelAssistant({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [intelligenceMode, setIntelligenceMode] = useState<"CONNECTED" | "DEMO" | "OFFLINE">("CONNECTED");
+  // Reflects the ACTUAL configured model reported by /api/ai; never a
+  // hardcoded label that could drift from GEMINI_MODEL.
+  const [activeModel, setActiveModel] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -102,6 +105,9 @@ export default function TravelAssistant({
     
     if (assistantMsg.mode) {
       setIntelligenceMode(assistantMsg.mode);
+    }
+    if (assistantMsg.model) {
+      setActiveModel(assistantMsg.model);
     }
 
     // Inspect if nearby places tool executed and sync with map
@@ -146,7 +152,7 @@ export default function TravelAssistant({
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className={`h-1.5 w-1.5 rounded-full ${intelligenceMode === "CONNECTED" ? "bg-emerald-500" : "bg-amber-500"}`} />
               <span className="text-[10px] font-bold text-(--muted-foreground) uppercase tracking-wider">
-                {intelligenceMode === "CONNECTED" ? "Gemini 1.5 Flash + Tools" : "Deterministic Safety Engine"}
+                {intelligenceMode === "CONNECTED" ? (activeModel || "Gemini + Tools") : "Deterministic Safety Engine"}
               </span>
             </div>
           </div>

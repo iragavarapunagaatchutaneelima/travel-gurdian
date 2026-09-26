@@ -24,7 +24,8 @@ export async function queryTravelAssistant(
       toolCalls: data.toolCalls || [],
       toolResults: data.toolResults || [],
       proposals: data.proposals || [],
-      mode: data.mode || "DEMO"
+      mode: data.mode || "DEMO",
+      model: data.model
     };
   } catch (err) {
     console.warn("Travel Assistant fetch error (offline or server error):", err);

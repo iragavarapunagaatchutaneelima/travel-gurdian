@@ -65,6 +65,7 @@ export interface AssistantMessage {
   toolResults?: ToolExecutionResult[];
   proposals?: ActionProposal[];
   mode?: "CONNECTED" | "DEMO" | "OFFLINE";
+  model?: string;
 }
 
 export interface LiveTravelContext {

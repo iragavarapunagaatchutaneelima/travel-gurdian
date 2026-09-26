@@ -488,59 +488,13 @@ export async function searchNearbyPlaces(
       }
     }
   } catch (err) {
-    console.warn("Google Maps Places nearbySearch failed or restricted, falling back to deterministic safe havens:", err);
+    console.warn("Google Maps Places nearbySearch failed or restricted:", err);
   }
 
-  // 2. Deterministic verified safe havens relative to the actual user GPS coordinates
-  // Offsets are strictly pinned around the user's actual (lat, lng) to represent verified local landmarks
-  const seedOffsets: Record<NearbyPlaceResult["category"], Array<{ name: string; dLat: number; dLng: number; address: string; phone?: string }>> = {
-    hospital: [
-      { name: "Emergency Care & Trauma Center", dLat: 0.009, dLng: 0.008, address: "Corridor Medical Zone", phone: "108" },
-      { name: "Apex Multi-Specialty Hospital", dLat: -0.015, dLng: 0.012, address: "Main Highway Hub", phone: "080-25024444" },
-      { name: "Community Health & Emergency Outpost", dLat: 0.021, dLng: -0.011, address: "District Safe Zone", phone: "112" }
-    ],
-    police: [
-      { name: "Highway Police Control Post", dLat: 0.006, dLng: -0.005, address: "Sector Security Checkpoint", phone: "112" },
-      { name: "Central Police Station & Transit Patrol", dLat: -0.018, dLng: -0.014, address: "Highway Junction Road", phone: "100" }
-    ],
-    fuel: [
-      { name: "24/7 Verified Highway Fuel & EV Hub", dLat: 0.011, dLng: 0.014, address: "National Corridor Mile 42" },
-      { name: "Clean Fuel & Travelers Oasis", dLat: -0.008, dLng: -0.009, address: "Outer Ring Service Road" }
-    ],
-    cafe: [
-      { name: "The Safe Haven Traveler's Cafe", dLat: 0.004, dLng: 0.005, address: "Well-lit Transit Square, Ground Floor" },
-      { name: "Brew & Route Artisan Coffee", dLat: -0.007, dLng: 0.006, address: "Commercial Plaza" },
-      { name: "Green Leaf Travelers Lounge & Cafe", dLat: 0.012, dLng: -0.008, address: "Highway Gateway Mall" }
-    ],
-    rest: [
-      { name: "Travelers Safe Plaza & Rest Stop", dLat: 0.015, dLng: 0.018, address: "Corridor Rest Zone, 24/7 CCTV" },
-      { name: "Comfort Highway Plaza", dLat: -0.022, dLng: 0.019, address: "Bypass Junction Rest Facility" }
-    ],
-    general: [
-      { name: "Travelers Assistance Hub", dLat: 0.008, dLng: 0.007, address: "Regional Transport Hub" }
-    ]
-  };
-
-  const pool = seedOffsets[placeCategory] || seedOffsets.general;
-  return pool.map((item, index) => {
-    const itemLat = lat + item.dLat;
-    const itemLng = lng + item.dLng;
-    const distM = haversineDistMeters(lat, lng, itemLat, itemLng);
-
-    return {
-      id: `verified_${placeCategory}_${index}`,
-      name: item.name,
-      type: placeCategory.charAt(0).toUpperCase() + placeCategory.slice(1),
-      category: placeCategory,
-      distanceMeters: Math.round(distM),
-      distanceFormatted: formatDistance(distM),
-      address: item.address,
-      latitude: Number(itemLat.toFixed(5)),
-      longitude: Number(itemLng.toFixed(5)),
-      rating: 4.6,
-      phone: item.phone,
-      openNow: true
-    };
-  }).sort((a, b) => a.distanceMeters - b.distanceMeters);
+  // Google returned nothing (or is unavailable/restricted right now). Return
+  // an honest empty result -- NEVER invent hospitals, fuel stations, cafes,
+  // or any other place. A fabricated "verified" business with a made-up
+  // phone number and coordinate offset is worse than no answer at all.
+  return [];
 }
 

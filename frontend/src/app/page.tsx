@@ -47,7 +47,7 @@ export default function LandingScreen() {
     {
       icon: Bot,
       title: "AI Guardian Assistant",
-      tag: "Gemini 1.5 Flash + Tools",
+      tag: "Gemini + Tools",
       desc: "Synchronized chat & map assistant that queries actual GPS coordinates to find verified safe havens without hallucinations.",
       href: "/assist",
       cta: "Open AI Assistant",
