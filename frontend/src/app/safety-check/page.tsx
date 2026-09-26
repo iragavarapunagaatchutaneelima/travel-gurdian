@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
+import SafetyCheckDemoMode from "../components/SafetyCheckDemoMode";
 import { useSafetyCheckIn } from "../../hooks/useSafetyCheckIn";
 import { useSharedLocation } from "../../hooks/useSharedLocation";
 import { getTrustedContacts, refreshTrustedContactsFromBackend } from "../../services/trustedContactService";
@@ -102,6 +103,10 @@ export default function SafetyCheckPage() {
           onRequestHelp={requestHelp}
           onCancel={cancelCheckIn}
         />
+
+        <div className="mt-6">
+          <SafetyCheckDemoMode primaryContact={primaryContact} />
+        </div>
 
         <div className="mt-6 p-4 rounded-2xl bg-surface border border-border text-xs text-(--muted-foreground) space-y-2">
           <div className="flex items-center gap-2 text-foreground font-bold text-xs">
