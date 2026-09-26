@@ -9,7 +9,7 @@
     "start": "npm --prefix frontend start",
     "lint": "npm --prefix frontend run lint",
     "typecheck": "npm --prefix frontend run typecheck",
-    "test:frontend": "npm --prefix frontend exec tsx src/scripts/testNavigation.ts && npm --prefix frontend exec tsx src/scripts/testNavigationAudit.ts && npm --prefix frontend exec tsx src/scripts/testGeminiTools.ts && npm --prefix frontend exec tsx src/scripts/testOfflineGuardian.ts && npm --prefix frontend exec tsx src/scripts/testOfflineVectorTiles.ts && npm --prefix frontend exec tsx src/scripts/testSafetyCheckIn.ts && npm --prefix frontend exec tsx src/scripts/testProductionHardening.ts",
+    "test:frontend": "npm --prefix frontend run test",
     "test:backend": "powershell -Command \"cd backend; .\\venv\\Scripts\\python.exe -m unittest discover tests\""
   }
 }

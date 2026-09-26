@@ -201,20 +201,25 @@ sequenceDiagram
 | Variable | Description | Exposure |
 |---|---|---|
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Public Google Maps JavaScript API key | Public |
-| `NEXT_PUBLIC_API_URL` | Base URL pointing to FastAPI backend | Public |
-| `GEMINI_API_KEY` | Google AI Studio API key for Gemini 1.5 Flash | Server-Only |
-| `GEMINI_MODEL` | Target Gemini model (`gemini-1.5-flash`) | Server-Only |
+| `GOOGLE_ROUTES_API_KEY` | Server-only Routes API key used by `/api/routes/compute` (falls back to the key above if unset) | Server-Only |
+| `GEMINI_API_KEY` | Google AI Studio API key for the AI Guardian assistant | Server-Only |
+| `GEMINI_MODEL` | Target Gemini model, e.g. `gemini-2.5-flash` (the UI always displays whatever this is actually set to) | Server-Only |
+| `BACKEND_API_URL` | Real FastAPI backend origin. The browser never talks to this directly -- Next.js proxies same-origin `/backend-api/*` requests to it (see `next.config.ts`), which is also what keeps the CSP `connect-src` from needing to name the backend host. | Server-Only |
 
 ### Backend (`backend/.env`)
 | Variable | Description | Exposure |
 |---|---|---|
 | `DATABASE_URL` | SQLAlchemy database connection string | Private |
+| `CORS_ORIGINS` | JSON array of allowed frontend origins | Private |
 | `EXOTEL_ACCOUNT_SID` | Exotel Account SID | Private |
 | `EXOTEL_API_KEY` | Exotel API Key | Private |
 | `EXOTEL_API_TOKEN` | Exotel API Token | Private |
 | `EXOTEL_SUBDOMAIN` | Exotel cluster subdomain (e.g., `api.exotel.com`) | Private |
-| `EXOTEL_CALLER_ID` | Approved Exotel virtual number / ExoPhone | Private |
-| `EXOTEL_APP_ID` | Flow App ID for automated outbound emergency calls | Private |
+| `EXOTEL_EXOPHONE` | Approved Exotel virtual number (Caller ID), required for live calls | Private |
+| `EXOTEL_APP_ID` | Optional ExoML Voice App ID for automated outbound emergency calls | Private |
+| `EXOTEL_DRY_RUN` | **Defaults to `true`.** While true, every Exotel SMS/call request is fully built and validated but never actually sent; the response reports `status: "dry_run"`. Set to `false` only once real, KYC-approved credentials and an ExoPhone are configured. | Private |
+| `SEED_RESET` | Defaults to `false`. When true, `python seed.py` wipes and re-inserts demo destinations/alerts. Emergency contacts and check-ins are never touched by seeding regardless. | Private |
+| `DISABLE_API_DOCS` | Defaults to `false`. Set to `true` in production to hide `/docs`, `/redoc`, `/openapi.json`. | Private |
 
 *(Never commit actual secret values or credentials to Git).*
 

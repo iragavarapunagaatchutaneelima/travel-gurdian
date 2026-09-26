@@ -2,6 +2,25 @@
 
 This document provides setup instructions and production deployment guidelines for integrating Exotel emergency SMS and outbound voice calls into Travel Guardian.
 
+> **Dry-run by default.** `EXOTEL_DRY_RUN` defaults to `true`. While it is
+> true, every SMS/call request is fully built and validated (phone
+> normalization, credential checks, request construction) but **never sent
+> over the network** -- the response reports `status: "dry_run"`, never
+> `"sent"`/`"initiated"`. Set `EXOTEL_DRY_RUN=false` only once you have real,
+> KYC-approved credentials and a provisioned ExoPhone. Never flip this to
+> `false` in a shared/demo/CI environment.
+>
+> **Primary contact resolution is deterministic.** Each `EmergencyContact`
+> row has an `is_primary` flag; exactly one enabled contact per device is
+> primary (auto-assigned to the first contact created, re-assigned
+> automatically if the primary is deleted or disabled). Dispatch always
+> targets that contact -- never "whichever row the database happens to
+> return first".
+>
+> **Contacts are scoped per device**, not to a single shared "default_user".
+> Each browser gets its own `tg_device_id` cookie (see
+> `backend/app/core/identity.py`) and only ever sees its own contacts.
+
 ---
 
 ## 1. Overview & Architecture
