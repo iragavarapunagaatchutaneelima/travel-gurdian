@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCrossOriginRequest, isRateLimited, getClientIp } from "../../../../services/apiRouteGuard";
 
 // ---------------------------------------------------------------------------
 // Server-side security hardening for the Google Routes API proxy.
@@ -6,30 +7,12 @@ import { NextResponse } from "next/server";
 // This endpoint spends real Google Cloud quota on every call, so it must not
 // behave as an open relay: it validates the request shape strictly, never
 // trusts client-supplied headers to satisfy Google's own key restrictions,
-// and applies a simple best-effort rate limit per source IP.
+// and applies a simple best-effort rate limit per source IP (see
+// services/apiRouteGuard.ts, shared with /api/ai).
 
 const ALLOWED_TRAVEL_MODES = new Set(["DRIVE", "WALK", "TWO_WHEELER", "Car", "Walk", "Bike"]);
 const MAX_REQUESTS_PER_WINDOW = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-
-// In-memory, best-effort limiter (per Node process). Not a substitute for a
-// shared store in a multi-instance deployment, but meaningfully raises the
-// cost of casual abuse without adding external infrastructure.
-const requestLog = new Map<string, number[]>();
-
-function isRateLimited(key: string): boolean {
-  const now = Date.now();
-  const timestamps = (requestLog.get(key) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
-  timestamps.push(now);
-  requestLog.set(key, timestamps);
-  // Bound memory: drop stale keys occasionally.
-  if (requestLog.size > 5000) {
-    for (const [k, v] of requestLog) {
-      if (v.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) requestLog.delete(k);
-    }
-  }
-  return timestamps.length > MAX_REQUESTS_PER_WINDOW;
-}
 
 function isValidLatLng(lat: unknown, lng: unknown): boolean {
   const la = Number(lat);
@@ -51,18 +34,12 @@ export async function POST(req: Request) {
     // 1. Best-effort same-app-origin check. A request with no Origin/Referer
     // at all is allowed (some legitimate same-origin fetches omit it), but a
     // request that explicitly names a DIFFERENT origin is rejected outright.
-    const selfOrigin = new URL(req.url).origin;
-    const originHeader = req.headers.get("origin");
-    const refererHeader = req.headers.get("referer");
-    const claimedOrigin = originHeader || (refererHeader ? new URL(refererHeader).origin : null);
-    if (claimedOrigin && claimedOrigin !== selfOrigin) {
+    if (isCrossOriginRequest(req)) {
       return NextResponse.json({ error: "Requests from this origin are not permitted." }, { status: 403 });
     }
 
     // 2. Best-effort rate limit per source IP.
-    const forwardedFor = req.headers.get("x-forwarded-for");
-    const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : "unknown";
-    if (isRateLimited(clientIp)) {
+    if (isRateLimited("routes-compute", getClientIp(req), MAX_REQUESTS_PER_WINDOW, RATE_LIMIT_WINDOW_MS)) {
       return NextResponse.json({ error: "Too many route requests. Please slow down." }, { status: 429 });
     }
 
@@ -173,7 +150,7 @@ export async function POST(req: Request) {
     // client's own Referer header, which would let any caller spoof
     // whatever origin the key happens to allow.
     if (!dedicatedServerKey) {
-      headers["Referer"] = selfOrigin;
+      headers["Referer"] = new URL(req.url).origin;
     }
 
     const googleResponse = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {

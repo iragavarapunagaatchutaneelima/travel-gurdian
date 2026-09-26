@@ -5,15 +5,31 @@ import {
   sanitizeInput,
   fetchLiveNearbyPlaces
 } from "../../../services/geminiToolRouter";
-import { 
-  ToolCallRequest, 
-  ToolExecutionResult, 
-  ActionProposal, 
-  LiveTravelContext 
+import { isCrossOriginRequest, isRateLimited, getClientIp } from "../../../services/apiRouteGuard";
+import {
+  ToolCallRequest,
+  ToolExecutionResult,
+  ActionProposal,
+  LiveTravelContext
 } from "../../../types/gemini";
+
+// This endpoint spends real Gemini/Places quota on every call, so it needs
+// the same baseline hardening as /api/routes/compute: reject requests that
+// explicitly claim a different origin, and rate-limit per source IP so it
+// can't be turned into a free, unmetered relay to those APIs.
+const AI_RATE_LIMIT_MAX_REQUESTS = 20;
+const AI_RATE_LIMIT_WINDOW_MS = 60_000;
 
 export async function POST(req: Request) {
   try {
+    if (isCrossOriginRequest(req)) {
+      return NextResponse.json({ error: "Requests from this origin are not permitted." }, { status: 403 });
+    }
+
+    if (isRateLimited("ai", getClientIp(req), AI_RATE_LIMIT_MAX_REQUESTS, AI_RATE_LIMIT_WINDOW_MS)) {
+      return NextResponse.json({ error: "Too many requests. Please wait a moment before trying again." }, { status: 429 });
+    }
+
     const body = await req.json();
     const rawPrompt = body.prompt;
     const context: LiveTravelContext = body.context || {};
