@@ -1,6 +1,7 @@
 // TRAVEL GUARDIAN SERVICE WORKER (PHASE 8 & 14)
-// Cache Version: travel-guardian-v10
-const CACHE_VERSION = 'travel-guardian-v10';
+// Cache Version: travel-guardian-v11 -- fixes cross-origin requests (Google
+// Maps tiles/markers) being wrongly intercepted and turned into broken images.
+const CACHE_VERSION = 'travel-guardian-v11';
 const STATIC_CACHE = `travel-guardian-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `travel-guardian-runtime-${CACHE_VERSION}`;
 
@@ -60,6 +61,20 @@ self.addEventListener('fetch', (event) => {
 
   // 1. Skip non-GET requests and browser extensions
   if (event.request.method !== 'GET' || !url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // 1b. Never intercept cross-origin requests (Google Maps tiles/marker
+  // images, Places/Routes/Gemini APIs, fonts, etc.). This service worker's
+  // job is caching OUR app shell, not third-party resources. Intercepting
+  // them turns a harmless, routine cancellation -- e.g. a map tile request
+  // the browser drops because the user panned/zoomed away before it
+  // finished -- into a permanently broken image: this SW's fetch() then
+  // rejects, the .catch() below returns a synthetic empty 408 response
+  // instead of letting the request fail/cancel naturally, and the browser
+  // renders that 408 as a broken-image icon where a silently dropped
+  // request would have shown nothing wrong at all.
+  if (url.origin !== self.location.origin) {
     return;
   }
 
