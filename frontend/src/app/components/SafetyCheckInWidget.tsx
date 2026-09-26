@@ -36,6 +36,7 @@ interface SafetyCheckInWidgetProps {
   graceSecondsRemaining: number;
   lastKnownSnapshot: LocationSnapshot | null;
   escalationResult: NotificationResult | null;
+  backendSyncError?: string | null;
   trustedContacts: TrustedContact[];
   onStart: (cfg?: Partial<SafetyCheckInConfig>) => void;
   onConfirmSafe: () => void;
@@ -58,6 +59,7 @@ export default function SafetyCheckInWidget({
   graceSecondsRemaining,
   lastKnownSnapshot,
   escalationResult,
+  backendSyncError,
   trustedContacts,
   onStart,
   onConfirmSafe,
@@ -270,6 +272,12 @@ export default function SafetyCheckInWidget({
   // 3. COMPACT HUD INDICATOR (During active navigation / idle)
   return (
     <>
+      {backendSyncError && (
+        <div className="rounded-2xl p-3 mb-2 bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 text-xs font-bold flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{backendSyncError}</span>
+        </div>
+      )}
       <div
         className={`rounded-2xl p-3.5 shadow-sm space-y-2 bg-surface border border-border text-left ${className}`}
         style={{ fontFamily: "'Poppins', sans-serif" }}

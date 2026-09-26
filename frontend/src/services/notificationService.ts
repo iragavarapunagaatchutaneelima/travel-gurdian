@@ -6,6 +6,7 @@ import {
   TrustedContact 
 } from "../types/safetyCheckIn";
 import { NavigationPosition } from "../types/navigation";
+import { TravelGuardianAPI } from "./api";
 
 // Set of cycle IDs that have already been escalated to prevent duplicate alerts
 const escalatedCycleIds = new Set<string>();
@@ -66,9 +67,10 @@ export function formatAlertMessage(payload: EscalationAlertPayload): string {
 }
 
 /**
- * Sends or simulates trusted contact alert.
- * Returns truthful providerStatus: "NOT_CONFIGURED" or "DEV_SIMULATED".
- * Never claims fake "SENT" unless a real provider integration exists.
+ * Sends a trusted contact alert THROUGH THE REAL BACKEND (which resolves the
+ * backend's own primary trusted contact and dispatches via Exotel, honoring
+ * EXOTEL_DRY_RUN). This never fabricates a "SENT" result client-side: the
+ * providerStatus returned always reflects what the backend actually did.
  */
 export async function sendTrustedContactAlert(
   payload: EscalationAlertPayload
@@ -90,31 +92,48 @@ export async function sendTrustedContactAlert(
   const activeRecipients = payload.recipients.filter(r => r.enabled);
   const formattedMessage = formatAlertMessage(payload);
 
-  // Check if real SMS environment variables exist (server-side check simulation)
-  const isRealProviderConfigured = false; // Twilio / SNS not configured in this environment
+  try {
+    const res = await TravelGuardianAPI.notifyTrustedContact({
+      latitude: payload.locationSnapshot?.latitude,
+      longitude: payload.locationSnapshot?.longitude,
+      location_name: payload.locationSnapshot?.formattedText,
+      custom_message: payload.userMessage || formattedMessage
+    });
 
-  const providerStatus: NotificationProviderStatus = isRealProviderConfigured 
-    ? "SENT" 
-    : "NOT_CONFIGURED";
+    let providerStatus: NotificationProviderStatus;
+    if (res.overall_status === "dry_run") {
+      providerStatus = "DRY_RUN";
+    } else if (res.success) {
+      providerStatus = "SENT";
+    } else {
+      providerStatus = "FAILED";
+    }
 
-  const statusExplanation = isRealProviderConfigured
-    ? "Live SMS transmitted via gateway."
-    : "SMS gateway not configured in environment. Alert prepared truthfully for local review (NOT_CONFIGURED).";
-
-  const result: NotificationResult = {
-    alertId: payload.alertId,
-    providerStatus,
-    message: `${statusExplanation}\n${formattedMessage}`,
-    timestamp: Date.now(),
-    recipientCount: activeRecipients.length,
-    recipients: activeRecipients.map(r => ({
-      contactId: r.id,
-      phone: r.phone,
-      status: providerStatus
-    }))
-  };
-
-  return result;
+    return {
+      alertId: payload.alertId,
+      providerStatus,
+      message: res.safe_message || res.message || formattedMessage,
+      timestamp: Date.now(),
+      recipientCount: activeRecipients.length,
+      recipients: activeRecipients.map(r => ({
+        contactId: r.id,
+        phone: r.phone,
+        status: providerStatus
+      }))
+    };
+  } catch (err: any) {
+    // Backend unreachable or no trusted contact configured: report honestly,
+    // never as SENT.
+    const detail = err?.detail || err?.message || "Backend emergency service unreachable.";
+    return {
+      alertId: payload.alertId,
+      providerStatus: "FAILED",
+      message: `Emergency alert could not be dispatched: ${detail}. Please dial 112 directly if in immediate danger.`,
+      timestamp: Date.now(),
+      recipientCount: 0,
+      recipients: []
+    };
+  }
 }
 
 /**

@@ -203,6 +203,7 @@ function LivingMapContent() {
     graceSecondsRemaining: checkInGraceSecondsRemaining,
     lastKnownSnapshot: checkInLocationSnapshot,
     escalationResult: checkInEscalationResult,
+    backendSyncError: checkInBackendSyncError,
     startCheckIn,
     confirmSafety,
     requestHelp,
@@ -1250,6 +1251,7 @@ function LivingMapContent() {
               graceSecondsRemaining={checkInGraceSecondsRemaining}
               lastKnownSnapshot={checkInLocationSnapshot}
               escalationResult={checkInEscalationResult}
+              backendSyncError={checkInBackendSyncError}
               trustedContacts={trustedContacts}
               onStart={startCheckIn}
               onConfirmSafe={confirmSafety}

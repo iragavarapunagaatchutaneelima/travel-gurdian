@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+// Server-only backend target for the same-origin API proxy (see rewrites() below).
+// Never exposed to the browser bundle because it is read only inside next.config.ts
+// and the rewrite destination, both of which execute on the Next.js server.
+const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://127.0.0.1:8000/api";
+
 const securityHeaders = [
   {
     key: "X-Content-Type-Options",
@@ -36,9 +41,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   productionBrowserSourceMaps: false, // Security: Do not expose raw server/client source maps in production
-  typescript: {
-    ignoreBuildErrors: true, // Type safety verified separately via `tsc --noEmit`
-  },
   experimental: {
     cpus: 1,
   },
@@ -47,6 +49,19 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+    ];
+  },
+  // Same-origin proxy to the FastAPI backend. The browser only ever talks to
+  // /backend-api/* on its own origin, so the strict CSP connect-src ('self')
+  // does not need to name the backend host at all, in dev OR production.
+  // The real backend location (BACKEND_API_URL) is a server-only env var and
+  // is never sent to the browser.
+  async rewrites() {
+    return [
+      {
+        source: "/backend-api/:path*",
+        destination: `${BACKEND_API_URL.replace(/\/$/, "")}/:path*`,
       },
     ];
   },

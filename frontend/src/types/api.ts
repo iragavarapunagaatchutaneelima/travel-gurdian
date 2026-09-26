@@ -113,9 +113,9 @@ export interface SOSResponse {
   latitude: number;
   longitude: number;
   nearest_havens: SafeHaven[];
-  sms_status?: "sent" | "failed" | "pending" | "throttled" | "skipped";
-  call_status?: "initiated" | "failed" | "pending" | "throttled" | "skipped";
-  overall_status?: "completed" | "partially_completed" | "failed" | "pending" | "throttled" | "no_trusted_contact";
+  sms_status?: "sent" | "failed" | "pending" | "throttled" | "skipped" | "dry_run";
+  call_status?: "initiated" | "failed" | "pending" | "throttled" | "skipped" | "dry_run";
+  overall_status?: "completed" | "partially_completed" | "failed" | "pending" | "throttled" | "no_trusted_contact" | "dry_run";
   recipient_name?: string;
   recipient_phone_masked?: string;
   transaction_id?: string | null;
@@ -137,7 +137,7 @@ export interface EmergencyActionParams {
 
 export interface EmergencySMSResponse {
   success: boolean;
-  status: "sent" | "failed" | "pending";
+  status: "sent" | "failed" | "pending" | "dry_run";
   message: string;
   safe_message?: string;
   recipient_name?: string;
@@ -148,7 +148,7 @@ export interface EmergencySMSResponse {
 
 export interface EmergencyCallResponse {
   success: boolean;
-  status: "initiated" | "failed" | "pending";
+  status: "initiated" | "failed" | "pending" | "dry_run";
   message: string;
   safe_message?: string;
   recipient_name?: string;
@@ -159,9 +159,9 @@ export interface EmergencyCallResponse {
 
 export interface EmergencyNotificationResponse {
   success: boolean;
-  overall_status: "completed" | "partially_completed" | "failed" | "pending";
-  sms_status: "sent" | "failed" | "pending";
-  call_status: "initiated" | "failed" | "pending";
+  overall_status: "completed" | "partially_completed" | "failed" | "pending" | "dry_run";
+  sms_status: "sent" | "failed" | "pending" | "skipped" | "dry_run";
+  call_status: "initiated" | "failed" | "pending" | "skipped" | "dry_run";
   message: string;
   safe_message?: string;
   recipient_name?: string;

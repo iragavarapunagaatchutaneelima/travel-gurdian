@@ -54,7 +54,11 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
   const [completedCycles, setCompletedCycles] = useState<CheckInCycle[]>([]);
   const [lastConfirmedAt, setLastConfirmedAt] = useState<number | null>(null);
   const [escalationResult, setEscalationResult] = useState<NotificationResult | null>(null);
-  
+  // Truthful backend-sync state: the Dead-Man's-Switch timer only actually
+  // protects the user once the backend has confirmed it. This is surfaced
+  // to the UI so it never shows an armed countdown that isn't really armed.
+  const [backendSyncError, setBackendSyncError] = useState<string | null>(null);
+
   // Real-time remaining seconds derived from absolute timestamp
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [graceSecondsRemaining, setGraceSecondsRemaining] = useState<number>(0);
@@ -210,7 +214,7 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
   /**
    * Starts a new check-in session with specified or current config
    */
-  const startCheckIn = useCallback((customConfig?: Partial<SafetyCheckInConfig>) => {
+  const startCheckIn = useCallback(async (customConfig?: Partial<SafetyCheckInConfig>) => {
     const activeConfig: SafetyCheckInConfig = {
       ...configRef.current,
       ...customConfig,
@@ -218,12 +222,33 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     };
     setConfig(activeConfig);
     clearEscalationHistory();
+    setBackendSyncError(null);
 
     const now = Date.now();
     const intervalMs = (activeConfig.customIntervalMinutes || activeConfig.intervalMinutes) * 60 * 1000;
     const gracePeriodMs = activeConfig.gracePeriodMinutes * 60 * 1000;
     const scheduledAt = now + intervalMs;
     const graceEndsAt = scheduledAt + gracePeriodMs;
+
+    // Register the Dead-Man's Switch timer on the authoritative backend
+    // FIRST. Only if the backend actually confirms it do we show the timer
+    // as ACTIVE -- a countdown the backend never armed would be a fake
+    // safety net.
+    const pos = positionRef.current;
+    try {
+      await TravelGuardianAPI.setCheckin(
+        new Date(graceEndsAt).toISOString(),
+        destinationName ? `Destination: ${destinationName}` : undefined,
+        pos?.latitude,
+        pos?.longitude
+      );
+    } catch (err: any) {
+      const detail = err?.detail || err?.message || "Backend unavailable.";
+      setBackendSyncError(`Safety check-in could NOT be armed: ${detail} Please retry once connectivity is restored.`);
+      setStatus("DISABLED");
+      setActiveCycle(null);
+      return;
+    }
 
     const initialCycle: CheckInCycle = {
       cycleId: `cycle_1_${now}`,
@@ -241,25 +266,40 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     setStatus("ACTIVE");
     setSecondsRemaining(Math.ceil(intervalMs / 1000));
     setGraceSecondsRemaining(Math.ceil(gracePeriodMs / 1000));
-
-    // Register Dead-Man's Switch timer on authoritative backend
-    const pos = positionRef.current;
-    TravelGuardianAPI.setCheckin(
-      new Date(graceEndsAt).toISOString(),
-      destinationName ? `Destination: ${destinationName}` : undefined,
-      pos?.latitude,
-      pos?.longitude
-    ).catch(err => console.warn("Backend checkin sync failed, using offline fallback:", err));
   }, [destinationName]);
 
   /**
    * User confirms safety ("I'M SAFE")
    * Resets nextCheckInAt, increments cycle count, clears reminders
    */
-  const confirmSafety = useCallback(() => {
+  const confirmSafety = useCallback(async () => {
     const now = Date.now();
     const current = activeCycleRef.current;
     const currentCfg = configRef.current;
+    setBackendSyncError(null);
+
+    const intervalMs = (currentCfg.customIntervalMinutes || currentCfg.intervalMinutes) * 60 * 1000;
+    const gracePeriodMs = currentCfg.gracePeriodMinutes * 60 * 1000;
+    const scheduledAt = now + intervalMs;
+    const graceEndsAt = scheduledAt + gracePeriodMs;
+
+    // Confirm safety on the backend and register the next cycle's timer
+    // BEFORE reflecting either in local state. A failed confirm must not
+    // silently show a fresh "armed" countdown the backend never registered.
+    try {
+      await TravelGuardianAPI.confirmCheckin();
+      const pos = positionRef.current;
+      await TravelGuardianAPI.setCheckin(
+        new Date(graceEndsAt).toISOString(),
+        destinationName ? `Destination: ${destinationName}` : undefined,
+        pos?.latitude,
+        pos?.longitude
+      );
+    } catch (err: any) {
+      const detail = err?.detail || err?.message || "Backend unavailable.";
+      setBackendSyncError(`Could not confirm safety with the server: ${detail} Your previous timer may still be active on the backend -- retry, or check the Emergency portal.`);
+      return;
+    }
 
     if (current) {
       const finishedCycle: CheckInCycle = {
@@ -271,11 +311,6 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     }
 
     const nextCycleNum = (current?.cycleNumber || 1) + 1;
-    const intervalMs = (currentCfg.customIntervalMinutes || currentCfg.intervalMinutes) * 60 * 1000;
-    const gracePeriodMs = currentCfg.gracePeriodMinutes * 60 * 1000;
-    const scheduledAt = now + intervalMs;
-    const graceEndsAt = scheduledAt + gracePeriodMs;
-
     const nextCycle: CheckInCycle = {
       cycleId: `cycle_${nextCycleNum}_${now}`,
       cycleNumber: nextCycleNum,
@@ -291,19 +326,6 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     setStatus("ACTIVE");
     setSecondsRemaining(Math.ceil(intervalMs / 1000));
     setGraceSecondsRemaining(Math.ceil(gracePeriodMs / 1000));
-
-    // Confirm safety on backend, completing the prior timer and registering the new cycle
-    TravelGuardianAPI.confirmCheckin()
-      .then(() => {
-        const pos = positionRef.current;
-        return TravelGuardianAPI.setCheckin(
-          new Date(graceEndsAt).toISOString(),
-          destinationName ? `Destination: ${destinationName}` : undefined,
-          pos?.latitude,
-          pos?.longitude
-        );
-      })
-      .catch(err => console.warn("Backend confirm checkin failed, using offline state:", err));
   }, [destinationName]);
 
   /**
@@ -370,6 +392,7 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     secondsRemaining,
     graceSecondsRemaining,
     lastKnownSnapshot,
+    backendSyncError,
     startCheckIn,
     confirmSafety,
     requestHelp,

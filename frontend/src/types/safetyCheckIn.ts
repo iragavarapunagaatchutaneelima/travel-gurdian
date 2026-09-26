@@ -9,10 +9,11 @@ export type SafetyCheckInStatus =
   | "RESOLVED"
   | "CANCELLED";
 
-export type NotificationProviderStatus = 
+export type NotificationProviderStatus =
   | "SENT"
   | "FAILED"
   | "NOT_CONFIGURED"
+  | "DRY_RUN"
   | "DEV_SIMULATED";
 
 export interface TrustedContact {
