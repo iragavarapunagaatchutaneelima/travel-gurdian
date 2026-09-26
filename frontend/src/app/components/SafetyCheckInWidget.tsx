@@ -329,6 +329,13 @@ export default function SafetyCheckInWidget({
               <span>I'm Safe</span>
             </button>
             <button
+              onClick={onCancel}
+              className="py-2 px-3 rounded-xl bg-elevated-surface border border-border text-(--muted-foreground) hover:text-red-600 hover:border-red-500/40 font-bold text-xs transition-all"
+              title="Stop monitoring"
+            >
+              Stop
+            </button>
+            <button
               onClick={() => setShowConfigModal(true)}
               className="p-2 rounded-xl bg-elevated-surface border border-border text-(--muted-foreground) hover:text-foreground transition-all"
               title="Settings"
@@ -457,21 +464,37 @@ export default function SafetyCheckInWidget({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setShowConfigModal(false)}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-(--muted-foreground) hover:bg-elevated-surface"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleStartCustom}
-                className="px-5 py-2.5 rounded-xl bg-(--primary) text-white text-xs font-extrabold shadow-md hover:opacity-90 transition-all"
-              >
-                {status === "ACTIVE" ? "Update Settings" : "Start Monitoring"}
-              </button>
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-border">
+              {status === "ACTIVE" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfigModal(false);
+                    onCancel();
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-500/10"
+                >
+                  Stop Monitoring
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-(--muted-foreground) hover:bg-elevated-surface"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartCustom}
+                  className="px-5 py-2.5 rounded-xl bg-(--primary) text-white text-xs font-extrabold shadow-md hover:opacity-90 transition-all"
+                >
+                  {status === "ACTIVE" ? "Update Settings" : "Start Monitoring"}
+                </button>
+              </div>
             </div>
 
           </div>

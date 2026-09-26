@@ -561,20 +561,35 @@ export async function fetchLiveNearbyPlaces(
   lng: number,
   placeType: string,
   apiKey: string | undefined,
-  radiusMeters: number = 6000
+  radiusMeters: number = 6000,
+  // Most deployments only ever configure NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+  // which is (correctly) HTTP-referrer restricted for browser use. A
+  // server-to-server fetch like this one sends NO Referer header at all,
+  // so Google rejects it outright with 403 API_KEY_HTTP_REFERRER_BLOCKED --
+  // this silently made every "find X near me" query return zero results,
+  // indistinguishable from "Google genuinely has nothing nearby". When no
+  // dedicated (server-only, non-referrer-restricted) GOOGLE_ROUTES_API_KEY
+  // is configured, we send a Referer matching an origin the shared key
+  // already allows (the app's own origin), exactly like /api/routes/compute
+  // already does for the same reason.
+  refererOrigin?: string
 ): Promise<LiveNearbyPlace[]> {
   if (!apiKey) return [];
 
   const includedTypes = PLACE_TYPE_MAP[placeType.toLowerCase()] || PLACE_TYPE_MAP.all;
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.nationalPhoneNumber,places.types"
+    };
+    if (refererOrigin) {
+      headers["Referer"] = refererOrigin;
+    }
     const res = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.nationalPhoneNumber,places.types"
-      },
+      headers,
       body: JSON.stringify({
         includedTypes,
         maxResultCount: 8,
@@ -589,6 +604,11 @@ export async function fetchLiveNearbyPlaces(
     });
 
     if (!res.ok) {
+      // Log the real reason (e.g. referrer-blocked key, API not enabled) so
+      // "no places found" failures are debuggable instead of silently
+      // looking identical to a genuine zero-result area.
+      const errBody = await res.text().catch(() => "");
+      console.warn(`fetchLiveNearbyPlaces: Places API returned ${res.status}: ${errBody.slice(0, 300)}`);
       return [];
     }
 

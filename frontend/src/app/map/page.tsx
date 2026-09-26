@@ -27,28 +27,90 @@ import jsPDF from "jspdf";
 
 export const dynamic = "force-dynamic";
 
+// The header/sidebar/bottom-nav "Live Map" links all point at a bare `/map`
+// with no query string (they can't know what you're currently navigating).
+// Without this, every one of those clicks reset the page to a hardcoded
+// Chennai->Bangalore demo route, discarding whatever real journey you had
+// open -- reported as "Live Map keeps showing Chennai to Bangalore no
+// matter what I select". We now remember the last REAL route (one that
+// arrived via actual query params, e.g. from Plan Journey) and restore it
+// when /map is opened with no params, instead of silently substituting a
+// different, unrelated demo route.
+const LAST_ROUTE_STORAGE_KEY = "tg_last_map_route";
+
+function readPersistedRouteParams(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(LAST_ROUTE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistRouteParams(params: Record<string, string | null | undefined>) {
+  if (typeof window === "undefined") return;
+  try {
+    const clean: Record<string, string> = {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) clean[k] = v;
+    });
+    localStorage.setItem(LAST_ROUTE_STORAGE_KEY, JSON.stringify(clean));
+  } catch {
+    // Best-effort only; never block rendering on this.
+  }
+}
+
 function LivingMapContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Route parameters
-  const fromLoc = searchParams.get("from") || "chennai";
-  const toLoc = searchParams.get("dest") || "bangalore";
-  const fromName = searchParams.get("fromName");
-  const destName = searchParams.get("destName");
-  const fromLat = searchParams.get("fromLat");
-  const fromLng = searchParams.get("fromLng");
-  const destLat = searchParams.get("destLat");
-  const destLng = searchParams.get("destLng");
-  const fromAddress = searchParams.get("fromAddress");
-  const destAddress = searchParams.get("destAddress");
-  const fromPlaceId = searchParams.get("fromPlaceId");
-  const destPlaceId = searchParams.get("destPlaceId");
-  const travelMode = (searchParams.get("mode") as any) || "Car";
-  const profileParam = (searchParams.get("profile") as TravelerProfile) || "Solo";
-  const priorityParam = (searchParams.get("priority") as RoutePriority) || "Balanced";
+  // Computed once per mount: this component fully remounts every time you
+  // navigate to /map (it's a different route), so a lazy useState/useMemo
+  // initializer is enough -- no effect timing issues.
+  const hasRealUrlParams = searchParams.get("from") !== null || searchParams.get("fromLat") !== null;
+  const [persisted] = useState<Record<string, string>>(() =>
+    hasRealUrlParams ? {} : readPersistedRouteParams()
+  );
+
+  // Route parameters: real URL params win; otherwise fall back to the last
+  // real route this device actually navigated to; only if NEITHER exists
+  // (e.g. the very first visit, ever) do we fall back to the Chennai/
+  // Bangalore starter demo.
+  const fromLoc = searchParams.get("from") || persisted.from || "chennai";
+  const toLoc = searchParams.get("dest") || persisted.dest || "bangalore";
+  const fromName = searchParams.get("fromName") || persisted.fromName || null;
+  const destName = searchParams.get("destName") || persisted.destName || null;
+  const fromLat = searchParams.get("fromLat") || persisted.fromLat || null;
+  const fromLng = searchParams.get("fromLng") || persisted.fromLng || null;
+  const destLat = searchParams.get("destLat") || persisted.destLat || null;
+  const destLng = searchParams.get("destLng") || persisted.destLng || null;
+  const fromAddress = searchParams.get("fromAddress") || persisted.fromAddress || null;
+  const destAddress = searchParams.get("destAddress") || persisted.destAddress || null;
+  const fromPlaceId = searchParams.get("fromPlaceId") || persisted.fromPlaceId || null;
+  const destPlaceId = searchParams.get("destPlaceId") || persisted.destPlaceId || null;
+  const travelMode = (searchParams.get("mode") as any) || (persisted.mode as any) || "Car";
+  const profileParam = (searchParams.get("profile") as TravelerProfile) || (persisted.profile as TravelerProfile) || "Solo";
+  const priorityParam = (searchParams.get("priority") as RoutePriority) || (persisted.priority as RoutePriority) || "Balanced";
+  // routeId and startNav are one-shot navigation instructions, not part of
+  // "the route to remember" -- deliberately never persisted/restored, so
+  // returning to /map later doesn't unexpectedly auto-start navigation.
   const routeIdParam = searchParams.get("routeId") || "A";
   const startNavParam = searchParams.get("startNav") === "true";
+
+  // Persist the current route whenever we actually landed here via real
+  // params (i.e. from Plan Journey, a deep link, etc.), so the NEXT bare
+  // /map visit (from clicking "Live Map" in navigation) restores it.
+  useEffect(() => {
+    if (hasRealUrlParams) {
+      persistRouteParams({
+        from: fromLoc, dest: toLoc, fromName, destName, fromLat, fromLng,
+        destLat, destLng, fromAddress, destAddress, fromPlaceId, destPlaceId,
+        mode: travelMode, profile: profileParam, priority: priorityParam
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRealUrlParams]);
 
   const cleanPlaceId = (id: string | null | undefined): string => {
     if (!id || id === "undefined" || id === "null" || id.trim() === "") return "";

@@ -25,7 +25,11 @@ export async function POST(req: Request) {
     const sanitizedPrompt = sanitizeInput(rawPrompt);
     const geminiKey = process.env.GEMINI_API_KEY;
     const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const placesApiKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const dedicatedPlacesKey = process.env.GOOGLE_ROUTES_API_KEY;
+    const placesApiKey = dedicatedPlacesKey || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    // Only needed when falling back to the shared, referrer-restricted
+    // browser key -- see fetchLiveNearbyPlaces for why.
+    const placesRefererOrigin = dedicatedPlacesKey ? undefined : new URL(req.url).origin;
 
     // "Where am I?" is intercepted HERE, before Gemini ever sees the prompt.
     // Gemini has no dedicated location tool declared, so left to its own
@@ -72,7 +76,7 @@ export async function POST(req: Request) {
       if (res.data?.places?.length > 0) return res;
       if (lat === undefined || lng === undefined) return res;
 
-      const livePlaces = await fetchLiveNearbyPlaces(lat, lng, pType, placesApiKey);
+      const livePlaces = await fetchLiveNearbyPlaces(lat, lng, pType, placesApiKey, 6000, placesRefererOrigin);
       return {
         ...res,
         data: {
@@ -150,7 +154,21 @@ export async function POST(req: Request) {
           if (candidate?.functionCall) {
             const funcName = candidate.functionCall.name;
             const funcArgs = candidate.functionCall.args || {};
-            runTool(funcName, funcArgs);
+
+            // findNearbyPlace must go through resolveNearbyPlaces (route
+            // POIs, then a real live Places lookup) -- NOT the bare
+            // synchronous runTool(), which only ever returns route POIs and
+            // was silently making every live-Gemini "near me" query report
+            // "no results" even when Google genuinely had places nearby.
+            if (funcName === "findNearbyPlace") {
+              const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+              const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+              const res = await resolveNearbyPlaces(funcArgs?.placeType || "all", userLat, userLng);
+              toolCallsExecuted.push({ id: `call_${Date.now()}`, name: funcName, arguments: funcArgs });
+              toolResults.push(res as any);
+            } else {
+              runTool(funcName, funcArgs);
+            }
 
             // Generate contextual summary based on tool result
             let replyText = "";

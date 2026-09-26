@@ -356,9 +356,18 @@ export default function EmergencyScreen() {
         setSmsStatus("sent");
         setAlertMessage({ text: `SMS alert dispatched to ${primaryContact.name} (${primaryContact.phone}). SID: ${res.sid || 'confirmed'}`, type: "success" });
         setActionStatusText("SMS alert dispatched successfully.");
+      } else if (res && res.status === "dry_run") {
+        // Dry-run is a deliberate safety gate, not a failure -- shown as a
+        // warning, never doubled up with "Emergency communication failed".
+        setSmsStatus("failed");
+        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Exotel dispatch is disabled (EXOTEL_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
+        setActionStatusText("Dry-run: SMS validated but not sent.");
       } else {
         setSmsStatus("failed");
-        setAlertMessage({ text: res?.safe_message ? `Emergency communication failed: ${res.safe_message}` : "Emergency communication failed. Please dial 112 directly.", type: "danger" });
+        // res.safe_message is already a complete, user-facing sentence --
+        // it must never be re-wrapped in another "Emergency communication
+        // failed:" prefix (that produced a confusing doubled message).
+        setAlertMessage({ text: res?.safe_message || "Emergency communication failed. Please dial 112 directly.", type: "danger" });
         setActionStatusText("Emergency communication failed.");
       }
     } catch {
@@ -396,9 +405,13 @@ export default function EmergencyScreen() {
         setCallStatus("initiated");
         setAlertMessage({ text: `Emergency call connected to ${primaryContact.name} (${primaryContact.phone}). Call SID: ${res.sid || 'confirmed'}`, type: "success" });
         setActionStatusText("Call initiated successfully.");
+      } else if (res && res.status === "dry_run") {
+        setCallStatus("failed");
+        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Exotel dispatch is disabled (EXOTEL_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
+        setActionStatusText("Dry-run: call validated but not placed.");
       } else {
         setCallStatus("failed");
-        setAlertMessage({ text: res?.safe_message ? `Emergency communication failed: ${res.safe_message}` : "Emergency communication failed. Please dial 112 directly.", type: "danger" });
+        setAlertMessage({ text: res?.safe_message || "Emergency communication failed. Please dial 112 directly.", type: "danger" });
         setActionStatusText("Emergency communication failed.");
       }
     } catch {
@@ -443,9 +456,13 @@ export default function EmergencyScreen() {
         setOverallStatus("partially_completed");
         setAlertMessage({ text: res?.safe_message || "SOS alert partially delivered.", type: "warning" });
         setActionStatusText("Partial delivery completed.");
+      } else if (res && res.overall_status === "dry_run") {
+        setOverallStatus("failed");
+        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Exotel dispatch is disabled (EXOTEL_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
+        setActionStatusText("Dry-run: SOS validated but not sent.");
       } else {
         setOverallStatus("failed");
-        setAlertMessage({ text: res?.safe_message ? `Emergency communication failed: ${res.safe_message}` : "Emergency communication failed. Please call 112 directly.", type: "danger" });
+        setAlertMessage({ text: res?.safe_message || "Emergency communication failed. Please call 112 directly.", type: "danger" });
         setActionStatusText("Emergency communication failed.");
       }
     } catch {
