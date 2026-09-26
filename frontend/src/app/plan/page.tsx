@@ -103,28 +103,46 @@ export default function PlanJourneyScreen() {
     }
   };
 
-  const handleSelectRoute = (routeId: string) => {
+  const navigateToMap = (routeId: string, startNav: boolean = false) => {
     if (!origin || !destination) return;
 
-    const query = new URLSearchParams({
-      from: origin.placeId ? origin.placeId : origin.name.toLowerCase().replace(/\s+/g, "-"),
-      dest: destination.placeId ? destination.placeId : destination.name.toLowerCase().replace(/\s+/g, "-"),
-      fromName: origin.name,
-      destName: destination.name,
-      fromAddress: origin.formattedAddress,
-      destAddress: destination.formattedAddress,
-      fromLat: origin.latitude.toString(),
-      fromLng: origin.longitude.toString(),
-      destLat: destination.latitude.toString(),
-      destLng: destination.longitude.toString(),
-      fromPlaceId: origin.placeId,
-      destPlaceId: destination.placeId,
-      mode: travelMode,
-      profile: travelerProfile,
-      priority: routePriority,
-      routeId: routeId
-    });
-    router.push(`/map?${query.toString()}`);
+    const params = new URLSearchParams();
+
+    const cleanFromId = origin.placeId && origin.placeId !== "undefined" ? origin.placeId : origin.name.toLowerCase().replace(/\s+/g, "-");
+    const cleanDestId = destination.placeId && destination.placeId !== "undefined" ? destination.placeId : destination.name.toLowerCase().replace(/\s+/g, "-");
+    params.set("from", cleanFromId);
+    params.set("dest", cleanDestId);
+
+    if (origin.placeId && origin.placeId !== "undefined") {
+      params.set("fromPlaceId", origin.placeId);
+    }
+    if (destination.placeId && destination.placeId !== "undefined") {
+      params.set("destPlaceId", destination.placeId);
+    }
+
+    params.set("fromLat", origin.latitude.toString());
+    params.set("fromLng", origin.longitude.toString());
+    params.set("fromName", origin.name);
+    params.set("fromAddress", origin.formattedAddress);
+
+    params.set("destLat", destination.latitude.toString());
+    params.set("destLng", destination.longitude.toString());
+    params.set("destName", destination.name);
+    params.set("destAddress", destination.formattedAddress);
+
+    params.set("mode", travelMode);
+    params.set("profile", travelerProfile);
+    params.set("priority", routePriority);
+    params.set("routeId", routeId);
+    if (startNav) {
+      params.set("startNav", "true");
+    }
+
+    router.push(`/map?${params.toString()}`);
+  };
+
+  const handleSelectRoute = (routeId: string) => {
+    navigateToMap(routeId, false);
   };
 
   const hubsList = [
@@ -287,7 +305,7 @@ export default function PlanJourneyScreen() {
                     <div className="grid grid-cols-3 gap-3 max-w-md">
                       {[
                         { mode: "Car", icon: Car, desc: "Highway Drive" },
-                        { mode: "Bike", icon: Bike, desc: "Two-Wheeler" },
+                        { mode: "Bike", icon: Bike, desc: "Motorized 2-Wheeler" },
                         { mode: "Walk", icon: Footprints, desc: "Pedestrian" }
                       ].map((item) => {
                         const isActive = travelMode === item.mode;
@@ -304,7 +322,7 @@ export default function PlanJourneyScreen() {
                             }`}
                           >
                             <Icon className="h-5 w-5" />
-                            <span>{item.mode}</span>
+                            <span>{item.mode === "Bike" ? "Bike / Two-Wheeler" : item.mode}</span>
                             <span className={`text-[10px] font-medium ${isActive ? "text-blue-100" : "text-(--muted-foreground)"}`}>
                               {item.desc}
                             </span>
@@ -312,6 +330,12 @@ export default function PlanJourneyScreen() {
                         );
                       })}
                     </div>
+                    {travelMode === "Bike" && (
+                      <div className="mt-2.5 p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-[11px] font-medium text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                        <Bike className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <span>Motorized two-wheeler routing uses dedicated motorcycle corridors across national and regional highway networks via Google Routes API.</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Safety & Traveler Preferences */}
@@ -450,33 +474,44 @@ export default function PlanJourneyScreen() {
               </div>
             </div>
 
-            {/* Route Cards Grid (Section 7: Clear Hierarchy & Integrated Safety Score) */}
+            {/* Route Cards Grid (Priority-Based Deterministic Ranking) */}
             <div className={`grid grid-cols-1 ${routes.length === 1 ? "md:grid-cols-1 max-w-2xl" : routes.length === 2 ? "md:grid-cols-2 max-w-5xl" : "md:grid-cols-2 lg:grid-cols-3"} gap-5`}>
               {routes.map((route, idx) => {
-                const isSafest = idx === 0 || route.safetyScore >= 88;
+                const isPrimaryRank = idx === 0;
+                const isSecondaryRank = idx === 1;
                 const assessment = route.safetyAssessment;
                 
                 return (
                   <div 
                     key={route.id} 
                     className={`rounded-3xl border p-6 flex flex-col justify-between shadow-md transition-all hover:-translate-y-1 hover:shadow-xl ${
-                      isSafest 
+                      isPrimaryRank 
                         ? "bg-linear-to-b from-blue-500/10 via-surface to-surface border-(--primary) ring-2 ring-(--primary)/20" 
                         : "bg-surface border-border"
                     }`}
                   >
                     <div className="space-y-4">
                       
-                      {/* Top Header & Safest Route Indicator */}
+                      {/* Top Header & Dynamic Priority Rank Indicator */}
                       <div className="flex justify-between items-start gap-2">
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground)">
                               Route {route.id}
                             </span>
-                            {isSafest && (
+                            {isPrimaryRank && (
                               <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-sm">
-                                ★ SAFEST ROUTE
+                                {route.rankBadge || "★ HIGHEST PRIORITY"}
+                              </span>
+                            )}
+                            {isSecondaryRank && (
+                              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                                {route.rankBadge || "RECOMMENDED ALTERNATIVE"}
+                              </span>
+                            )}
+                            {!isPrimaryRank && !isSecondaryRank && (
+                              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-elevated-surface text-(--muted-foreground) border border-border">
+                                {route.rankBadge || "ALTERNATIVE ROUTE"}
                               </span>
                             )}
                           </div>
@@ -485,7 +520,7 @@ export default function PlanJourneyScreen() {
                           </h3>
                         </div>
 
-                        {/* Prominently Presented Safety Score (Section 7: e.g. 94 clearly presented) */}
+                        {/* Prominently Presented Safety Score */}
                         <div className="flex flex-col items-center justify-center p-2.5 rounded-2xl bg-elevated-surface border border-border shrink-0 min-w-17.5">
                           <span className="text-[9px] font-black uppercase text-(--muted-foreground)">Safety</span>
                           <span className={`text-xl font-black ${
@@ -556,32 +591,7 @@ export default function PlanJourneyScreen() {
                     {/* Action Buttons (Section 7 & 3: High Contrast, Clear Hierarchy) */}
                     <div className="pt-5 space-y-2">
                       <button
-                        onClick={() => {
-                          const params = new URLSearchParams({
-                            from: origin?.name.toLowerCase() || "chennai",
-                            dest: destination?.name.toLowerCase() || "bangalore",
-                            mode: travelMode,
-                            profile: travelerProfile,
-                            priority: routePriority,
-                            routeId: route.id,
-                            startNav: "true"
-                          });
-                          if (origin) {
-                            params.set("fromPlaceId", origin.placeId);
-                            params.set("fromLat", origin.latitude.toString());
-                            params.set("fromLng", origin.longitude.toString());
-                            params.set("fromName", origin.name);
-                            params.set("fromAddress", origin.formattedAddress);
-                          }
-                          if (destination) {
-                            params.set("destPlaceId", destination.placeId);
-                            params.set("destLat", destination.latitude.toString());
-                            params.set("destLng", destination.longitude.toString());
-                            params.set("destName", destination.name);
-                            params.set("destAddress", destination.formattedAddress);
-                          }
-                          router.push(`/map?${params.toString()}`);
-                        }}
+                        onClick={() => navigateToMap(route.id, true)}
                         className="w-full rounded-2xl py-3 text-xs font-extrabold transition-all flex items-center justify-center gap-2 bg-linear-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:opacity-95 text-white shadow-lg shadow-emerald-600/25 active:scale-95"
                       >
                         <Navigation className="h-4 w-4 fill-white" />

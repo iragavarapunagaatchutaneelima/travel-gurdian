@@ -53,6 +53,7 @@ export interface EmergencyContactResponse {
   email?: string | null;
   relation: string;
   user_id: string;
+  is_enabled: boolean;
 }
 
 export interface SafeCheckInResponse {
@@ -63,6 +64,27 @@ export interface SafeCheckInResponse {
   is_completed: boolean;
   is_triggered: boolean;
   created_at: string;
+  last_known_latitude?: number | null;
+  last_known_longitude?: number | null;
+  last_location_time?: string | null;
+  escalation_status: string; // pending, confirmed_safe, escalating, escalated, exotel_failure, no_trusted_contact, cancelled
+  dispatched_at?: string | null;
+  dispatch_sms_sid?: string | null;
+  dispatch_call_sid?: string | null;
+  dispatch_recipient_name?: string | null;
+  dispatch_recipient_phone?: string | null;
+  dispatch_error?: string | null;
+  idempotency_key?: string | null;
+}
+
+export interface SchedulerStatusResponse {
+  is_running: boolean;
+  poll_interval_seconds: number;
+  last_poll_at?: string | null;
+  total_evaluations: number;
+  total_escalations: number;
+  active_pending_count: number;
+  server_time: string;
 }
 
 export interface SOSRequest {
@@ -73,11 +95,15 @@ export interface SOSRequest {
 
 export interface SafeHaven {
   name: string;
-  type: string; // Hospital, Police Station, Embassy
-  latitude: number;
-  longitude: number;
-  distance_km: number;
+  type: string; // Hospital, Police Station, National Emergency
+  latitude?: number;
+  longitude?: number;
+  distance_km?: number;
   phone: string;
+  is_verified?: boolean;
+  is_demo?: boolean;
+  data_source?: string;
+  note?: string;
 }
 
 export interface SOSResponse {
@@ -87,11 +113,12 @@ export interface SOSResponse {
   latitude: number;
   longitude: number;
   nearest_havens: SafeHaven[];
-  sms_status?: "sent" | "failed" | "pending";
-  call_status?: "initiated" | "failed" | "pending";
-  overall_status?: "completed" | "partially_completed" | "failed" | "pending";
+  sms_status?: "sent" | "failed" | "pending" | "throttled" | "skipped";
+  call_status?: "initiated" | "failed" | "pending" | "throttled" | "skipped";
+  overall_status?: "completed" | "partially_completed" | "failed" | "pending" | "throttled" | "no_trusted_contact";
   recipient_name?: string;
   recipient_phone_masked?: string;
+  transaction_id?: string | null;
 }
 
 export interface EmergencyActionParams {

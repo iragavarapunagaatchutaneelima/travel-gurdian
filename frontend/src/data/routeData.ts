@@ -160,6 +160,9 @@ export type RouteOption = {
   steps?: any[];
   safetyAssessment?: SafetyAssessment;
   whyThisRoute?: string[];
+  rank?: number;
+  rankLabel?: string;
+  rankBadge?: string;
 };
 
 export type TravelMode = "Car" | "Bike" | "Walk";

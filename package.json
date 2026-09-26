@@ -1,0 +1,15 @@
+{
+  "name": "travel-guardian-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Travel Guardian root workspace scripts",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend start",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck": "npm --prefix frontend run typecheck",
+    "test:frontend": "npm --prefix frontend exec tsx src/scripts/testNavigationAudit.ts",
+    "test:backend": "powershell -Command \"cd backend; .\\venv\\Scripts\\python.exe -m unittest discover tests\""
+  }
+}

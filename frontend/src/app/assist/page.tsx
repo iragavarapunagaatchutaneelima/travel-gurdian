@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import TravelAssistant from "../components/TravelAssistant";
@@ -33,7 +33,7 @@ export default function AssistHub() {
   const [mobileTab, setMobileTab] = useState<"chat" | "map" | "safety">("chat");
 
   // Shared Location Hook
-  const { latitude, longitude, accuracy, address, locate, hasLocation, permissionStatus } = useSharedLocation();
+  const { latitude, longitude, accuracy, timestamp, address, locate, hasLocation, permissionStatus } = useSharedLocation();
 
   // Safety Check-In Controller
   const {
@@ -81,7 +81,7 @@ export default function AssistHub() {
   }, [latitude, longitude]);
 
   // Aggregated live context for Gemini Tool Router
-  const liveContext: LiveTravelContext = {
+  const liveContext: LiveTravelContext = useMemo(() => ({
     navStatus: "READY",
     safetyScore: 89,
     currentPosition: latitude && longitude ? {
@@ -91,13 +91,13 @@ export default function AssistHub() {
       altitude: null,
       heading: null,
       speed: null,
-      timestamp: Date.now()
+      timestamp: timestamp || 0
     } : null,
     locationSnapshot: latitude && longitude ? {
       latitude,
       longitude,
       accuracy: accuracy || 15,
-      timestamp: Date.now(),
+      timestamp: timestamp || 0,
       isStale: false,
       formattedText: address
     } : null,
@@ -107,7 +107,17 @@ export default function AssistHub() {
     trustedContactsCount: trustedContacts.filter(c => c.enabled).length,
     destinationName: "Destination Corridor",
     travelMode: "Car"
-  };
+  }), [
+    latitude,
+    longitude,
+    accuracy,
+    timestamp,
+    address,
+    checkInStatus,
+    checkInCycle,
+    checkInSecondsRemaining,
+    trustedContacts
+  ]);
 
   const handleApplyInterval = (minutes: number) => {
     startCheckIn({ intervalMinutes: minutes });

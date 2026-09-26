@@ -19,7 +19,7 @@ import {
 export default function Footer() {
   return (
     <footer 
-      className="w-full border-t border-border bg-surface text-foreground transition-colors"
+      className="w-full border-t border-border bg-surface/95 backdrop-blur-md text-foreground transition-colors mt-auto shrink-0 z-20"
       style={{ fontFamily: "'Poppins', sans-serif" }}
     >
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-12 md:py-16">

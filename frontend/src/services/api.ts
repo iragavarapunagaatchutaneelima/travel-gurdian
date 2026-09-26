@@ -11,7 +11,8 @@ import {
   type EmergencyActionParams,
   type EmergencySMSResponse,
   type EmergencyCallResponse,
-  type EmergencyNotificationResponse
+  type EmergencyNotificationResponse,
+  type SchedulerStatusResponse
 } from "../types/api";
 
 
@@ -232,10 +233,12 @@ const MOCK_ALERTS: AlertResponse[] = [
 
 export const TravelGuardianAPI = {
   // Generic fetch wrapper with timeout and fallback support
-  async callAPI<T>(endpoint: string, options?: RequestInit, fallbackData?: T): Promise<T> {
+  async callAPI<T>(endpoint: string, options?: RequestInit, fallbackData?: T, timeoutMs: number = 6000): Promise<T> {
     try {
+      const isEmergencyEndpoint = endpoint.includes("/emergency/") || endpoint.includes("/sos");
+      const effectiveTimeout = isEmergencyEndpoint ? Math.max(timeoutMs, 15000) : timeoutMs;
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), 3000); // 3-second timeout
+      const id = setTimeout(() => controller.abort(), effectiveTimeout);
 
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -248,12 +251,24 @@ export const TravelGuardianAPI = {
       clearTimeout(id);
 
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        const errJson = await res.json().catch(() => null);
+        const detailMsg = errJson?.detail || errJson?.message || `HTTP error! status: ${res.status}`;
+        const err: any = new Error(detailMsg);
+        err.status = res.status;
+        err.detail = detailMsg;
+        throw err;
       }
       return await res.json() as T;
-    } catch (e) {
-      console.warn(`Backend unreachable on ${API_BASE_URL}${endpoint}. Falling back to mock data.`, e);
+    } catch (e: any) {
       if (fallbackData !== undefined) {
+        console.warn(`Backend unreachable on ${API_BASE_URL}${endpoint}. Falling back to mock data.`, e);
+        if (typeof fallbackData === "object" && fallbackData !== null) {
+          const detail = e?.detail || e?.message;
+          if (detail && !detail.includes("abort")) {
+            (fallbackData as any).safe_message = `Emergency communication failed: ${detail}`;
+            (fallbackData as any).error = detail;
+          }
+        }
         return fallbackData;
       }
       throw e;
@@ -360,45 +375,42 @@ export const TravelGuardianAPI = {
     return this.callAPI<any>(`/guide/destination/${cleanName}`, undefined, fallbackDetails);
   },
 
-  // 4. ASSIST - Contacts, checkin & SOS
+  // 4. ASSIST - Contacts, checkin & SOS (Source of Truth: Backend)
   async getEmergencyContacts(): Promise<EmergencyContactResponse[]> {
-    const mockContacts = getLocalStorage<EmergencyContactResponse[]>("tg_contacts", [
-      { id: 1, name: "Sarah Miller", phone: "+1-555-0199", email: "sarah.miller@example.com", relation: "Spouse/Partner", user_id: "default_user" }
-    ]);
-    return this.callAPI<EmergencyContactResponse[]>("/assist/contacts", undefined, mockContacts);
+    // Backend is the source of truth; no fake default contacts
+    return this.callAPI<EmergencyContactResponse[]>("/assist/contacts");
   },
 
   async createEmergencyContact(contact: Omit<EmergencyContactResponse, "id" | "user_id">): Promise<EmergencyContactResponse> {
-    const newContactOffline: EmergencyContactResponse = {
-      ...contact,
-      id: Date.now(),
-      user_id: "default_user"
-    };
+    return this.callAPI<EmergencyContactResponse>("/assist/contacts", {
+      method: "POST",
+      body: JSON.stringify(contact)
+    });
+  },
 
-    try {
-      return await this.callAPI<EmergencyContactResponse>("/assist/contacts", {
-        method: "POST",
-        body: JSON.stringify(contact)
-      });
-    } catch {
-      const contacts = getLocalStorage<EmergencyContactResponse[]>("tg_contacts", [
-        { id: 1, name: "Sarah Miller", phone: "+1-555-0199", email: "sarah.miller@example.com", relation: "Spouse/Partner", user_id: "default_user" }
-      ]);
-      const updated = [...contacts, newContactOffline];
-      setLocalStorage("tg_contacts", updated);
-      return newContactOffline;
-    }
+  async updateEmergencyContact(id: number, contact: Partial<Omit<EmergencyContactResponse, "id" | "user_id">>): Promise<EmergencyContactResponse> {
+    return this.callAPI<EmergencyContactResponse>(`/assist/contacts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(contact)
+    });
   },
 
   async deleteEmergencyContact(id: number): Promise<void> {
+    const controller = new AbortController();
+    const idTimer = setTimeout(() => controller.abort(), 4000);
     try {
-      await this.callAPI<void>(`/assist/contacts/${id}`, {
-        method: "DELETE"
+      const res = await fetch(`${API_BASE_URL}/assist/contacts/${id}`, {
+        method: "DELETE",
+        signal: controller.signal
       });
-    } catch {
-      const contacts = getLocalStorage<EmergencyContactResponse[]>("tg_contacts", []);
-      const updated = contacts.filter(c => c.id !== id);
-      setLocalStorage("tg_contacts", updated);
+      clearTimeout(idTimer);
+      if (!res.ok && res.status !== 404) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.detail || `Failed to delete contact (HTTP ${res.status})`);
+      }
+    } catch (e) {
+      clearTimeout(idTimer);
+      throw e;
     }
   },
 
@@ -407,8 +419,28 @@ export const TravelGuardianAPI = {
     return this.callAPI<SafeCheckInResponse[]>("/assist/checkin", undefined, mockCheckins);
   },
 
-  async setCheckin(targetTime: string, checkinText?: string): Promise<SafeCheckInResponse> {
-    const payload = { target_time: targetTime, checkin_text: checkinText };
+  async getActiveCheckin(): Promise<SafeCheckInResponse | null> {
+    try {
+      return await this.callAPI<SafeCheckInResponse>("/assist/checkin/active");
+    } catch {
+      const checkins = getLocalStorage<SafeCheckInResponse[]>("tg_checkins", []);
+      const active = checkins.find(c => !c.is_completed);
+      return active || null;
+    }
+  },
+
+  async setCheckin(
+    targetTime: string,
+    checkinText?: string,
+    lat?: number,
+    lon?: number
+  ): Promise<SafeCheckInResponse> {
+    const payload = {
+      target_time: targetTime,
+      checkin_text: checkinText || null,
+      latitude: lat !== undefined ? lat : null,
+      longitude: lon !== undefined ? lon : null
+    };
     const newCheckinOffline: SafeCheckInResponse = {
       target_time: targetTime,
       checkin_text: checkinText || null,
@@ -416,14 +448,19 @@ export const TravelGuardianAPI = {
       user_id: "default_user",
       is_completed: false,
       is_triggered: false,
+      escalation_status: "pending",
+      last_known_latitude: lat || null,
+      last_known_longitude: lon || null,
       created_at: new Date().toISOString()
     };
 
     try {
-      return await this.callAPI<SafeCheckInResponse>("/assist/checkin", {
+      const result = await this.callAPI<SafeCheckInResponse>("/assist/checkin", {
         method: "POST",
         body: JSON.stringify(payload)
       });
+      setLocalStorage("tg_checkins", [result]);
+      return result;
     } catch {
       setLocalStorage("tg_checkins", [newCheckinOffline]);
       return newCheckinOffline;
@@ -432,13 +469,16 @@ export const TravelGuardianAPI = {
 
   async confirmCheckin(): Promise<SafeCheckInResponse> {
     try {
-      return await this.callAPI<SafeCheckInResponse>("/assist/checkin/confirm", {
+      const result = await this.callAPI<SafeCheckInResponse>("/assist/checkin/confirm", {
         method: "POST"
       });
+      setLocalStorage("tg_checkins", []);
+      return result;
     } catch {
       const checkins = getLocalStorage<SafeCheckInResponse[]>("tg_checkins", []);
       if (checkins.length > 0) {
         checkins[0].is_completed = true;
+        checkins[0].escalation_status = "confirmed_safe";
         setLocalStorage("tg_checkins", checkins);
         return checkins[0];
       }
@@ -446,20 +486,59 @@ export const TravelGuardianAPI = {
     }
   },
 
+  async cancelCheckin(): Promise<SafeCheckInResponse> {
+    try {
+      const result = await this.callAPI<SafeCheckInResponse>("/assist/checkin/cancel", {
+        method: "POST"
+      });
+      setLocalStorage("tg_checkins", []);
+      return result;
+    } catch {
+      const checkins = getLocalStorage<SafeCheckInResponse[]>("tg_checkins", []);
+      if (checkins.length > 0) {
+        checkins[0].is_completed = true;
+        checkins[0].escalation_status = "cancelled";
+        setLocalStorage("tg_checkins", checkins);
+        return checkins[0];
+      }
+      throw new Error("No active timer to cancel.");
+    }
+  },
+
+  async updateCheckinLocation(latitude: number, longitude: number): Promise<SafeCheckInResponse> {
+    return await this.callAPI<SafeCheckInResponse>("/assist/checkin/location", {
+      method: "POST",
+      body: JSON.stringify({ latitude, longitude })
+    });
+  },
+
+  async checkOverdueCheckins(): Promise<SafeCheckInResponse[]> {
+    return await this.callAPI<SafeCheckInResponse[]>("/assist/checkin/check-overdue", {
+      method: "POST"
+    });
+  },
+
+  async getSchedulerStatus(): Promise<SchedulerStatusResponse> {
+    return await this.callAPI<SchedulerStatusResponse>("/assist/checkin/scheduler-status");
+  },
+
   async triggerSOS(request: SOSRequest): Promise<SOSResponse> {
     const contacts = await this.getEmergencyContacts();
     const broadcastList = contacts.map(c => `${c.name} (${c.relation}) via ${c.phone}`);
     const fallbackResponse: SOSResponse = {
-      success: true,
-      message: `SOS Broadcasted to Emergency Contacts. Message: '${request.custom_message || "Emergency Help Needed!"}'`,
-      broadcasted_contacts: broadcastList.length > 0 ? broadcastList : ["Emergency Dispatch (911/112)"],
+      success: false,
+      message: "Emergency broadcast network offline. Live telemetry could not be dispatched via Exotel. Please call 112 directly if in immediate danger.",
+      broadcasted_contacts: broadcastList.length > 0 ? broadcastList : ["Emergency Dispatch Hotline (112)"],
       latitude: request.latitude,
       longitude: request.longitude,
       nearest_havens: [
-        { name: "Metropolitan Emergency Police Station", type: "Police Station", latitude: request.latitude + 0.004, longitude: request.longitude - 0.002, distance_km: 0.5, phone: "+1-555-0199" },
-        { name: "General Memorial Medical Center", type: "Hospital", latitude: request.latitude - 0.009, longitude: request.longitude + 0.007, distance_km: 1.2, phone: "+1-555-0144" },
-        { name: "International Diplomatic Embassy District office", type: "Embassy", latitude: request.latitude + 0.018, longitude: request.longitude + 0.015, distance_km: 2.5, phone: "+1-555-0100" }
-      ]
+        { name: "National Emergency Response Center (Police, Medical, Fire, Disaster)", type: "National Emergency Service", phone: "112", is_verified: true, is_demo: false, data_source: "Emergency Response Support System (ERSS 112)", note: "Unified 24/7 national emergency response line. Primary fail-safe lifeline." },
+        { name: "National Ambulance & Medical Trauma Dispatch", type: "Medical Emergency / Hospital", phone: "108", is_verified: true, is_demo: false, data_source: "National Health Mission (108 Ambulance)", note: "24/7 emergency medical dispatch and hospital triage network." },
+        { name: "Police Emergency Control Room", type: "Police Department", phone: "100", is_verified: true, is_demo: false, data_source: "National Police Service (100 PCR)", note: "Direct police emergency dispatch for immediate safety protection." }
+      ],
+      sms_status: "failed",
+      call_status: "failed",
+      overall_status: "failed"
     };
 
     return this.callAPI<SOSResponse>("/assist/sos", {

@@ -63,13 +63,30 @@ export function formatDurationSeconds(seconds: number): string {
 }
 
 /**
- * Format distance in meters into human-readable km/m string.
+ * Clean and normalize HTML instructions returned by Google Directions.
+ * Replaces block elements with space and removes tags without gluing words together.
+ */
+export function cleanInstruction(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<div[^>]*>/gi, " ")
+    .replace(/<br[^>]*>/gi, " ")
+    .replace(/<\/?[^>]+(>|$)/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Format distance in meters into human-readable km/m string with integer rounding.
  */
 export function formatDistanceMeters(meters: number): string {
-  if (meters < 1000) {
-    return `${meters} m`;
+  if (isNaN(meters) || meters <= 0) return "0 m";
+  const roundedMeters = Math.round(meters);
+  if (roundedMeters < 1000) {
+    return `${roundedMeters} m`;
   }
-  const km = (meters / 1000).toFixed(1);
+  const km = (roundedMeters / 1000).toFixed(1);
   return `${km.endsWith(".0") ? km.slice(0, -2) : km} km`;
 }
 
@@ -101,13 +118,73 @@ export async function calculateGoogleRoutes(
     throw new Error("ORIGIN_AND_DESTINATION_REQUIRED");
   }
 
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
+  const cleanPlaceId = (id: string | null | undefined): string => {
+    if (!id || id === "undefined" || id === "null" || id.trim() === "") return "";
+    return id.trim();
+  };
+
+  const origPlaceId = cleanPlaceId(origin.placeId);
+  const dstPlaceId = cleanPlaceId(destination.placeId);
+
+  // 1. Validation: Same Origin and Destination
+  const isSamePlaceId = Boolean(origPlaceId && dstPlaceId && origPlaceId === dstPlaceId);
+  const isSameCoords =
+    origin.latitude != null &&
+    destination.latitude != null &&
+    origin.longitude != null &&
+    destination.longitude != null &&
+    !isNaN(Number(origin.latitude)) &&
+    !isNaN(Number(destination.latitude)) &&
+    !isNaN(Number(origin.longitude)) &&
+    !isNaN(Number(destination.longitude)) &&
+    Math.abs(Number(origin.latitude) - Number(destination.latitude)) < 0.0001 &&
+    Math.abs(Number(origin.longitude) - Number(destination.longitude)) < 0.0001;
+  const isSameName =
+    Boolean(
+      origin.name &&
+      destination.name &&
+      origin.name.trim().toLowerCase() === destination.name.trim().toLowerCase() &&
+      origin.name.trim().length > 0
+    );
+
+  if (isSamePlaceId || isSameCoords || (isSameName && !origPlaceId && !dstPlaceId)) {
+    throw new Error("SAME_ORIGIN_AND_DESTINATION");
+  }
+
+  // 2. Validation: Invalid Coordinates bounds
+  const hasInvalidOriginCoords =
+    (origin.latitude != null && (isNaN(Number(origin.latitude)) || Number(origin.latitude) < -90 || Number(origin.latitude) > 90)) ||
+    (origin.longitude != null && (isNaN(Number(origin.longitude)) || Number(origin.longitude) < -180 || Number(origin.longitude) > 180));
+  const hasInvalidDestCoords =
+    (destination.latitude != null && (isNaN(Number(destination.latitude)) || Number(destination.latitude) < -90 || Number(destination.latitude) > 90)) ||
+    (destination.longitude != null && (isNaN(Number(destination.longitude)) || Number(destination.longitude) < -180 || Number(destination.longitude) > 180));
+
+  if (hasInvalidOriginCoords || hasInvalidDestCoords) {
+    throw new Error("INVALID_COORDINATES");
+  }
+
+  // 3. Validation: Missing location identifier
+  const hasOriginIdentifier =
+    (origin.latitude != null && origin.longitude != null && !isNaN(Number(origin.latitude)) && !isNaN(Number(origin.longitude))) ||
+    Boolean(origPlaceId) ||
+    Boolean(origin.name && origin.name.trim() !== "");
+  const hasDestIdentifier =
+    (destination.latitude != null && destination.longitude != null && !isNaN(Number(destination.latitude)) && !isNaN(Number(destination.longitude))) ||
+    Boolean(dstPlaceId) ||
+    Boolean(destination.name && destination.name.trim() !== "");
+
+  if (!hasOriginIdentifier || !hasDestIdentifier) {
+    throw new Error("INVALID_LOCATION");
+  }
+
+  // 4. Offline Check
+  if (typeof window !== "undefined" && typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("OFFLINE");
   }
 
   // Generate cache & deduplication key
-  const origKey = origin.placeId || `${origin.latitude?.toFixed(4)}_${origin.longitude?.toFixed(4)}_${origin.name}`;
-  const destKey = destination.placeId || `${destination.latitude?.toFixed(4)}_${destination.longitude?.toFixed(4)}_${destination.name}`;
+  const origKey = origPlaceId || `${Number(origin.latitude)?.toFixed(4)}_${Number(origin.longitude)?.toFixed(4)}_${origin.name}`;
+  const destKey = dstPlaceId || `${Number(destination.latitude)?.toFixed(4)}_${Number(destination.longitude)?.toFixed(4)}_${destination.name}`;
   const cacheKey = `${origKey}__${destKey}__${travelMode}__${profile}__${priority}`;
 
   // Check cache
@@ -123,7 +200,221 @@ export async function calculateGoogleRoutes(
 
   const executionPromise: Promise<RouteOption[]> = (async (): Promise<RouteOption[]> => {
     try {
-      // Load Google Maps API with directions support
+      const activeIncidents = getActiveIncidents();
+
+      // Priority-based ranking helper
+      const applyPriorityRanking = (unrankedRoutes: RouteOption[]): RouteOption[] => {
+        if (!unrankedRoutes || unrankedRoutes.length === 0) return [];
+        if (unrankedRoutes.length === 1) {
+          const r = unrankedRoutes[0];
+          r.id = "A";
+          r.rank = 1;
+          r.rankBadge = priority === "Maximum Safety" ? "★ MOST SAFE" : priority === "Time Priority" ? "⚡ FASTEST ROUTE" : "★ BEST MATCH";
+          r.rankLabel = priority === "Maximum Safety" ? "#1 — MOST SAFE (HIGHLY RECOMMENDED)" : priority === "Time Priority" ? "#1 — FASTEST CORRIDOR (RECOMMENDED)" : "#1 — BEST CORRIDOR (HIGHLY RECOMMENDED)";
+          r.recommendation = "HIGHLY RECOMMENDED";
+          r.name = priority === "Maximum Safety" ? "Primary Safety Corridor" : priority === "Time Priority" ? "Direct Express Route" : "Optimal Safety Corridor";
+          return [r];
+        }
+
+        const minDuration = Math.min(...unrankedRoutes.map(r => r.durationMinutes || 1));
+
+        const scored = unrankedRoutes.map(r => {
+          const dur = r.durationMinutes || 1;
+          const timeEfficiency = Math.max(10, Math.min(100, Math.round(100 - ((dur - minDuration) / Math.max(1, minDuration)) * 60)));
+          let compositeScore = 0;
+
+          if (priority === "Maximum Safety") {
+            compositeScore = (r.safetyScore * 0.85) + (timeEfficiency * 0.15);
+          } else if (priority === "Time Priority") {
+            compositeScore = (timeEfficiency * 0.75) + (r.safetyScore * 0.25);
+          } else {
+            // Balanced
+            compositeScore = (r.safetyScore * 0.55) + (timeEfficiency * 0.45);
+          }
+
+          return { ...r, _compositeScore: compositeScore };
+        });
+
+        // Deterministic sort: highest composite score first
+        scored.sort((a, b) => b._compositeScore - a._compositeScore);
+
+        const routeLetters: Array<"A" | "B" | "C" | "D"> = ["A", "B", "C", "D"];
+        return scored.map((r, idx) => {
+          const letter = routeLetters[idx] || ("D" as const);
+          let rankBadge = "ALTERNATIVE ROUTE";
+          let rankLabel = `#${idx + 1} — ALTERNATIVE OPTION`;
+          let rec: RouteOption["recommendation"] = "USE CAUTION";
+          let corridorName = "Alternative Corridor";
+
+          if (idx === 0) {
+            rankBadge = priority === "Maximum Safety" ? "★ MOST SAFE" : priority === "Time Priority" ? "⚡ FASTEST ROUTE" : "★ BEST MATCH";
+            rankLabel = priority === "Maximum Safety" ? "#1 — MOST SAFE (HIGHLY RECOMMENDED)" : priority === "Time Priority" ? "#1 — FASTEST CORRIDOR (RECOMMENDED)" : "#1 — BEST CORRIDOR (HIGHLY RECOMMENDED)";
+            rec = "HIGHLY RECOMMENDED";
+            corridorName = priority === "Maximum Safety" ? "Primary Safety Corridor" : priority === "Time Priority" ? "Direct Express Route" : "Optimal Safety Corridor";
+          } else if (idx === 1) {
+            rankBadge = "SAFE ALTERNATIVE";
+            rankLabel = "#2 — SAFE ALTERNATIVE (RECOMMENDED)";
+            rec = "RECOMMENDED";
+            corridorName = "Secondary Safety Corridor";
+          } else if (idx === 2) {
+            rankBadge = "ALTERNATIVE ROUTE";
+            rankLabel = "#3 — ALTERNATIVE ROUTE (CONSIDER IF NEEDED)";
+            rec = "USE CAUTION";
+            corridorName = "Alternative Transit Pathway";
+          }
+
+          return {
+            ...r,
+            id: letter,
+            rank: idx + 1,
+            rankBadge,
+            rankLabel,
+            recommendation: rec,
+            name: corridorName
+          };
+        });
+      };
+
+      // =========================================================================
+      // MOTORIZED TWO-WHEELER ROUTING via Google Routes API v2 (TWO_WHEELER)
+      // Sections 5, 6, 8: Motorized two-wheeler routing replaces legacy BICYCLING.
+      // =========================================================================
+      if (travelMode === "Bike") {
+        const computeRes = await fetch("/api/routes/compute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            origin: {
+              latitude: origin.latitude,
+              longitude: origin.longitude,
+              placeId: origPlaceId,
+              name: origin.name,
+              address: origin.formattedAddress
+            },
+            destination: {
+              latitude: destination.latitude,
+              longitude: destination.longitude,
+              placeId: dstPlaceId,
+              name: destination.name,
+              address: destination.formattedAddress
+            },
+            travelMode: "TWO_WHEELER",
+            computeAlternativeRoutes: true,
+            languageCode: "en-US"
+          })
+        });
+
+        const computeData = await computeRes.json().catch(() => null);
+
+        if (!computeRes.ok || !computeData?.routes || computeData.routes.length === 0) {
+          throw new Error(
+            `Two-wheeler routing is currently unavailable for this route between "${origin.name}" and "${destination.name}". Try another destination or switch to Car mode.`
+          );
+        }
+
+        const rawRoutes = computeData.routes;
+        const normalizedPromises = rawRoutes.map(async (route: any, index: number) => {
+          let waypoints: [number, number][] = [];
+          if (route.polyline?.encodedPolyline) {
+            waypoints = decodeGooglePolyline(route.polyline.encodedPolyline);
+          }
+
+          const totalDistanceMeters = route.distanceMeters || 0;
+          const totalDurationSeconds = parseInt(route.duration?.replace("s", "") || "0");
+          const routeWarnings: string[] = route.warnings || [];
+          const hasTolls = routeWarnings.some((w: string) => w.toLowerCase().includes("toll"));
+
+          const structuredSteps: any[] = [];
+          if (route.legs && Array.isArray(route.legs)) {
+            route.legs.forEach((leg: any) => {
+              if (leg.steps && Array.isArray(leg.steps)) {
+                leg.steps.forEach((step: any, sIdx: number) => {
+                  const sDist = step.distanceMeters || 0;
+                  const sDur = parseInt(step.staticDuration?.replace("s", "") || "0");
+                  const startLat = step.startLocation?.latLng?.latitude || 0;
+                  const startLng = step.startLocation?.latLng?.longitude || 0;
+                  const endLat = step.endLocation?.latLng?.latitude || 0;
+                  const endLng = step.endLocation?.latLng?.longitude || 0;
+
+                  let stepPath: [number, number][] = [];
+                  if (step.polyline?.encodedPolyline) {
+                    stepPath = decodeGooglePolyline(step.polyline.encodedPolyline);
+                  } else if (startLat && startLng && endLat && endLng) {
+                    stepPath = [[startLng, startLat], [endLng, endLat]];
+                  }
+
+                  structuredSteps.push({
+                    instruction: step.navigationInstruction?.instructions || "Continue along roadway",
+                    distance: formatDistanceMeters(sDist),
+                    distanceMeters: sDist,
+                    duration: formatDurationSeconds(sDur),
+                    durationSeconds: sDur,
+                    startLocation: [startLng, startLat],
+                    endLocation: [endLng, endLat],
+                    maneuver: step.navigationInstruction?.maneuver || "STRAIGHT",
+                    stepIndex: sIdx,
+                    path: stepPath
+                  });
+                });
+              }
+            });
+          }
+
+          const distanceKm = Math.round(totalDistanceMeters / 1000);
+          const durationMinutes = Math.round(totalDurationSeconds / 60);
+          const distanceText = formatDistanceMeters(totalDistanceMeters);
+          const durationText = formatDurationSeconds(totalDurationSeconds);
+          const tollInfo = hasTolls ? "Tolls on Route" : "No Tolls Reported";
+
+          const realPOIs = await fetchRouteCorridorPOIs(waypoints, "Bike");
+
+          const baseRouteObj: RouteOption = {
+            id: index === 0 ? "A" : index === 1 ? "B" : index === 2 ? "C" : "D",
+            name: index === 0 ? "Motorized Two-Wheeler Corridor" : "Alternative Two-Wheeler Route",
+            subtitle: route.description ? `via ${route.description}` : "Motorized 2-Wheeler Network",
+            distance: distanceText,
+            distanceKm: distanceKm || 1,
+            time: durationText,
+            durationMinutes: durationMinutes || 1,
+            safetyScore: 85,
+            trafficScore: "Low",
+            roadScore: "Good",
+            nightSafety: "Medium",
+            weatherRisk: "Low",
+            emergencyAccessScore: 85,
+            recommendation: "RECOMMENDED",
+            restStops: realPOIs.filter(p => p.type === "food" || p.type === "rest").length,
+            fuelStops: realPOIs.filter(p => p.type === "petrol").length,
+            foodStops: realPOIs.filter(p => p.type === "food").length,
+            hotels: 0,
+            notes: `Verified Google motorized two-wheeler corridor via ${route.description || "highway network"}. Distance: ${distanceText}, estimated time: ${durationText}. ${hasTolls ? "Tolls apply." : "No tolls indicated."}`,
+            type: "safe",
+            waypoints,
+            pois: realPOIs,
+            provider: "google",
+            tollInfo,
+            warnings: routeWarnings,
+            legs: route.legs,
+            steps: structuredSteps
+          };
+
+          const safetyAssessment = assessRouteSafety(baseRouteObj, realPOIs, activeIncidents, profile, priority, "Bike");
+          const safetyScore = safetyAssessment.safetyFit;
+
+          return {
+            ...baseRouteObj,
+            safetyScore,
+            emergencyAccessScore: safetyAssessment.factors.emergencyAccess.score,
+            notes: safetyAssessment.explanation.join(" "),
+            safetyAssessment
+          };
+        });
+
+        const resolvedRoutes = await Promise.all(normalizedPromises);
+        return applyPriorityRanking(resolvedRoutes);
+      }
+
+      // Load Google Maps API with directions support for Car & Walk
       await loadGoogleMapsScript();
 
       const service = getDirectionsService();
@@ -131,38 +422,31 @@ export async function calculateGoogleRoutes(
         throw new Error("SERVICE_UNAVAILABLE");
       }
 
-  // Map TravelGuardian TravelMode to Google Maps TravelMode
-  let googleTravelMode: any;
-  if (travelMode === "Bike") {
-    googleTravelMode = window.google.maps.TravelMode.BICYCLING;
-  } else if (travelMode === "Walk") {
-    googleTravelMode = window.google.maps.TravelMode.WALKING;
-  } else {
-    googleTravelMode = window.google.maps.TravelMode.DRIVING;
-  }
+      // Map TravelGuardian TravelMode to Google Maps TravelMode
+      const googleTravelMode = travelMode === "Walk"
+        ? window.google.maps.TravelMode.WALKING
+        : window.google.maps.TravelMode.DRIVING;
 
-  const originLocation =
-    origin.latitude != null && origin.longitude != null && !isNaN(Number(origin.latitude)) && !isNaN(Number(origin.longitude))
-      ? { lat: Number(origin.latitude), lng: Number(origin.longitude) }
-      : origin.placeId
-        ? { placeId: origin.placeId }
-        : origin.formattedAddress || origin.name;
+      const originLocation =
+        origin.latitude != null && origin.longitude != null && !isNaN(Number(origin.latitude)) && !isNaN(Number(origin.longitude))
+          ? { lat: Number(origin.latitude), lng: Number(origin.longitude) }
+          : origPlaceId
+            ? { placeId: origPlaceId }
+            : origin.formattedAddress || origin.name;
 
-  const destLocation =
-    destination.latitude != null && destination.longitude != null && !isNaN(Number(destination.latitude)) && !isNaN(Number(destination.longitude))
-      ? { lat: Number(destination.latitude), lng: Number(destination.longitude) }
-      : destination.placeId
-        ? { placeId: destination.placeId }
-        : destination.formattedAddress || destination.name;
+      const destLocation =
+        destination.latitude != null && destination.longitude != null && !isNaN(Number(destination.latitude)) && !isNaN(Number(destination.longitude))
+          ? { lat: Number(destination.latitude), lng: Number(destination.longitude) }
+          : dstPlaceId
+            ? { placeId: dstPlaceId }
+            : destination.formattedAddress || destination.name;
 
-  const activeIncidents = getActiveIncidents();
-
-  return new Promise<RouteOption[]>((resolve, reject) => {
-    service.route(
-      {
-        origin: originLocation,
-        destination: destLocation,
-        travelMode: googleTravelMode,
+      return new Promise<RouteOption[]>((resolve, reject) => {
+        service.route(
+          {
+            origin: originLocation,
+            destination: destLocation,
+            travelMode: googleTravelMode,
         provideRouteAlternatives: true,
         unitSystem: window.google.maps.UnitSystem.METRIC
       },
@@ -213,7 +497,7 @@ export async function calculateGoogleRoutes(
                 if (leg.steps && Array.isArray(leg.steps)) {
                   leg.steps.forEach((step: any) => {
                     structuredSteps.push({
-                      instruction: step.instructions ? step.instructions.replace(/<[^>]*>?/gm, "") : "",
+                      instruction: step.instructions ? cleanInstruction(step.instructions) : "",
                       distance: step.distance?.text || "",
                       duration: step.duration?.text || "",
                       startLocation: step.start_location ? [step.start_location.lng(), step.start_location.lat()] : null,
@@ -321,11 +605,11 @@ export async function calculateGoogleRoutes(
           });
 
           const normalizedRoutes = await Promise.all(normalizedPromises);
-          resolve(normalizedRoutes);
+          resolve(applyPriorityRanking(normalizedRoutes));
         } else if (status === window.google.maps.DirectionsStatus.ZERO_RESULTS) {
           reject(
             new Error(
-              `Google routing is unavailable for this travel mode (${travelMode}) on this route between "${origin.name}" and "${destination.name}".`
+              `Routing is unavailable for this travel mode (${travelMode}) on this route between "${origin.name}" and "${destination.name}". Try another destination or switch to Car.`
             )
           );
         } else if (status === window.google.maps.DirectionsStatus.NOT_FOUND) {
@@ -344,6 +628,12 @@ export async function calculateGoogleRoutes(
           reject(
             new Error(
               `Google Directions API request was denied. Ensure the Directions API is enabled on your Google Cloud Console key.`
+            )
+          );
+        } else if (status === window.google.maps.DirectionsStatus.INVALID_REQUEST) {
+          reject(
+            new Error(
+              `Invalid routing request. Please verify the selected locations.`
             )
           );
         } else {

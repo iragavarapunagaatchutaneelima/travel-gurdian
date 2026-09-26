@@ -34,6 +34,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  devIndicators: false,
   productionBrowserSourceMaps: false, // Security: Do not expose raw server/client source maps in production
   typescript: {
     ignoreBuildErrors: true, // Type safety verified separately via `tsc --noEmit`

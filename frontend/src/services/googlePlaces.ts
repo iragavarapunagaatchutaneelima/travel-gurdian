@@ -16,11 +16,15 @@ const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
  * Strictly adheres to Phase 12 requirements.
  */
 export function formatMapErrorMessage(error: any): string {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return "You're offline. Cached map/navigation information is available where supported.";
+  const msg = typeof error === "string" ? error : error?.message || "";
+
+  if (msg.includes("SAME_ORIGIN_AND_DESTINATION")) {
+    return "Origin and Destination cannot be the same place. Please choose two distinct locations.";
   }
 
-  const msg = typeof error === "string" ? error : error?.message || "";
+  if (msg.includes("INVALID_COORDINATES") || msg.includes("INVALID_LOCATION")) {
+    return "Invalid location coordinates or address provided. Please select a valid origin and destination.";
+  }
 
   if (msg.includes("MISSING_API_KEY") || msg.includes("API key not configured") || msg.includes("not configured")) {
     return "Google Maps API key is not configured.";
@@ -36,8 +40,27 @@ export function formatMapErrorMessage(error: any): string {
     return "The Google Maps API key is restricted and the current website origin may not be authorized. Please verify HTTP referrer restrictions in Google Cloud Console.";
   }
 
-  if (msg.includes("OFFLINE")) {
+  if (msg.includes("OVER_QUERY_LIMIT") || msg.includes("quota exceeded") || msg.includes("quota")) {
+    return "Google Directions API request quota exceeded. Please check your Google Cloud Console quota or try again shortly.";
+  }
+
+  if (
+    msg.includes("OFFLINE") ||
+    (typeof window !== "undefined" && typeof navigator !== "undefined" && navigator.onLine === false)
+  ) {
     return "You're offline. Cached map/navigation information is available where supported.";
+  }
+
+  if (msg.includes("PERMISSION_DENIED")) {
+    return "Location permission was denied. Please allow location access in your browser to enable live navigation.";
+  }
+
+  if (msg.includes("POSITION_UNAVAILABLE")) {
+    return "GPS position temporarily unavailable. Waiting for satellite lock...";
+  }
+
+  if (msg.includes("TIMEOUT")) {
+    return "GPS location request timed out. Retrying...";
   }
 
   if (msg.includes("LOAD_ERROR") || msg.includes("SERVICE_UNAVAILABLE")) {

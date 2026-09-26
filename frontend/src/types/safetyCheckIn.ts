@@ -17,6 +17,7 @@ export type NotificationProviderStatus =
 
 export interface TrustedContact {
   id: string;
+  backendId?: number;
   name: string;
   phone: string;
   relationship?: string;

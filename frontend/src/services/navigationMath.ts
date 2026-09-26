@@ -178,13 +178,11 @@ export function isOffRoute(
   distanceToRouteMeters: number,
   accuracyMeters: number,
   baseThresholdMeters: number = 80,
-  accuracyMultiplier: number = 1.4
+  accuracyMultiplier: number = 0.6
 ): boolean {
   // Effective threshold expands with low GPS accuracy up to a ceiling of 250m
-  const effectiveThreshold = Math.max(
-    baseThresholdMeters,
-    Math.min(250, accuracyMeters * accuracyMultiplier)
-  );
+  const accuracyBuffer = accuracyMeters > 30 ? accuracyMeters * accuracyMultiplier : 0;
+  const effectiveThreshold = Math.min(250, Math.max(baseThresholdMeters, baseThresholdMeters + accuracyBuffer));
   return distanceToRouteMeters > effectiveThreshold;
 }
 
@@ -311,7 +309,7 @@ export function getCurrentAndNextManeuver(
  */
 export function formatSpeedKmh(speedMps: number | null): string {
   if (speedMps === null || speedMps === undefined || isNaN(speedMps) || speedMps < 0) {
-    return "-- km/h";
+    return "--";
   }
   const kmh = Math.round(speedMps * 3.6);
   return `${kmh} km/h`;

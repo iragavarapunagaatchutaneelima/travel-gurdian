@@ -69,37 +69,16 @@ def _resolve_primary_contact(
     user_id: str = "default_user"
 ) -> Optional[models.EmergencyContact]:
     """
-    Resolves the primary emergency contact from the database.
-    If no contact exists in DB but one was provided in the request payload,
-    automatically creates and stores it in the database for the user.
+    Resolves the primary active (is_enabled == True) emergency contact from the database.
+    Does NOT create fake default or unconfirmed emergency contacts.
     """
     contacts = db.query(models.EmergencyContact).filter(
-        models.EmergencyContact.user_id == user_id
+        models.EmergencyContact.user_id == user_id,
+        models.EmergencyContact.is_enabled == True
     ).all()
 
     if contacts:
         return contacts[0]
-
-    # Auto-register contact if provided in request
-    if request and request.contact_phone and request.contact_phone.strip():
-        try:
-            name = (request.contact_name or "Guardian").strip()
-            phone = request.contact_phone.strip()
-            rel = (request.contact_relation or "Emergency Contact").strip()
-            new_contact = models.EmergencyContact(
-                name=name,
-                phone=phone,
-                relation=rel,
-                user_id=user_id
-            )
-            db.add(new_contact)
-            db.commit()
-            db.refresh(new_contact)
-            logger.info(f"Auto-registered emergency contact for {user_id}")
-            return new_contact
-        except Exception as exc:
-            db.rollback()
-            logger.warning(f"Could not auto-register contact: {exc}")
 
     return None
 
@@ -107,9 +86,12 @@ def _resolve_primary_contact(
 def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "default_user") -> schemas.SOSResponse:
     """
     Activates immediate SOS Broadcast alerts, triggers Exotel SMS and Voice Call to stored
-    trusted contact(s), logs the event, and identifies nearby safe havens.
+    active trusted contact(s), logs the event, and identifies nearby safe havens.
     """
-    contacts = db.query(models.EmergencyContact).filter(models.EmergencyContact.user_id == user_id).all()
+    contacts = db.query(models.EmergencyContact).filter(
+        models.EmergencyContact.user_id == user_id,
+        models.EmergencyContact.is_enabled == True
+    ).all()
     broadcast_list = []
     for c in contacts:
         contact_type = f"{c.name} ({c.relation}) via {exotel_service.mask_phone_number(c.phone)}"
@@ -159,14 +141,28 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
             # Compute overall status
             if sms_status == "sent" and call_status == "initiated":
                 overall_status = "completed"
-            elif sms_status == "sent" or call_status == "initiated":
+                is_success = True
+                response_msg = f"SOS broadcast completed successfully. Emergency SMS sent and voice call initiated to {target_name} ({target_masked})."
+            elif sms_status == "sent":
                 overall_status = "partially_completed"
+                is_success = True
+                response_msg = f"SOS alert SMS delivered to {target_name} ({target_masked}). Voice call could not be completed."
+            elif call_status == "initiated":
+                overall_status = "partially_completed"
+                is_success = True
+                response_msg = f"SOS voice call initiated to {target_name} ({target_masked}). SMS alert could not be delivered."
             else:
                 overall_status = "failed"
+                is_success = False
+                sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS dispatch failed"
+                call_err = call_res.get("safe_message") or call_res.get("error") or "Voice call initiation failed"
+                response_msg = f"Emergency communication failed. Dispatch to trusted contact failed via Exotel (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
         else:
             overall_status = "throttled"
             sms_status = "throttled"
             call_status = "throttled"
+            is_success = False
+            response_msg = reason or "SOS broadcast throttled. Please wait before retrying."
 
         # Log SOS event
         log_emergency_event(
@@ -177,11 +173,15 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
             recipient_phone_masked=target_masked,
             status=overall_status,
             sid=call_sid or sms_sid,
+            error_message=response_msg if not is_success else None,
             latitude=lat,
             longitude=lon
         )
     else:
-        broadcast_list = ["System Emergency Dispatch (112)", "Global SOS Command Center"]
+        overall_status = "no_trusted_contact"
+        is_success = False
+        response_msg = "No trusted emergency contact is registered. Please configure a trusted contact in Settings or dial 112 directly."
+        broadcast_list = ["No registered contact - Dial 112 National Emergency directly"]
         log_emergency_event(
             db=db,
             user_id=user_id,
@@ -189,52 +189,58 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
             recipient_name="Emergency Dispatch (112)",
             recipient_phone_masked="112",
             status="no_trusted_contact",
+            error_message="No registered contacts found for user",
             latitude=lat,
             longitude=lon
         )
 
-    safe_havens = [
+    # Fail-safe emergency response network: Official verified emergency lifelines.
+    # Never fabricate fictitious hospitals or police stations with artificial coordinate offsets.
+    verified_havens = [
         schemas.SafeHaven(
-            name="Metropolitan Emergency Police Station",
-            type="Police Station",
-            latitude=lat + 0.004,
-            longitude=lon - 0.002,
-            distance_km=0.5,
-            phone="112"
+            name="National Emergency Response Center (Police, Medical, Fire, Disaster)",
+            type="National Emergency Service",
+            phone="112",
+            is_verified=True,
+            is_demo=False,
+            data_source="Emergency Response Support System (ERSS 112)",
+            note="Unified 24/7 national emergency response line. Primary fail-safe lifeline."
         ),
         schemas.SafeHaven(
-            name="General Memorial Medical Center",
-            type="Hospital",
-            latitude=lat - 0.009,
-            longitude=lon + 0.007,
-            distance_km=1.2,
-            phone="108"
+            name="National Ambulance & Medical Trauma Dispatch",
+            type="Medical Emergency / Hospital",
+            phone="108",
+            is_verified=True,
+            is_demo=False,
+            data_source="National Health Mission (108 Ambulance)",
+            note="24/7 emergency medical dispatch and hospital triage network."
         ),
         schemas.SafeHaven(
-            name="Emergency Rescue Command Post",
-            type="Rescue Post",
-            latitude=lat + 0.018,
-            longitude=lon + 0.015,
-            distance_km=2.5,
-            phone="112"
+            name="Police Emergency Control Room",
+            type="Police Department",
+            phone="100",
+            is_verified=True,
+            is_demo=False,
+            data_source="National Police Service (100 PCR)",
+            note="Direct police emergency dispatch for immediate safety protection."
         )
     ]
 
-    msg = request.custom_message or "Immediate emergency assistance required! Live coordinates transmitted."
-    response_msg = f"SOS Broadcasting activated. Alert dispatched to configured channels."
+    active_transaction_id = call_sid or sms_sid
 
     return schemas.SOSResponse(
-        success=True,
+        success=is_success,
         message=response_msg,
         broadcasted_contacts=broadcast_list,
         latitude=lat,
         longitude=lon,
-        nearest_havens=safe_havens,
+        nearest_havens=verified_havens,
         sms_status=sms_status,
         call_status=call_status,
         overall_status=overall_status,
         recipient_name=target_name,
-        recipient_phone_masked=target_masked
+        recipient_phone_masked=target_masked,
+        transaction_id=active_transaction_id
     )
 
 
@@ -274,6 +280,7 @@ def send_trusted_contact_sms(
         user_name=primary.name,
         latitude=request.latitude,
         longitude=request.longitude,
+        location_name=request.location_name,
         custom_message=request.custom_message
     )
 
@@ -395,7 +402,7 @@ def notify_trusted_contact(
             safe_message=reason or "Please wait before resending emergency notification.",
             recipient_name=primary.name,
             recipient_phone_masked=masked_phone,
-            timestamp=datetime.datetime.utcnow()
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
 
     sms_res = {"status": "skipped", "sid": None, "success": True}
@@ -405,6 +412,7 @@ def notify_trusted_contact(
             user_name=primary.name,
             latitude=request.latitude,
             longitude=request.longitude,
+            location_name=request.location_name,
             custom_message=request.custom_message
         )
 
@@ -418,15 +426,28 @@ def notify_trusted_contact(
     sms_status = sms_res.get("status", "failed")
     call_status = call_res.get("status", "failed")
 
-    if (sms_status in ["sent", "skipped"]) and (call_status in ["initiated", "skipped"]):
+    if sms_status == "sent" and call_status == "initiated":
         overall = "completed"
-        msg = "Emergency alerts dispatched successfully to trusted contact."
+        is_success = True
+        msg = f"Emergency SMS and voice call dispatched successfully to {primary.name} ({masked_phone})."
+    elif sms_status == "sent" and call_status == "skipped":
+        overall = "completed"
+        is_success = True
+        msg = f"Emergency SMS dispatched successfully to {primary.name} ({masked_phone})."
+    elif call_status == "initiated" and sms_status == "skipped":
+        overall = "completed"
+        is_success = True
+        msg = f"Emergency voice call initiated successfully to {primary.name} ({masked_phone})."
     elif sms_status == "sent" or call_status == "initiated":
         overall = "partially_completed"
-        msg = "Emergency alert partially delivered to trusted contact."
+        is_success = True
+        msg = f"Emergency alert partially dispatched to {primary.name} ({masked_phone}). One channel failed."
     else:
         overall = "failed"
-        msg = "Emergency communication to trusted contact failed."
+        is_success = False
+        sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS failed"
+        call_err = call_res.get("safe_message") or call_res.get("error") or "Call failed"
+        msg = f"Emergency communication failed. Dispatch to trusted contact failed via Exotel (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
 
     # Persist audit logs
     log_emergency_event(
@@ -443,12 +464,12 @@ def notify_trusted_contact(
     )
 
     return schemas.EmergencyNotificationResponse(
-        success=(overall in ["completed", "partially_completed"]),
+        success=is_success,
         overall_status=overall,
         sms_status=sms_status,
         call_status=call_status,
         message=msg,
-        safe_message=f"{msg} Destination: {primary.name} ({masked_phone})",
+        safe_message=msg,
         recipient_name=primary.name,
         recipient_phone_masked=masked_phone,
         sms_sid=sms_res.get("sid"),
@@ -457,17 +478,319 @@ def notify_trusted_contact(
     )
 
 
-def check_pending_checkins(db: Session):
-    now = datetime.datetime.now(datetime.timezone.utc)
-    overdue_checkins = db.query(models.SafeCheckIn).filter(
+_active_escalating_ids = set()
 
-        models.SafeCheckIn.is_completed == False,
-        models.SafeCheckIn.is_triggered == False,
-        models.SafeCheckIn.target_time < now
-    ).all()
-    
-    for checkin in overdue_checkins:
-        checkin.is_triggered = True
-        
+
+def to_utc_naive(dt: datetime.datetime) -> datetime.datetime:
+    """Normalize datetime to UTC naive for consistent database comparisons."""
+    if dt.tzinfo is not None:
+        return dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeCheckIn:
+    """
+    Executes the Dead-Man's Switch emergency escalation workflow for an expired check-in.
+    Idempotent: guarantees the same expired check-in cannot trigger repeated emergency calls/SMS.
+    """
+    # 1. Verify user has not confirmed safety
+    if checkin.is_completed:
+        if checkin.escalation_status == "pending":
+            checkin.escalation_status = "confirmed_safe"
+            db.commit()
+        return checkin
+
+    # 2. Prevent duplicate dispatch & enforce idempotency
+    if checkin.is_triggered and checkin.escalation_status not in ("pending", "escalating"):
+        # Already evaluated and dispatched/handled previously
+        return checkin
+
+    if checkin.id in _active_escalating_ids:
+        # Currently being evaluated in another concurrent process/thread
+        return checkin
+
+    # Acquire in-flight escalation lock atomically
+    _active_escalating_ids.add(checkin.id)
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    target_ts = int(checkin.target_time.timestamp()) if hasattr(checkin.target_time, "timestamp") else int(datetime.datetime.now().timestamp())
+    checkin.idempotency_key = f"chk_{checkin.id}_{target_ts}"
+    checkin.is_triggered = True
+    checkin.escalation_status = "escalating"
     db.commit()
-    return overdue_checkins
+    db.refresh(checkin)
+
+    try:
+        # Re-verify user did not confirm safety during lock acquisition
+        if checkin.is_completed:
+            checkin.escalation_status = "confirmed_safe"
+            db.commit()
+            return checkin
+
+        # 3. Get active trusted contact
+        active_contact = db.query(models.EmergencyContact).filter(
+            models.EmergencyContact.user_id == checkin.user_id,
+            models.EmergencyContact.is_enabled == True
+        ).first()
+
+        # 4. Get latest known GPS snapshot
+        lat = checkin.last_known_latitude
+        lon = checkin.last_known_longitude
+        if lat is None or lon is None:
+            # Fallback: check most recent emergency event or ping with coordinates for this user
+            last_event = db.query(models.EmergencyEventLog).filter(
+                models.EmergencyEventLog.user_id == checkin.user_id,
+                models.EmergencyEventLog.latitude.isnot(None),
+                models.EmergencyEventLog.longitude.isnot(None)
+            ).order_by(models.EmergencyEventLog.created_at.desc()).first()
+            if last_event:
+                lat = last_event.latitude
+                lon = last_event.longitude
+
+        if not active_contact:
+            # No active trusted contact configured
+            checkin.escalation_status = "no_trusted_contact"
+            checkin.dispatched_at = now_utc
+            checkin.dispatch_error = "No active trusted contact configured for user"
+            db.commit()
+            db.refresh(checkin)
+
+            log_emergency_event(
+                db=db,
+                user_id=checkin.user_id,
+                event_type="dead_man_switch_escalation",
+                recipient_name=None,
+                recipient_phone_masked=None,
+                status="failed",
+                error_message="No active trusted contact configured",
+                latitude=lat,
+                longitude=lon
+            )
+            return checkin
+
+        # 5. Trigger Exotel emergency communication
+        masked_phone = exotel_service.mask_phone_number(active_contact.phone)
+        maps_link = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}" if (lat is not None and lon is not None) else None
+        loc_text = f" Last known location: {maps_link}." if maps_link else ""
+        user_note = f" Check-in note: '{checkin.checkin_text.strip()}'." if checkin.checkin_text else ""
+
+        escalation_message = (
+            f"DEAD-MAN'S SWITCH EMERGENCY ALERT: Traveler '{checkin.user_id}' missed their scheduled safety check-in."
+            f"{user_note}{loc_text} Please attempt to reach them immediately or contact emergency services (112)."
+        )
+
+        sms_res = exotel_service.send_emergency_sms(
+            to_phone=active_contact.phone,
+            user_name=active_contact.name,
+            latitude=lat,
+            longitude=lon,
+            custom_message=escalation_message
+        )
+
+        call_res = exotel_service.make_emergency_call(
+            to_phone=active_contact.phone,
+            user_name=active_contact.name
+        )
+
+        sms_status = sms_res.get("status", "failed")
+        call_status = call_res.get("status", "failed")
+        sms_sid = sms_res.get("sid")
+        call_sid = call_res.get("sid")
+
+        sms_ok = sms_status == "sent"
+        call_ok = call_status == "initiated"
+
+        # 6. Record dispatch result & Update escalation status
+        if sms_ok or call_ok:
+            checkin.escalation_status = "escalated"
+            overall_status = "completed" if (sms_ok and call_ok) else "partially_completed"
+            err_msg = None
+        else:
+            checkin.escalation_status = "exotel_failure"
+            overall_status = "failed"
+            sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS failed"
+            call_err = call_res.get("safe_message") or call_res.get("error") or "Call failed"
+            err_msg = f"SMS: {sms_err} | Call: {call_err}"
+
+        checkin.dispatched_at = now_utc
+        checkin.dispatch_sms_sid = sms_sid
+        checkin.dispatch_call_sid = call_sid
+        checkin.dispatch_recipient_name = active_contact.name
+        checkin.dispatch_recipient_phone = masked_phone
+        checkin.dispatch_error = err_msg
+
+        db.commit()
+        db.refresh(checkin)
+
+        # Audit log in EmergencyEventLog
+        log_emergency_event(
+            db=db,
+            user_id=checkin.user_id,
+            event_type="dead_man_switch_escalation",
+            recipient_name=active_contact.name,
+            recipient_phone_masked=masked_phone,
+            status=overall_status,
+            sid=call_sid or sms_sid,
+            error_message=err_msg,
+            latitude=lat,
+            longitude=lon
+        )
+        return checkin
+
+    except Exception as exc:
+        db.rollback()
+        logger.error(f"Unexpected error during checkin escalation: {exc}", exc_info=True)
+        checkin.escalation_status = "exotel_failure"
+        checkin.dispatch_error = str(exc)
+        checkin.dispatched_at = datetime.datetime.now(datetime.timezone.utc)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+        return checkin
+    finally:
+        _active_escalating_ids.discard(checkin.id)
+
+
+def check_pending_checkins(db: Session) -> List[models.SafeCheckIn]:
+    """
+    Scans for overdue, uncompleted, non-triggered check-ins and executes real emergency escalation.
+    """
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_naive = now_utc.replace(tzinfo=None)
+
+    pending_items = db.query(models.SafeCheckIn).filter(
+        models.SafeCheckIn.is_completed == False,
+        models.SafeCheckIn.is_triggered == False
+    ).all()
+
+    overdue_to_escalate = []
+    for item in pending_items:
+        t_time = item.target_time
+        if t_time is not None:
+            if t_time.tzinfo is not None:
+                is_past = t_time <= now_utc
+            else:
+                is_past = t_time <= now_naive
+            if is_past:
+                overdue_to_escalate.append(item)
+
+    escalated_results = []
+    for checkin in overdue_to_escalate:
+        res = escalate_checkin(db, checkin)
+        escalated_results.append(res)
+
+    return escalated_results
+
+
+def set_safe_checkin(
+    db: Session,
+    checkin_in: schemas.SafeCheckInCreate,
+    user_id: str = "default_user"
+) -> models.SafeCheckIn:
+    """
+    Initializes a new safe check-in timer with optional GPS snapshot.
+    Cleans up older non-completed timers for the user.
+    """
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    db.query(models.SafeCheckIn).filter(
+        models.SafeCheckIn.user_id == user_id,
+        models.SafeCheckIn.is_completed == False
+    ).delete()
+
+    target_time_utc = to_utc_naive(checkin_in.target_time)
+
+    db_checkin = models.SafeCheckIn(
+        target_time=target_time_utc,
+        checkin_text=checkin_in.checkin_text,
+        user_id=user_id,
+        is_completed=False,
+        is_triggered=False,
+        escalation_status="pending",
+        last_known_latitude=checkin_in.latitude,
+        last_known_longitude=checkin_in.longitude,
+        last_location_time=now_utc if (checkin_in.latitude is not None and checkin_in.longitude is not None) else None,
+        created_at=now_utc
+    )
+    db.add(db_checkin)
+    db.commit()
+    db.refresh(db_checkin)
+    return db_checkin
+
+
+def confirm_safe_checkin(
+    db: Session,
+    user_id: str = "default_user"
+) -> models.SafeCheckIn:
+    """
+    Completes the active check-in timer safely, preventing any escalation.
+    """
+    active_checkin = db.query(models.SafeCheckIn).filter(
+        models.SafeCheckIn.user_id == user_id,
+        models.SafeCheckIn.is_completed == False
+    ).order_by(models.SafeCheckIn.target_time.desc()).first()
+
+    if not active_checkin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active check-in timers found."
+        )
+
+    active_checkin.is_completed = True
+    active_checkin.escalation_status = "confirmed_safe"
+    db.commit()
+    db.refresh(active_checkin)
+    return active_checkin
+
+
+def cancel_safe_checkin(
+    db: Session,
+    user_id: str = "default_user"
+) -> models.SafeCheckIn:
+    """
+    Cancels an active check-in timer without triggering escalation.
+    """
+    active_checkin = db.query(models.SafeCheckIn).filter(
+        models.SafeCheckIn.user_id == user_id,
+        models.SafeCheckIn.is_completed == False
+    ).order_by(models.SafeCheckIn.target_time.desc()).first()
+
+    if not active_checkin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active check-in timers found to cancel."
+        )
+
+    active_checkin.is_completed = True
+    active_checkin.escalation_status = "cancelled"
+    db.commit()
+    db.refresh(active_checkin)
+    return active_checkin
+
+
+def update_checkin_location(
+    db: Session,
+    latitude: float,
+    longitude: float,
+    user_id: str = "default_user"
+) -> models.SafeCheckIn:
+    """
+    Updates the latest known GPS snapshot for the active check-in timer.
+    """
+    active_checkin = db.query(models.SafeCheckIn).filter(
+        models.SafeCheckIn.user_id == user_id,
+        models.SafeCheckIn.is_completed == False
+    ).order_by(models.SafeCheckIn.target_time.desc()).first()
+
+    if not active_checkin:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active check-in timer found to update location."
+        )
+
+    active_checkin.last_known_latitude = latitude
+    active_checkin.last_known_longitude = longitude
+    active_checkin.last_location_time = datetime.datetime.now(datetime.timezone.utc)
+    db.commit()
+    db.refresh(active_checkin)
+    return active_checkin
+

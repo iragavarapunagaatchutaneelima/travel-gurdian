@@ -43,7 +43,7 @@ assert(swExists, "public/sw.js exists");
 
 if (swExists) {
   const swContent = fs.readFileSync(swPath, "utf-8");
-  assert(swContent.includes("travel-guardian-v8"), "Service Worker includes v8 cache version tag");
+  assert(swContent.includes("travel-guardian-v10"), "Service Worker includes current cache version tag");
   assert(swContent.includes("STATIC_CACHE"), "Static cache strategy defined");
   assert(swContent.includes("RUNTIME_CACHE"), "Runtime cache strategy defined");
   assert(swContent.includes("APP_SHELL"), "App shell pre-cache array configured");

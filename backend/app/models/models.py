@@ -72,6 +72,7 @@ class EmergencyContact(Base):
     email = Column(String(100), nullable=True)
     relation = Column(String(50), nullable=False)  # Partner, Parent, Friend, etc.
     user_id = Column(String(50), default="default_user", index=True)
+    is_enabled = Column(Boolean, default=True, nullable=False)
 
 class SafeCheckIn(Base):
     __tablename__ = "safe_checkins"
@@ -82,8 +83,21 @@ class SafeCheckIn(Base):
     checkin_text = Column(String(200), nullable=True)
     
     is_completed = Column(Boolean, default=False)
-    is_triggered = Column(Boolean, default=False)  # SOS triggered because user failed to check in
+    is_triggered = Column(Boolean, default=False)  # Escalation triggered because user failed to check in
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # Escalation & Dead-Man's Switch tracking
+    last_known_latitude = Column(Float, nullable=True)
+    last_known_longitude = Column(Float, nullable=True)
+    last_location_time = Column(DateTime, nullable=True)
+    escalation_status = Column(String(50), default="pending", nullable=False)  # pending, confirmed_safe, escalating, escalated, exotel_failure, no_trusted_contact, cancelled
+    dispatched_at = Column(DateTime, nullable=True)
+    dispatch_sms_sid = Column(String(100), nullable=True)
+    dispatch_call_sid = Column(String(100), nullable=True)
+    dispatch_recipient_name = Column(String(100), nullable=True)
+    dispatch_recipient_phone = Column(String(30), nullable=True)
+    dispatch_error = Column(String(255), nullable=True)
+    idempotency_key = Column(String(100), nullable=True, unique=True, index=True)
 
 class EmergencyEventLog(Base):
     __tablename__ = "emergency_event_logs"

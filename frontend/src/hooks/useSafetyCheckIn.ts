@@ -17,6 +17,7 @@ import {
   sendTrustedContactAlert, 
   clearEscalationHistory 
 } from "../services/notificationService";
+import { TravelGuardianAPI } from "../services/api";
 
 export interface UseSafetyCheckInOptions {
   autoStartWithNavigation?: boolean;
@@ -86,6 +87,42 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
   useEffect(() => {
     onStateChange?.(status);
   }, [status, onStateChange]);
+
+  // Authoritative Source of Truth: Recover active timer from backend on mount
+  useEffect(() => {
+    let isMounted = true;
+    TravelGuardianAPI.getActiveCheckin()
+      .then(active => {
+        if (!isMounted || !active || active.is_completed || active.is_triggered) return;
+        const targetMs = new Date(active.target_time).getTime();
+        const now = Date.now();
+        if (targetMs > now) {
+          const remainingSec = Math.max(0, Math.ceil((targetMs - now) / 1000));
+          setStatus("ACTIVE");
+          setActiveCycle({
+            cycleId: `backend_${active.id}`,
+            cycleNumber: 1,
+            startedAt: new Date(active.created_at).getTime(),
+            scheduledCheckInAt: targetMs,
+            gracePeriodEndsAt: targetMs,
+            status: "ACTIVE"
+          });
+          setSecondsRemaining(remainingSec);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Sync GPS updates to active backend check-in timer
+  useEffect(() => {
+    if (activeCycleRef.current && currentPosition?.latitude && currentPosition?.longitude) {
+      TravelGuardianAPI.updateCheckinLocation(currentPosition.latitude, currentPosition.longitude)
+        .catch(() => {});
+    }
+  }, [currentPosition?.latitude, currentPosition?.longitude]);
 
   /**
    * Evaluates state machine based on authoritative Date.now()
@@ -204,7 +241,16 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     setStatus("ACTIVE");
     setSecondsRemaining(Math.ceil(intervalMs / 1000));
     setGraceSecondsRemaining(Math.ceil(gracePeriodMs / 1000));
-  }, []);
+
+    // Register Dead-Man's Switch timer on authoritative backend
+    const pos = positionRef.current;
+    TravelGuardianAPI.setCheckin(
+      new Date(graceEndsAt).toISOString(),
+      destinationName ? `Destination: ${destinationName}` : undefined,
+      pos?.latitude,
+      pos?.longitude
+    ).catch(err => console.warn("Backend checkin sync failed, using offline fallback:", err));
+  }, [destinationName]);
 
   /**
    * User confirms safety ("I'M SAFE")
@@ -245,7 +291,20 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     setStatus("ACTIVE");
     setSecondsRemaining(Math.ceil(intervalMs / 1000));
     setGraceSecondsRemaining(Math.ceil(gracePeriodMs / 1000));
-  }, []);
+
+    // Confirm safety on backend, completing the prior timer and registering the new cycle
+    TravelGuardianAPI.confirmCheckin()
+      .then(() => {
+        const pos = positionRef.current;
+        return TravelGuardianAPI.setCheckin(
+          new Date(graceEndsAt).toISOString(),
+          destinationName ? `Destination: ${destinationName}` : undefined,
+          pos?.latitude,
+          pos?.longitude
+        );
+      })
+      .catch(err => console.warn("Backend confirm checkin failed, using offline state:", err));
+  }, [destinationName]);
 
   /**
    * User explicitly requests emergency help ("I NEED HELP")
@@ -288,6 +347,7 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     setStatus("CANCELLED");
     setActiveCycle(null);
     setEscalationResult(null);
+    TravelGuardianAPI.cancelCheckin().catch(() => {});
   }, []);
 
   /**
@@ -296,6 +356,7 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
   const resolveOnArrival = useCallback(() => {
     setStatus("RESOLVED");
     setActiveCycle(prev => prev ? { ...prev, status: "RESOLVED", confirmedAt: Date.now() } : null);
+    TravelGuardianAPI.confirmCheckin().catch(() => {});
   }, []);
 
   return {

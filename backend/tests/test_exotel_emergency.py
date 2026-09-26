@@ -174,8 +174,11 @@ class TestExotelEmergencyIntegration(unittest.TestCase):
         self.assertEqual(exotel_service.normalize_phone_number("9876543210"), "+919876543210")
         self.assertEqual(exotel_service.normalize_phone_number("09876543210"), "+919876543210")
         self.assertEqual(exotel_service.normalize_phone_number("+91 98765 43210"), "+919876543210")
-        self.assertEqual(exotel_service.normalize_phone_number("+1-555-019900"), "+1555019900")
+        self.assertEqual(exotel_service.normalize_phone_number("+1-415-234-5678"), "+14152345678")
         
+        # Fictional 555 numbers must be rejected
+        with self.assertRaises(ValueError):
+            exotel_service.normalize_phone_number("+1-555-019900")
         with self.assertRaises(ValueError):
             exotel_service.normalize_phone_number("123")  # Too short
         with self.assertRaises(ValueError):

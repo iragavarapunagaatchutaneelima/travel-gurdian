@@ -11,7 +11,8 @@ import {
   removeTrustedContact, 
   toggleContactEnabled,
   MAX_TRUSTED_CONTACTS,
-  MIN_TRUSTED_CONTACTS
+  MIN_TRUSTED_CONTACTS,
+  validatePhoneNumber
 } from "../../services/trustedContactService";
 import { TravelGuardianAPI } from "../../services/api";
 import { reverseGeocodeCoordinates } from "../../services/googlePlaces";
@@ -34,17 +35,25 @@ import {
   Radio, 
   X, 
   CheckCircle2,
+  AlertCircle,
   Info,
   Loader2,
   MessageSquare,
   Send,
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  Unlock
 } from "lucide-react";
 
 export default function EmergencyScreen() {
   const [contacts, setContacts] = useState<TrustedContact[]>([]);
   const [alertMessage, setAlertMessage] = useState<{ text: string; type: "success" | "warning" | "danger" } | null>(null);
+
+  // 112 Safety Lock State (Sections 23, 24, 25, 26: DEACTIVATED by default)
+  const [is112Active, setIs112Active] = useState(false);
+  const [show112ConfirmModal, setShow112ConfirmModal] = useState(false);
+  const [show112CallDialog, setShow112CallDialog] = useState(false);
   
   // Trusted Contact Modal
   const [showContactModal, setShowContactModal] = useState(false);
@@ -53,6 +62,10 @@ export default function EmergencyScreen() {
   const [contactPhone, setContactPhone] = useState("");
   const [contactRel, setContactRel] = useState("Family");
   const [contactFormError, setContactFormError] = useState<string | null>(null);
+
+  // Synchronization status state (Source of Truth: Backend)
+  const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error" | "offline">("syncing");
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Telemetry Location Snapshot (Section 17: Humanized Location)
   const [locationSnapshot, setLocationSnapshot] = useState<LocationSnapshot | null>(null);
@@ -66,28 +79,38 @@ export default function EmergencyScreen() {
   const [callStatus, setCallStatus] = useState<"pending" | "initiated" | "completed" | "failed" | null>(null);
   const [overallStatus, setOverallStatus] = useState<"pending" | "partially_completed" | "completed" | "failed" | null>(null);
 
-  useEffect(() => {
-    const local = getTrustedContacts();
-    setContacts(local);
-    fetchCurrentLocation();
+  // Load contacts from backend server as the definitive Source of Truth
+  const loadContactsFromBackend = async () => {
+    setSyncStatus("syncing");
+    setSyncMessage("Synchronizing contacts with server...");
+    try {
+      const backendContacts = await TravelGuardianAPI.getEmergencyContacts();
+      const mapped: TrustedContact[] = backendContacts.map((bc) => ({
+        id: `tc_${bc.id}`,
+        backendId: bc.id,
+        name: bc.name,
+        phone: bc.phone,
+        relationship: bc.relation,
+        enabled: bc.is_enabled !== undefined ? bc.is_enabled : true,
+        createdAt: Date.now()
+      }));
+      setContacts(mapped);
+      saveTrustedContacts(mapped);
+      setSyncStatus("synced");
+      setSyncMessage("Synced with Server");
+    } catch (err: any) {
+      console.warn("Backend contacts fetch failed:", err);
+      // Offline fallback: load from local cache
+      const local = getTrustedContacts();
+      setContacts(local);
+      setSyncStatus("offline");
+      setSyncMessage(err?.detail || err?.message || "Backend offline — Loaded from local cache");
+    }
+  };
 
-    // Synchronize with backend database contacts if available
-    TravelGuardianAPI.getEmergencyContacts()
-      .then((backendContacts) => {
-        if (backendContacts && backendContacts.length > 0) {
-          const mapped: TrustedContact[] = backendContacts.map((bc) => ({
-            id: `tc_${bc.id}`,
-            name: bc.name,
-            phone: bc.phone,
-            relationship: bc.relation,
-            enabled: true,
-            createdAt: Date.now()
-          }));
-          setContacts(mapped);
-          saveTrustedContacts(mapped);
-        }
-      })
-      .catch(() => {});
+  useEffect(() => {
+    loadContactsFromBackend();
+    fetchCurrentLocation();
   }, []);
 
   // Section 17: Fetch actual GPS and reverse geocode to human-readable address
@@ -162,59 +185,155 @@ export default function EmergencyScreen() {
     setShowContactModal(true);
   };
 
-  const handleSaveContact = (e: React.FormEvent) => {
+  const handleSaveContact = async (e: React.FormEvent) => {
     e.preventDefault();
     setContactFormError(null);
 
-    if (editingContactId) {
-      const res = updateTrustedContact(editingContactId, {
-        name: contactName,
-        phone: contactPhone,
-        relationship: contactRel
-      });
-      if (!res.success) {
-        setContactFormError(res.error || "Failed to update contact.");
-        return;
-      }
-      setAlertMessage({ text: `Updated contact: ${contactName}`, type: "success" });
-    } else {
-      const res = addTrustedContact({
-        name: contactName,
-        phone: contactPhone,
-        relationship: contactRel,
-        enabled: true
-      });
-      if (!res.success) {
-        setContactFormError(res.error || "Failed to add contact.");
-        return;
-      }
-      setAlertMessage({ text: `Added trusted contact: ${contactName}`, type: "success" });
-    }
-
-    // Synchronize to backend SQLite database
-    TravelGuardianAPI.createEmergencyContact({
-      name: contactName,
-      phone: contactPhone,
-      relation: contactRel
-    }).catch(err => console.warn("Backend contact sync notice:", err));
-
-    setContacts(getTrustedContacts());
-    setShowContactModal(false);
-  };
-
-  const handleDeleteContact = (id: string, name: string) => {
-    const res = removeTrustedContact(id);
-    if (!res.success) {
-      setAlertMessage({ text: res.error || "Could not delete contact.", type: "warning" });
+    const cleanName = contactName.trim();
+    if (!cleanName) {
+      setContactFormError("Contact name cannot be blank.");
       return;
     }
-    setContacts(getTrustedContacts());
-    setAlertMessage({ text: `Removed contact: ${name}`, type: "success" });
+
+    const phoneValidation = validatePhoneNumber(contactPhone);
+    if (!phoneValidation.valid) {
+      setContactFormError(phoneValidation.error || "Invalid phone number.");
+      return;
+    }
+
+    setIsActionLoading(true);
+    setSyncStatus("syncing");
+
+    if (editingContactId) {
+      const existing = contacts.find(c => c.id === editingContactId);
+      const backendId = existing?.backendId;
+
+      try {
+        if (backendId) {
+          // Update the SAME record on backend (avoids duplicate creation)
+          const updatedBc = await TravelGuardianAPI.updateEmergencyContact(backendId, {
+            name: cleanName,
+            phone: phoneValidation.formatted,
+            relation: contactRel
+          });
+          updateTrustedContact(editingContactId, {
+            name: updatedBc.name,
+            phone: updatedBc.phone,
+            relationship: updatedBc.relation,
+            backendId: updatedBc.id
+          });
+        } else {
+          // No backend ID yet: create on backend
+          const newBc = await TravelGuardianAPI.createEmergencyContact({
+            name: cleanName,
+            phone: phoneValidation.formatted,
+            relation: contactRel,
+            is_enabled: true
+          });
+          updateTrustedContact(editingContactId, {
+            name: newBc.name,
+            phone: newBc.phone,
+            relationship: newBc.relation,
+            backendId: newBc.id
+          });
+        }
+
+        setContacts(getTrustedContacts());
+        setSyncStatus("synced");
+        setSyncMessage("Synced with Server");
+        setAlertMessage({ text: `Updated contact: ${cleanName}`, type: "success" });
+        setShowContactModal(false);
+      } catch (err: any) {
+        setSyncStatus("error");
+        setSyncMessage(`Sync error: ${err.detail || err.message}`);
+        setContactFormError(err.detail || err.message || "Failed to update contact on server.");
+      } finally {
+        setIsActionLoading(false);
+      }
+    } else {
+      // Add new contact
+      try {
+        const newBc = await TravelGuardianAPI.createEmergencyContact({
+          name: cleanName,
+          phone: phoneValidation.formatted,
+          relation: contactRel,
+          is_enabled: true
+        });
+
+        addTrustedContact({
+          name: newBc.name,
+          phone: newBc.phone,
+          relationship: newBc.relation,
+          enabled: newBc.is_enabled,
+          backendId: newBc.id
+        });
+
+        setContacts(getTrustedContacts());
+        setSyncStatus("synced");
+        setSyncMessage("Synced with Server");
+        setAlertMessage({ text: `Added trusted contact: ${cleanName}`, type: "success" });
+        setShowContactModal(false);
+      } catch (err: any) {
+        setSyncStatus("error");
+        setSyncMessage(`Sync error: ${err.detail || err.message}`);
+        setContactFormError(err.detail || err.message || "Failed to save contact on server.");
+      } finally {
+        setIsActionLoading(false);
+      }
+    }
   };
 
-  const handleToggleContact = (id: string) => {
-    toggleContactEnabled(id);
-    setContacts(getTrustedContacts());
+  const handleDeleteContact = async (id: string, name: string) => {
+    const contact = contacts.find(c => c.id === id);
+    if (!contact) return;
+
+    setIsActionLoading(true);
+    setSyncStatus("syncing");
+
+    try {
+      if (contact.backendId) {
+        await TravelGuardianAPI.deleteEmergencyContact(contact.backendId);
+      }
+      removeTrustedContact(id);
+      setContacts(getTrustedContacts());
+      setSyncStatus("synced");
+      setSyncMessage("Synced with Server");
+      setAlertMessage({ text: `Removed contact: ${name}`, type: "success" });
+    } catch (err: any) {
+      setSyncStatus("error");
+      setSyncMessage(`Delete sync failed: ${err.detail || err.message}`);
+      setAlertMessage({ text: `Failed to delete contact from server: ${err.detail || err.message}`, type: "danger" });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const handleToggleContact = async (id: string) => {
+    const contact = contacts.find(c => c.id === id);
+    if (!contact) return;
+
+    const nextEnabled = !contact.enabled;
+    setIsActionLoading(true);
+    setSyncStatus("syncing");
+
+    try {
+      if (contact.backendId) {
+        await TravelGuardianAPI.updateEmergencyContact(contact.backendId, {
+          is_enabled: nextEnabled
+        });
+      }
+      updateTrustedContact(id, { enabled: nextEnabled });
+      setContacts(getTrustedContacts());
+      setSyncStatus("synced");
+      setSyncMessage("Synced with Server");
+      setAlertMessage({ text: `${contact.name} is now ${nextEnabled ? "active" : "disabled"}`, type: "success" });
+    } catch (err: any) {
+      setSyncStatus("error");
+      setSyncMessage(`Status sync failed: ${err.detail || err.message}`);
+      setAlertMessage({ text: `Failed to update status on server: ${err.detail || err.message}`, type: "danger" });
+    } finally {
+      setIsActionLoading(false);
+    }
   };
 
   // Section 18: Destination must strictly resolve from the stored Trusted Contact
@@ -243,19 +362,19 @@ export default function EmergencyScreen() {
         contact_relation: primaryContact.relationship
       });
 
-      if (res && (res.status === "sent" || (res as any).status === "success" || res.success)) {
+      if (res && res.success && res.status === "sent") {
         setSmsStatus("sent");
-        setAlertMessage({ text: `SMS alert dispatched to ${primaryContact.name} (${primaryContact.phone}).`, type: "success" });
+        setAlertMessage({ text: `SMS alert dispatched to ${primaryContact.name} (${primaryContact.phone}). SID: ${res.sid || 'confirmed'}`, type: "success" });
         setActionStatusText("SMS alert dispatched successfully.");
       } else {
         setSmsStatus("failed");
-        setAlertMessage({ text: res?.safe_message || "Exotel SMS alert could not be delivered. Please use voice dialer.", type: "warning" });
-        setActionStatusText("SMS dispatch failed.");
+        setAlertMessage({ text: res?.safe_message ? `Emergency communication failed: ${res.safe_message}` : "Emergency communication failed. Please dial 112 directly.", type: "danger" });
+        setActionStatusText("Emergency communication failed.");
       }
     } catch {
       setSmsStatus("failed");
-      setAlertMessage({ text: "SMS dispatch network error.", type: "danger" });
-      setActionStatusText("SMS dispatch failed.");
+      setAlertMessage({ text: "Emergency communication failed. Network error. Please dial 112 directly.", type: "danger" });
+      setActionStatusText("Emergency communication failed.");
     } finally {
       setIsActionLoading(false);
     }
@@ -283,19 +402,19 @@ export default function EmergencyScreen() {
         contact_relation: primaryContact.relationship
       });
 
-      if (res && (res.status === "initiated" || (res as any).status === "completed" || res.success)) {
+      if (res && res.success && res.status === "initiated") {
         setCallStatus("initiated");
-        setAlertMessage({ text: `Emergency call connected to ${primaryContact.name} (${primaryContact.phone}).`, type: "success" });
+        setAlertMessage({ text: `Emergency call connected to ${primaryContact.name} (${primaryContact.phone}). Call SID: ${res.sid || 'confirmed'}`, type: "success" });
         setActionStatusText("Call initiated successfully.");
       } else {
         setCallStatus("failed");
-        setAlertMessage({ text: res?.safe_message || "Unable to initiate Exotel call. Please dial directly.", type: "warning" });
-        setActionStatusText("Call initiation failed.");
+        setAlertMessage({ text: res?.safe_message ? `Emergency communication failed: ${res.safe_message}` : "Emergency communication failed. Please dial 112 directly.", type: "danger" });
+        setActionStatusText("Emergency communication failed.");
       }
     } catch {
       setCallStatus("failed");
-      setAlertMessage({ text: "Voice call network error.", type: "danger" });
-      setActionStatusText("Call initiation failed.");
+      setAlertMessage({ text: "Emergency communication failed. Network error. Please dial 112 directly.", type: "danger" });
+      setActionStatusText("Emergency communication failed.");
     } finally {
       setIsActionLoading(false);
     }
@@ -324,9 +443,9 @@ export default function EmergencyScreen() {
         contact_relation: primaryContact.relationship
       });
 
-      if (res && (res.overall_status === "completed" || (res as any).status === "success" || res.success)) {
+      if (res && res.success && res.overall_status === "completed") {
         setSmsStatus("sent");
-        setCallStatus("completed");
+        setCallStatus("initiated");
         setOverallStatus("completed");
         setAlertMessage({ text: `SOS alerts dispatched to ${primaryContact.name} (${primaryContact.phone}).`, type: "success" });
         setActionStatusText("Emergency alerts sent successfully.");
@@ -336,16 +455,15 @@ export default function EmergencyScreen() {
         setActionStatusText("Partial delivery completed.");
       } else {
         setOverallStatus("failed");
-        setAlertMessage({ text: res?.safe_message || "Unable to contact trusted person via Exotel.", type: "danger" });
-        setActionStatusText("Unable to contact trusted person.");
+        setAlertMessage({ text: res?.safe_message ? `Emergency communication failed: ${res.safe_message}` : "Emergency communication failed. Please call 112 directly.", type: "danger" });
+        setActionStatusText("Emergency communication failed.");
       }
     } catch {
       setSmsStatus("failed");
       setCallStatus("failed");
       setOverallStatus("failed");
-      setAlertMessage({ text: "Unable to contact trusted person.", type: "danger" });
-
-      setActionStatusText("Unable to contact trusted person.");
+      setAlertMessage({ text: "Emergency communication failed. Network error. Please dial 112 directly.", type: "danger" });
+      setActionStatusText("Emergency communication failed.");
     } finally {
       setIsActionLoading(false);
     }
@@ -360,18 +478,59 @@ export default function EmergencyScreen() {
 
       <div className="w-full max-w-5xl mx-auto px-4 md:px-8 py-6 space-y-6 flex flex-col items-center animate-slideUp">
         
-        {/* Title Header */}
-        <div className="text-center max-w-xl space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold tracking-wider uppercase">
-            <ShieldAlert className="h-3.5 w-3.5" />
-            <span>Emergency Readiness Protocol</span>
+        {/* Title Header with Top-Right 112 Safety Lock Control */}
+        <div className="w-full max-w-2xl flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
+          <div className="text-left space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold tracking-wider uppercase">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              <span>Emergency Readiness Protocol</span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
+              Emergency Portal &amp; Guardians
+            </h1>
+            <p className="text-xs text-(--muted-foreground) leading-relaxed max-w-md">
+              Dispatch instant alerts exclusively to your configured guardians, inspect verified GPS telemetry, or access emergency services.
+            </p>
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-tight">
-            Emergency Portal &amp; Trusted Guardians
-          </h1>
-          <p className="text-xs md:text-sm text-(--muted-foreground) leading-relaxed">
-            Dispatch instant alerts to your configured guardians, inspect verified GPS location telemetry, or directly dial 112 emergency services.
-          </p>
+
+          {/* 112 Emergency Activation Toggle (Section 23: Small toggle in top-right, Initial State: DEACTIVATED) */}
+          <div className="p-3 rounded-2xl bg-surface border border-border shadow-sm flex flex-col items-end gap-1.5 shrink-0 self-end sm:self-auto">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-(--muted-foreground) uppercase">112 Activation</span>
+              <button
+                type="button"
+                id="toggle-112-activation"
+                onClick={() => {
+                  if (is112Active) {
+                    setIs112Active(false);
+                    setAlertMessage({ text: "112 emergency calling has been deactivated and locked.", type: "warning" });
+                  } else {
+                    setShow112ConfirmModal(true);
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black transition-all ${
+                  is112Active
+                    ? "bg-red-600 text-white shadow-md shadow-red-600/30"
+                    : "bg-elevated-surface text-(--muted-foreground) border border-border hover:text-foreground"
+                }`}
+              >
+                {is112Active ? (
+                  <>
+                    <Unlock className="h-3.5 w-3.5" />
+                    <span>112 ACTIVE</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="h-3.5 w-3.5" />
+                    <span>DEACTIVATED</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <span className="text-[9px] text-(--muted-foreground) font-semibold">
+              {is112Active ? "Emergency calling enabled" : "Protected • Locked by default"}
+            </span>
+          </div>
         </div>
 
         {/* Global Feedback Banner */}
@@ -495,14 +654,38 @@ export default function EmergencyScreen() {
             {/* Action Buttons Grid */}
             <div className="space-y-3">
               
-              {/* PRIMARY EMERGENCY DIAL (112) - OFFICIAL 112 ONLY */}
-              <a
-                href="tel:112"
-                className="w-full py-4 rounded-2xl text-white font-black text-sm sm:text-base flex items-center justify-center gap-3 bg-linear-to-r from-red-600 to-rose-700 hover:opacity-95 shadow-xl shadow-red-600/30 transition-all active:scale-95 group"
-              >
-                <PhoneCall className="h-5 w-5 group-hover:animate-bounce" />
-                <span>Call Emergency Services — 112</span>
-              </a>
+              {/* 112 SAFETY LOCK PROTECTED CALL BUTTON (Sections 23, 24, 25, 26) */}
+              {is112Active ? (
+                <button
+                  type="button"
+                  id="action-112-call-btn"
+                  onClick={() => setShow112CallDialog(true)}
+                  className="w-full py-4 rounded-2xl text-white font-black text-sm sm:text-base flex items-center justify-center gap-3 bg-linear-to-r from-red-600 to-rose-700 hover:opacity-95 shadow-xl shadow-red-600/30 transition-all active:scale-95 group cursor-pointer"
+                >
+                  <PhoneCall className="h-5 w-5" />
+                  <span>Call Emergency Services — 112</span>
+                </button>
+              ) : (
+                <div 
+                  id="locked-112-container"
+                  onClick={() => setShow112ConfirmModal(true)}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-elevated-surface border-2 border-dashed border-red-500/30 text-(--muted-foreground) flex items-center justify-between gap-3 cursor-pointer hover:border-red-500/50 transition-all"
+                  title="Click to activate 112 calling"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-red-500/10 text-red-500">
+                      <Lock className="h-4 w-4" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-extrabold text-foreground">112 Emergency Calling (Locked / Disabled)</div>
+                      <div className="text-[10px] text-(--muted-foreground)">Activate toggle in top-right to enable direct emergency dialing</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider px-2.5 py-1 rounded-lg bg-red-500/10 shrink-0">
+                    LOCKED
+                  </span>
+                </div>
+              )}
 
               {/* SOS Broadcast to Configured Contact Only (SMS + Call) */}
               <button
@@ -578,19 +761,52 @@ export default function EmergencyScreen() {
           <div className="rounded-3xl p-6 space-y-4 bg-surface border border-border shadow-xl text-left">
             <div className="flex items-center justify-between pb-3 border-b border-border">
               <div>
-                <h3 className="font-extrabold text-sm sm:text-base text-foreground">Trusted Guardian Contacts</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-extrabold text-sm sm:text-base text-foreground">Trusted Guardian Contacts</h3>
+                  
+                  {syncStatus === "synced" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                      <Check className="h-3 w-3" /> Synced with Server
+                    </span>
+                  )}
+                  {syncStatus === "syncing" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-(--primary) border border-blue-500/20 inline-flex items-center gap-1 animate-pulse">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Syncing...
+                    </span>
+                  )}
+                  {syncStatus === "offline" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 inline-flex items-center gap-1" title={syncMessage || undefined}>
+                      <AlertTriangle className="h-3 w-3" /> Local Cache
+                    </span>
+                  )}
+                  {syncStatus === "error" && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 inline-flex items-center gap-1" title={syncMessage || undefined}>
+                      <AlertCircle className="h-3 w-3" /> Sync Failed
+                    </span>
+                  )}
+                </div>
                 <span className="text-[11px] text-(--muted-foreground) font-medium block mt-0.5">
                   {contacts.length} of {MAX_TRUSTED_CONTACTS} configured • Emergency alerts dispatch exclusively here
                 </span>
               </div>
-              <button
-                onClick={handleOpenAddContact}
-                disabled={contacts.length >= MAX_TRUSTED_CONTACTS}
-                className="py-2 px-4 rounded-xl text-white text-xs font-bold bg-(--primary) hover:opacity-90 shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                <span>Add Contact</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadContactsFromBackend}
+                  disabled={syncStatus === "syncing"}
+                  className="p-2 rounded-xl bg-elevated-surface text-(--muted-foreground) hover:text-foreground border border-border transition-colors disabled:opacity-50"
+                  title="Re-sync with Server"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${syncStatus === "syncing" ? "animate-spin" : ""}`} />
+                </button>
+                <button
+                  onClick={handleOpenAddContact}
+                  disabled={contacts.length >= MAX_TRUSTED_CONTACTS}
+                  className="py-2 px-4 rounded-xl text-white text-xs font-bold bg-(--primary) hover:opacity-90 shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span>Add Contact</span>
+                </button>
+              </div>
             </div>
 
             {/* Contact List */}
@@ -756,6 +972,99 @@ export default function EmergencyScreen() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 112 Activation Confirmation Modal (Section 23) */}
+      {show112ConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-surface border border-border w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp text-left">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2 text-red-600 font-extrabold text-sm uppercase tracking-wide">
+                <ShieldAlert className="h-5 w-5" />
+                <span>112 Emergency Activation</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShow112ConfirmModal(false)}
+                className="p-1 rounded-xl text-(--muted-foreground) hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-foreground">
+                Are you sure you want to activate 112 emergency calling?
+              </p>
+              <p className="text-xs text-(--muted-foreground) leading-relaxed">
+                Activating this feature enables direct emergency-service calling. Use it only when required.
+              </p>
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                Safety Note: In development and test environments, 112 live dispatches are disabled. Never simulate a real emergency dispatch.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                id="cancel-112-activation-btn"
+                onClick={() => setShow112ConfirmModal(false)}
+                className="px-4 py-2.5 rounded-2xl font-bold text-xs bg-elevated-surface border border-border text-foreground hover:bg-surface transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-activate-112-btn"
+                onClick={() => {
+                  setIs112Active(true);
+                  setShow112ConfirmModal(false);
+                  setAlertMessage({ text: "112 Emergency Calling is now ACTIVE.", type: "warning" });
+                }}
+                className="px-5 py-2.5 rounded-2xl font-black text-xs bg-red-600 text-white shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
+              >
+                Activate 112
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Final Confirmation Modal before initiating actual 112 Call (Section 24) */}
+      {show112CallDialog && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-surface border-2 border-red-500 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 animate-scaleUp text-left">
+            <div className="flex items-center gap-2 text-red-600 font-extrabold text-sm uppercase">
+              <PhoneCall className="h-5 w-5" />
+              <span>Confirm Emergency 112 Call</span>
+            </div>
+            <p className="text-xs text-(--muted-foreground) leading-relaxed">
+              You are about to dial India's National Emergency Number (112). This connects directly to official first responders.
+            </p>
+            <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-[11px] font-semibold text-red-700 dark:text-red-300">
+              DEVELOPMENT TEST NOTICE: DO NOT dial 112 during automated or prototype tests.
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                id="dismiss-112-call-btn"
+                onClick={() => setShow112CallDialog(false)}
+                className="px-4 py-2.5 rounded-2xl font-bold text-xs bg-elevated-surface border border-border text-foreground hover:bg-surface cursor-pointer"
+              >
+                Cancel
+              </button>
+              <a
+                href="tel:112"
+                id="execute-112-call-link"
+                onClick={() => setShow112CallDialog(false)}
+                className="px-5 py-2.5 rounded-2xl font-black text-xs bg-red-600 text-white hover:bg-red-700 inline-flex items-center gap-2 shadow-lg cursor-pointer"
+              >
+                <PhoneCall className="h-3.5 w-3.5" />
+                <span>Dial 112 Now</span>
+              </a>
+            </div>
           </div>
         </div>
       )}

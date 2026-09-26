@@ -363,6 +363,15 @@ export default function SafetyCheckInWidget({
               </button>
             </div>
 
+            {/* Fail-Safe Architecture Notice */}
+            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] leading-relaxed flex items-start gap-2">
+              <Shield className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <span className="font-bold block">Authoritative Dead-Man's Switch Engine</span>
+                Timers run on the backend scheduler. If safety is unconfirmed when expired, Exotel emergency communication dispatches to active guardians automatically even if this browser tab is closed.
+              </div>
+            </div>
+
             {/* Interval Options */}
             <div className="space-y-2">
               <label className="text-[11px] font-bold text-(--muted-foreground) uppercase tracking-wider block">

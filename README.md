@@ -53,19 +53,23 @@ Travel Guardian resolves these issues through a multi-tiered architecture:
 ## 🌟 Key Features
 
 1. **Multi-Profile Journey Planning (`/plan`)**:
-   - Calculates 4 comparative corridors: Safe Corridor (Main NH), Fast Bypass, Balanced Highway, and Caution Route.
-   - Tailored profiles: Solo Traveler, Women Safety Prioritization, Family Travel, and Night Driving.
+   - Real road corridors via Google Routes API v2 (`TWO_WHEELER` for motorized motorcycles) and Google Directions (`DRIVE`, `WALK`).
+   - Priority-based deterministic ranking: Maximum Safety (Safety-First), Time Priority (Fastest), and Balanced.
+   - Dynamic route hierarchy: `#1 — HIGHEST PRIORITY (HIGHLY RECOMMENDED)`, `#2 — SECOND PRIORITY (SAFE ALTERNATIVE)`, `#3 — THIRD PRIORITY (ALTERNATIVE OPTION)`.
+   - Tailored profiles: Solo Traveler, Solo Woman Traveller (Police & Emergency Focus), Family Travel, and Group.
 2. **Interactive Live Navigation & Map (`/map`)**:
    - Google Maps JavaScript API interactive mapping with live GPS tracking, heading, and speed telemetry.
+   - Translucent dark glassmorphism HUD (`LiveNavigationOverlay`) displaying live ETA, Speed, Heading, and Safety metrics.
    - Layers for 24/7 verified hospitals, police posts, EV charging, fuel bunks, and rest plazas.
 3. **AI Guardian Assistant (`/assist`)**:
    - Dedicated split-view layout on desktop and responsive tab view on mobile.
-   - Independent chat scroll container preventing outer page scrolling.
-   - Strict tool execution: `findNearbyPlace`, `readSafetyState`, `readCheckInState`, `getArrivalEstimate`.
-4. **Emergency Hub & SOS (`/emergency`)**:
-   - Direct National Emergency 112 hotline dialer (`tel:112`).
-   - One-tap SOS notification to trusted contacts via Exotel SMS and Voice Calls.
-   - Anti-accidental confirmation barriers and live GPS snapshot sharing.
+   - Grounded tool execution over verified application state (`findNearbyPlace`, `readSafetyState`, `readCheckInState`, `getArrivalEstimate`).
+   - Route-aware and travel-direction-aware search for fuel stations/petrol bunks and medical havens.
+4. **Emergency Portal & 112 Safety Lock (`/emergency`)**:
+   - Protected **112 Safety Lock**: DEACTIVATED by default with explicit confirmation modal opt-in preventing accidental or unauthorized emergency service calls. Zero automated test calls permitted.
+   - Strict destination restriction: SMS and Voice alerts resolve strictly to stored, registered trusted guardians.
+   - Standardized Section 21 SMS alert structure containing human-readable address, GPS coordinates, and direct Google Maps link.
+   - Exotel Cloud Telephony (Singapore Regional Cluster) integration with truthful status reporting.
 5. **Offline Survival Guardian (`/offline-mode`)**:
    - Zero-signal emergency checklists, nearest offline POI indexes, and PDF route generators.
 6. **Unified Design System & Themes (`/settings`)**:
@@ -276,10 +280,10 @@ All 13 Exotel communication and API tests validate successfully.
 
 ## 📚 Project Documentation
 
-- [Master Project Audit](PROJECT_AUDIT.md) — Complete 35-section A-to-Z audit, architecture matrix, and QA checklist.
-- [Exotel Emergency Setup](docs/EXOTEL_SETUP.md) — Comprehensive telecommunications setup, DLT template registration, and IVR configuration.
-
----
+- [Master Project Audit](docs/audits/PROJECT_AUDIT.md) — Comprehensive architectural analysis, root cause audits, and engineering verification.
+- [Issue Inventory & Resolution Tracker](docs/issues/issues.md) — Detailed registry of all identified issues and their verified solutions.
+- [Unresolved Issues Tracker](docs/issues/tobe-resolved.md) — Status of any open architectural items.
+- [Exotel Emergency Setup](docs/EXOTEL_SETUP.md) — Telecommunications configuration for the Exotel Singapore cluster, phone normalization, and DLT compliance.
 
 ## 📄 License & Disclaimer
 

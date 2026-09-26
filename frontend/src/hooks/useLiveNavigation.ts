@@ -102,8 +102,8 @@ export function useLiveNavigation({
     setCurrentPosition(navPos);
     setGpsError(null);
 
-    // Check accuracy warning (> 40 meters)
-    setGpsAccuracyWarning(navPos.accuracy > 40);
+    // Check accuracy warning (> 100 meters indicates degraded GPS signal)
+    setGpsAccuracyWarning(navPos.accuracy > 100);
 
     const currentRoute = activeRouteRef.current;
     if (!currentRoute || !currentRoute.waypoints || currentRoute.waypoints.length < 2) {
@@ -121,7 +121,6 @@ export function useLiveNavigation({
       currentRoute.steps || [],
       prog.distanceTraveledMeters
     );
-    setCurrentManeuver(curMan);
     setCurrentManeuver(curMan);
     setNextManeuver(nxtMan);
 
@@ -146,7 +145,7 @@ export function useLiveNavigation({
     }
 
     // 4. Check Off-Route Detection (Persisted over 3 consecutive fixes to avoid GPS noise)
-    const off = isOffRoute(prog.distanceToRouteMeters, navPos.accuracy, 80, 1.4);
+    const off = isOffRoute(prog.distanceToRouteMeters, navPos.accuracy, 80, 0.6);
     if (off) {
       offRouteCountRef.current += 1;
       if (offRouteCountRef.current >= 3 && status === "ACTIVE") {
@@ -179,15 +178,21 @@ export function useLiveNavigation({
   /**
    * Start Live Navigation with continuous watchPosition.
    */
-  const startNavigation = useCallback(() => {
+  const startNavigation = useCallback((routeOverride?: RouteOption) => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
       setGpsError("Geolocation is not supported by your browser.");
       return;
     }
 
-    if (!activeRouteRef.current) {
+    const routeToUse = routeOverride || activeRouteRef.current;
+    if (!routeToUse) {
       setGpsError("No route selected for navigation.");
       return;
+    }
+
+    if (routeOverride) {
+      setActiveRoute(routeOverride);
+      activeRouteRef.current = routeOverride;
     }
 
     setGpsError(null);

@@ -60,32 +60,30 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
             });
             setSosResult(res);
           } catch (e: any) {
-            setError("Failed to reach emergency api. Broadcasting locally.");
+            setError("Emergency communication failed. Please dial 112 directly.");
             fallbackSOS(position.coords.latitude, position.coords.longitude);
           } finally {
             setLoading(false);
           }
         },
         async (err) => {
-          // Geolocation error - fallback to mock coords
-          console.warn("Geolocation permission denied. Mocking coordinates.", err);
+          console.warn("Geolocation unavailable or denied.", err);
           try {
             const res = await TravelGuardianAPI.triggerSOS({
-              latitude: -22.9068, // Default to mock Rio coordinates
-              longitude: -43.1729,
-              custom_message: "SOS! Urgent assistance. Location permissions unavailable."
+              latitude: 0.0,
+              longitude: 0.0,
+              custom_message: "SOS! Urgent assistance requested. Live GPS coordinates unavailable."
             });
             setSosResult(res);
           } catch (e) {
-            setError("Unable to dispatch SOS alert.");
+            setError("Emergency communication failed. Please dial 112 directly.");
           } finally {
             setLoading(false);
           }
         }
       );
     } else {
-      // Geolocation not supported - fallback to mock coords
-      fallbackSOS(-22.9068, -43.1729);
+      fallbackSOS(0.0, 0.0);
     }
   };
 
@@ -98,7 +96,7 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
       });
       setSosResult(res);
     } catch {
-      setError("Critical: Dispatch systems offline.");
+      setError("Emergency communication failed. Dispatch systems offline. Please dial 112 directly.");
     } finally {
       setLoading(false);
     }
@@ -182,32 +180,58 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
         {/* 4. SOS Dispatch Results */}
         {sosResult && !loading && (
           <div className="mt-5 space-y-5">
-            <div className="flex items-center gap-3.5 rounded-2xl p-4" style={{ backgroundColor: "#DCFCE7", border: "1px solid #86EFAC", color: "#16A34A" }}>
-              <CheckCircle className="h-6 w-6 flex-shrink-0" />
-              <div>
-                <h4 style={{ fontSize: "13px", fontWeight: 800, textTransform: "uppercase" }}>GUARDIAN ALERTS DISPATCHED</h4>
-                <p style={{ fontSize: "11px", color: "#15803D", marginTop: "2px" }}>Your live telemetry has been sent to emergency contacts.</p>
+            {sosResult.success ? (
+              <div className="flex items-center gap-3.5 rounded-2xl p-4" style={{ backgroundColor: "#DCFCE7", border: "1px solid #86EFAC", color: "#16A34A" }}>
+                <CheckCircle className="h-6 w-6 flex-shrink-0" />
+                <div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 800, textTransform: "uppercase" }}>GUARDIAN ALERTS DISPATCHED</h4>
+                  <p style={{ fontSize: "11px", color: "#15803D", marginTop: "2px" }}>{sosResult.message}</p>
+                  {sosResult.transaction_id && (
+                    <p className="font-mono mt-1" style={{ fontSize: "10px", color: "#166534" }}>Call/SMS SID: {sosResult.transaction_id}</p>
+                  )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-3.5 rounded-2xl p-4" style={{ backgroundColor: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626" }}>
+                <AlertCircle className="h-6 w-6 flex-shrink-0" />
+                <div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 800, textTransform: "uppercase" }}>EMERGENCY COMMUNICATION FAILED</h4>
+                  <p style={{ fontSize: "11px", color: "#B91C1C", marginTop: "2px" }}>
+                    {sosResult.message || "Exotel emergency communication failed. Please dial 112 directly if in danger."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Telemetry info */}
             <div className="rounded-2xl p-4" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
-              <h4 style={{ fontSize: "11px", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Transmitted Location Info</h4>
+              <h4 style={{ fontSize: "11px", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Transmitted Location Telemetry</h4>
               <div className="grid grid-cols-2 gap-4 text-sm font-medium">
                 <div>
                   <span style={{ fontSize: "11px", color: "#64748B" }}>Latitude</span>
-                  <p className="font-mono mt-0.5" style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{sosResult.latitude.toFixed(6)}</p>
+                  <p className="font-mono mt-0.5" style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
+                    {sosResult.latitude && sosResult.latitude !== 0 ? sosResult.latitude.toFixed(6) : "Unavailable (0.000000)"}
+                  </p>
                 </div>
                 <div>
                   <span style={{ fontSize: "11px", color: "#64748B" }}>Longitude</span>
-                  <p className="font-mono mt-0.5" style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{sosResult.longitude.toFixed(6)}</p>
+                  <p className="font-mono mt-0.5" style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>
+                    {sosResult.longitude && sosResult.longitude !== 0 ? sosResult.longitude.toFixed(6) : "Unavailable (0.000000)"}
+                  </p>
                 </div>
               </div>
             </div>
 
-            {/* Nearest Safe Havens */}
+            {/* Verified Emergency Lifelines & Safe Havens */}
             <div>
-              <h4 style={{ fontSize: "11px", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Nearest Safe Havens (Hospital/Police)</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 style={{ fontSize: "11px", fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Verified Emergency Response Nodes
+                </h4>
+                <span style={{ fontSize: "9px", fontWeight: 800, color: "#16A34A", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  OFFICIAL 24/7 NETWORK
+                </span>
+              </div>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                 {sosResult.nearest_havens.map((haven, idx) => (
                   <div
@@ -218,7 +242,9 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
                     <div className="flex items-start gap-3">
                       <Navigation className="h-5 w-5 mt-0.5 flex-shrink-0" style={{ color: "#EF4444" }} />
                       <div>
-                        <h5 style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>{haven.name}</h5>
+                        <div className="flex items-center gap-2">
+                          <h5 style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>{haven.name}</h5>
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
                           <span
                             style={{
@@ -227,21 +253,29 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
                               textTransform: "uppercase",
                               padding: "2px 6px",
                               borderRadius: "6px",
-                              backgroundColor: "#FEF2F2",
-                              color: "#DC2626",
+                              backgroundColor: haven.is_demo ? "#FEF3C7" : "#FEF2F2",
+                              color: haven.is_demo ? "#B45309" : "#DC2626",
                             }}
                           >
-                            {haven.type}
+                            {haven.is_demo ? "DEMO DATA" : haven.type}
                           </span>
-                          <span style={{ fontSize: "11px", color: "#64748B", fontWeight: 500 }}>{haven.distance_km} km away</span>
+                          <span style={{ fontSize: "10px", color: "#64748B", fontWeight: 500 }}>
+                            {haven.distance_km !== undefined && haven.distance_km !== null
+                              ? `${haven.distance_km} km away`
+                              : (haven.data_source || "National Emergency ERSS")}
+                          </span>
                         </div>
+                        {haven.note && (
+                          <p style={{ fontSize: "10px", color: "#94A3B8", marginTop: "2px" }}>{haven.note}</p>
+                        )}
                       </div>
                     </div>
                     
                     <a
                       href={`tel:${haven.phone}`}
-                      className="rounded-full p-2.5 transition-colors"
-                      style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.1)", color: "#0F172A" }}
+                      className="rounded-full p-2.5 transition-colors flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: "#EF4444", color: "#FFFFFF" }}
+                      title={`Call ${haven.name}`}
                     >
                       <Phone className="h-4 w-4" />
                     </a>
@@ -250,15 +284,15 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
               </div>
             </div>
 
-            {/* Direct hotline call */}
+            {/* Direct 112 calling as final fallback */}
             <div className="flex gap-3 mt-6">
               <a
                 href="tel:112"
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3.5 text-white font-bold text-xs shadow-sm transition-all"
-                style={{ backgroundColor: "#EF4444" }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl py-3.5 text-white font-bold text-xs shadow-md transition-all active:scale-98"
+                style={{ backgroundColor: "#DC2626" }}
               >
                 <Phone className="h-4 w-4" />
-                <span>CALL 112 / 911 EMERGENCY</span>
+                <span>CALL 112 NATIONAL EMERGENCY DIRECTLY</span>
               </a>
               <button
                 onClick={onClose}

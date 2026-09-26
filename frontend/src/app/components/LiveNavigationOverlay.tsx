@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
   NavigationStatus, 
   NavigationPosition, 
@@ -98,6 +98,9 @@ export default function LiveNavigationOverlay({
   onApproveReroute,
   onRejectReroute
 }: LiveNavigationOverlayProps) {
+  const [isAccuracyDismissed, setIsAccuracyDismissed] = useState(false);
+  const [showMobileSafety, setShowMobileSafety] = useState(false);
+
   if (status === "READY" || status === "ENDED") {
     return null;
   }
@@ -151,10 +154,15 @@ export default function LiveNavigationOverlay({
 
   return (
     <>
-      {/* TOP TURN-BY-TURN MANEUVER CARD & SAFETY CHECK-IN */}
-      <div className="absolute top-4 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-slideDown space-y-3" style={{ fontFamily: "'Poppins', sans-serif" }}>
+      {/* ============================================================
+          TOP-LEFT: TURN-BY-TURN MANEUVER CARD & ALERTS
+          ============================================================ */}
+      <div 
+        className="pointer-events-none absolute top-4 left-3 right-16 sm:right-auto md:left-6 md:w-96 z-40 animate-slideDown flex flex-col gap-2.5" 
+        style={{ fontFamily: "'Poppins', sans-serif" }}
+      >
         <div
-          className="rounded-3xl p-4 text-left space-y-3 shadow-2xl backdrop-blur-xl border border-white/15 text-white"
+          className="pointer-events-auto rounded-3xl p-4 text-left space-y-3 shadow-2xl backdrop-blur-xl border border-white/15 text-white"
           style={{
             backgroundColor: "rgba(15, 23, 42, 0.88)",
             boxShadow: "0 8px 32px rgba(0, 0, 0, 0.35)"
@@ -196,55 +204,29 @@ export default function LiveNavigationOverlay({
           )}
         </div>
 
-        {/* Safety Check-In HUD Widget */}
-        {safetyWidget}
-      </div>
-
-      {/* FLOATING MAP CONTROLS (Re-center / Follow Me / Exit) */}
-      <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
-        <button
-          onClick={onRecenter}
-          className="p-3 rounded-2xl shadow-lg transition-all cursor-pointer backdrop-blur-md"
-          style={{
-            backgroundColor: isFollowMode ? "#2563FF" : "rgba(15, 23, 42, 0.85)",
-            color: "#FFFFFF",
-            border: isFollowMode ? "1px solid #3B82F6" : "1px solid rgba(255, 255, 255, 0.15)",
-            boxShadow: isFollowMode ? "0 4px 16px rgba(37,99,255,0.4)" : "0 4px 16px rgba(0,0,0,0.25)",
-          }}
-          title={isFollowMode ? "Camera following user" : "Re-center camera on GPS"}
-        >
-          <Crosshair className={`h-5 w-5 ${isFollowMode ? "animate-spin-slow" : ""}`} />
-        </button>
-
-        <button
-          onClick={onEndNavigation}
-          className="p-3 rounded-2xl transition-all cursor-pointer backdrop-blur-md"
-          style={{
-            backgroundColor: "rgba(239, 68, 68, 0.85)",
-            color: "#FFFFFF",
-            border: "1px solid rgba(255, 255, 255, 0.2)",
-            boxShadow: "0 4px 16px rgba(239,68,68,0.3)",
-          }}
-          title="End Live Navigation"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* GPS ACCURACY WARNING BANNER */}
-      {gpsAccuracyWarning && (
-        <div className="absolute top-28 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-fadeIn" style={{ fontFamily: "'Poppins', sans-serif" }}>
-          <div className="p-2.5 rounded-2xl flex items-center gap-2 shadow-lg text-xs backdrop-blur-md bg-amber-500/20 border border-amber-500/40 text-amber-200">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-            <span className="text-[11px] font-semibold">GPS accuracy is low ({currentPosition?.accuracy ? Math.round(currentPosition.accuracy) : 50}m). Navigation continues.</span>
+        {/* GPS ACCURACY WARNING BANNER - Natural Stack Below Maneuver Card */}
+        {gpsAccuracyWarning && !isAccuracyDismissed && (
+          <div className="pointer-events-auto p-2.5 rounded-2xl flex items-center justify-between gap-2 shadow-lg text-xs backdrop-blur-md bg-amber-500/20 border border-amber-500/40 text-amber-200 animate-fadeIn">
+            <div className="flex items-center gap-2 min-w-0">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+              <span className="text-[11px] font-semibold truncate">
+                GPS accuracy is low ({currentPosition?.accuracy ? Math.round(currentPosition.accuracy) : 50}m). Navigation continues.
+              </span>
+            </div>
+            <button
+              onClick={() => setIsAccuracyDismissed(true)}
+              className="p-1 rounded-lg hover:bg-amber-500/30 text-amber-300 transition-colors shrink-0 cursor-pointer"
+              title="Dismiss accuracy notice"
+              aria-label="Dismiss accuracy notice"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* OFF-ROUTE NOTICE BANNER & RECALCULATE PROMPT */}
-      {status === "OFF_ROUTE" && !rerouteProposal && (
-        <div className="absolute top-36 left-4 right-4 md:left-6 md:right-auto md:w-96 z-40 animate-fadeIn" style={{ fontFamily: "'Poppins', sans-serif" }}>
-          <div className="rounded-3xl p-4 shadow-2xl text-left space-y-3 backdrop-blur-xl bg-slate-900/90 border-2 border-rose-500 text-white">
+        {/* OFF-ROUTE NOTICE BANNER & RECALCULATE PROMPT - Natural Stack */}
+        {status === "OFF_ROUTE" && !rerouteProposal && (
+          <div className="pointer-events-auto rounded-3xl p-4 shadow-2xl text-left space-y-3 backdrop-blur-xl bg-slate-900/90 border-2 border-rose-500 text-white animate-fadeIn">
             <div className="flex items-center gap-2 text-rose-400">
               <AlertTriangle className="h-5 w-5" />
               <h4 className="text-xs font-extrabold uppercase tracking-wider">Off Planned Route</h4>
@@ -262,6 +244,102 @@ export default function LiveNavigationOverlay({
                 <span>Recalculate Route</span>
               </button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================
+          TOP-RIGHT: SAFETY CHECK-IN WIDGET (RIGHT SIDE) & MAP CONTROLS
+          ============================================================ */}
+      <div 
+        className="pointer-events-none absolute top-4 right-3 sm:right-4 z-40 flex items-start gap-2.5 sm:gap-3"
+        style={{ fontFamily: "'Poppins', sans-serif" }}
+      >
+        {/* Safety Check-In HUD Widget - Relocated to Right Side on Desktop/Tablet */}
+        {safetyWidget && (
+          <div className="pointer-events-auto hidden md:block w-80 lg:w-84 shadow-2xl animate-slideDown">
+            {safetyWidget}
+          </div>
+        )}
+
+        {/* Floating Action Cluster */}
+        <div className="pointer-events-auto flex flex-col gap-2">
+          {/* Mobile Safety Check-In Toggle Pill */}
+          {safetyWidget && (
+            <button
+              onClick={() => setShowMobileSafety(prev => !prev)}
+              className={`md:hidden p-3 rounded-2xl shadow-lg transition-all cursor-pointer backdrop-blur-md border active:scale-95 ${
+                showMobileSafety
+                  ? "bg-emerald-600 text-white border-emerald-400/50 shadow-emerald-600/30"
+                  : "bg-slate-900/85 hover:bg-slate-800 text-emerald-400 border-white/15"
+              }`}
+              title="Toggle Safety Check-In"
+              aria-label="Toggle Safety Check-In"
+            >
+              <ShieldCheck className="h-5 w-5" />
+            </button>
+          )}
+
+          {/* Emergency SOS Button */}
+          <button
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.href = "/emergency";
+              }
+            }}
+            className="p-3 rounded-2xl shadow-lg transition-all cursor-pointer backdrop-blur-md bg-rose-600/90 hover:bg-rose-600 text-white border border-rose-400/40 shadow-rose-600/30 active:scale-95"
+            title="Emergency SOS / 112 Protocol"
+            aria-label="Emergency SOS"
+          >
+            <AlertTriangle className="h-5 w-5 text-white" />
+          </button>
+
+          {/* Re-center Camera Button */}
+          <button
+            onClick={onRecenter}
+            className="p-3 rounded-2xl shadow-lg transition-all cursor-pointer backdrop-blur-md"
+            style={{
+              backgroundColor: isFollowMode ? "#2563FF" : "rgba(15, 23, 42, 0.85)",
+              color: "#FFFFFF",
+              border: isFollowMode ? "1px solid #3B82F6" : "1px solid rgba(255, 255, 255, 0.15)",
+              boxShadow: isFollowMode ? "0 4px 16px rgba(37,99,255,0.4)" : "0 4px 16px rgba(0,0,0,0.25)",
+            }}
+            title={isFollowMode ? "Camera following user" : "Re-center camera on GPS"}
+            aria-label="Re-center camera"
+          >
+            <Crosshair className={`h-5 w-5 ${isFollowMode ? "animate-spin-slow" : ""}`} />
+          </button>
+
+          {/* End Live Navigation Button */}
+          <button
+            onClick={onEndNavigation}
+            className="p-3 rounded-2xl transition-all cursor-pointer backdrop-blur-md hover:bg-red-700 active:scale-95"
+            style={{
+              backgroundColor: "rgba(239, 68, 68, 0.85)",
+              color: "#FFFFFF",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              boxShadow: "0 4px 16px rgba(239,68,68,0.3)",
+            }}
+            title="End Live Navigation"
+            aria-label="End Live Navigation"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* MOBILE SAFETY CHECK-IN FLOATING DRAWER */}
+      {showMobileSafety && safetyWidget && (
+        <div className="md:hidden fixed inset-x-3 top-20 z-50 p-2 animate-fadeIn pointer-events-auto">
+          <div className="relative shadow-2xl rounded-3xl overflow-hidden border border-white/20 bg-surface">
+            <button
+              onClick={() => setShowMobileSafety(false)}
+              className="absolute top-2.5 right-2.5 z-20 p-1.5 rounded-full bg-slate-800/90 text-white shadow-md border border-white/20 hover:bg-slate-700 cursor-pointer"
+              aria-label="Close Safety Check-In"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            {safetyWidget}
           </div>
         </div>
       )}
@@ -327,58 +405,62 @@ export default function LiveNavigationOverlay({
       )}
 
       {/* ============================================================
-          BOTTOM TELEMETRY OVERLAY — Redesigned Semi-Transparent Glassmorphism HUD (Sections 9, 10, 11, 12, 13, 14, 15)
+      {/* ============================================================
+          BOTTOM TELEMETRY OVERLAY — Semi-Transparent Glassmorphism HUD
           ============================================================ */}
       <div 
-        className="absolute bottom-4 left-4 right-4 md:left-6 md:right-6 lg:max-w-2xl lg:mx-auto lg:left-0 lg:right-0 z-40 animate-slideUp pb-safe"
-        style={{ fontFamily: "'Poppins', sans-serif" }}
+        className="pointer-events-none absolute left-2 right-2 sm:left-6 sm:right-6 lg:max-w-2xl lg:mx-auto lg:left-0 lg:right-0 z-40 animate-slideUp"
+        style={{
+          fontFamily: "'Poppins', sans-serif",
+          bottom: "max(12px, env(safe-area-inset-bottom, 12px))"
+        }}
       >
         <div
-          className="rounded-3xl p-4 md:p-5 shadow-2xl backdrop-blur-xl border border-white/15 text-white space-y-3"
+          className="pointer-events-auto rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-2xl backdrop-blur-xl border border-white/20 text-white space-y-2.5 sm:space-y-3"
           style={{
-            backgroundColor: "rgba(15, 23, 42, 0.85)",
-            boxShadow: "0 12px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.1)"
+            backgroundColor: "rgba(15, 23, 42, 0.90)",
+            boxShadow: "0 12px 36px rgba(0, 0, 0, 0.50), 0 0 0 1px rgba(255, 255, 255, 0.12)"
           }}
         >
           {/* Telemetry Metrics Grid: ETA | SPEED | HEADING | SAFETY */}
-          <div className="grid grid-cols-4 gap-2 text-center">
+          <div className="grid grid-cols-4 gap-1 sm:gap-2 text-center">
             
             {/* ETA */}
-            <div className="p-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex flex-col justify-center min-h-16">
-              <span className="text-[10px] font-bold text-blue-300 uppercase tracking-wider flex items-center justify-center gap-1">
-                <Clock className="h-3 w-3 text-blue-400 shrink-0" /> ETA
+            <div className="p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex flex-col justify-center min-h-[52px] sm:min-h-16">
+              <span className="text-[9px] sm:text-[10px] font-bold text-blue-300 uppercase tracking-wider flex items-center justify-center gap-0.5 sm:gap-1">
+                <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-blue-400 shrink-0" /> ETA
               </span>
-              <p className="text-sm md:text-base font-extrabold text-white mt-1">
-                {progress?.etaString || activeRoute.time || "--:--"}
+              <p className="text-xs sm:text-base font-black text-white mt-0.5 sm:mt-1 truncate">
+                {progress?.etaString || activeRoute.time || "--"}
               </p>
             </div>
 
             {/* SPEED */}
-            <div className="p-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex flex-col justify-center min-h-16">
-              <span className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider flex items-center justify-center gap-1">
-                <Gauge className="h-3 w-3 text-cyan-400 shrink-0" /> SPEED
+            <div className="p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex flex-col justify-center min-h-[52px] sm:min-h-16">
+              <span className="text-[9px] sm:text-[10px] font-bold text-cyan-300 uppercase tracking-wider flex items-center justify-center gap-0.5 sm:gap-1">
+                <Gauge className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-cyan-400 shrink-0" /> SPEED
               </span>
-              <p className="text-xs md:text-sm font-extrabold text-white mt-1 truncate">
+              <p className="text-xs sm:text-base font-black text-white mt-0.5 sm:mt-1 truncate">
                 {formatSpeedKmh(currentPosition?.speed ?? null)}
               </p>
             </div>
 
             {/* HEADING */}
-            <div className="p-2.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex flex-col justify-center min-h-16">
-              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center justify-center gap-1">
-                <Compass className="h-3 w-3 text-amber-400 shrink-0" /> HEADING
+            <div className="p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex flex-col justify-center min-h-[52px] sm:min-h-16">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center justify-center gap-0.5 sm:gap-1">
+                <Compass className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-amber-400 shrink-0" /> HEADING
               </span>
-              <p className="text-xs md:text-sm font-extrabold text-white mt-1 truncate">
+              <p className="text-xs sm:text-base font-black text-white mt-0.5 sm:mt-1 truncate">
                 {formatHeading(currentPosition?.heading ?? null)}
               </p>
             </div>
 
             {/* SAFETY FIT */}
-            <div className="p-2.5 rounded-2xl bg-emerald-500/15 backdrop-blur-md border border-emerald-500/30 flex flex-col justify-center min-h-16">
-              <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider flex items-center justify-center gap-1">
-                <ShieldCheck className="h-3 w-3 text-emerald-400 shrink-0" /> SAFETY
+            <div className="p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-emerald-500/15 backdrop-blur-md border border-emerald-500/30 flex flex-col justify-center min-h-[52px] sm:min-h-16">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-300 uppercase tracking-wider flex items-center justify-center gap-0.5 sm:gap-1">
+                <ShieldCheck className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-emerald-400 shrink-0" /> SAFETY
               </span>
-              <p className="text-sm md:text-base font-extrabold text-emerald-400 mt-1">
+              <p className="text-xs sm:text-base font-black text-emerald-400 mt-0.5 sm:mt-1 truncate">
                 {activeRoute.safetyScore}
               </p>
             </div>
@@ -386,9 +468,9 @@ export default function LiveNavigationOverlay({
           </div>
 
           {/* Progress Bar & Distance Remaining */}
-          <div className="space-y-1.5 pt-0.5">
-            <div className="flex justify-between items-center text-[11px] font-semibold text-slate-300">
-              <span className="flex items-center gap-1.5 truncate">
+          <div className="space-y-1 sm:space-y-1.5 pt-0.5">
+            <div className="flex justify-between items-center text-[10px] sm:text-[11px] font-semibold text-slate-200">
+              <span className="flex items-center gap-1 sm:gap-1.5 truncate max-w-[68%]">
                 <MapPin className="h-3 w-3 text-blue-400 shrink-0" />
                 <span className="truncate">
                   {progress 
@@ -396,12 +478,12 @@ export default function LiveNavigationOverlay({
                     : `${activeRoute.distance} remaining`}
                 </span>
               </span>
-              <span className="text-blue-300 font-extrabold shrink-0 ml-2">
+              <span className="text-blue-300 font-extrabold shrink-0 ml-1.5">
                 {progress?.progressPercent ?? 0}% Complete
               </span>
             </div>
 
-            <div className="h-2 w-full rounded-full overflow-hidden bg-white/15">
+            <div className="h-1.5 sm:h-2 w-full rounded-full overflow-hidden bg-white/20">
               <div 
                 className="h-full rounded-full transition-all duration-300 bg-linear-to-r from-blue-500 via-indigo-500 to-emerald-400 shadow-sm"
                 style={{ width: `${Math.min(100, Math.max(0, progress?.progressPercent || 0))}%` }}

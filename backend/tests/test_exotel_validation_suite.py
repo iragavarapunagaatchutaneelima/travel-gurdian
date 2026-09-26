@@ -229,14 +229,30 @@ class TestExotelComprehensiveValidation(unittest.TestCase):
             self.assertNotIn("api_key", resp_dict)
 
 
-    # 14. Existing SOS functionality still works
+    # 14. Existing SOS functionality still works and truthfulness is maintained
     def test_req14_existing_sos_functionality_preserved(self):
+        # 14a. With zero contacts: fails truthfully, but still provides nearest safe havens
         req = SOSRequest(latitude=28.6139, longitude=77.2090)
-        sos_res = assist.trigger_sos(self.db, req, user_id="sos_preservation_test")
-        self.assertTrue(sos_res.success)
-        self.assertGreater(len(sos_res.nearest_havens), 0)
-        self.assertEqual(sos_res.nearest_havens[0].type, "Police Station")
-        self.assertIn("112", [h.phone for h in sos_res.nearest_havens])
+        sos_res_empty = assist.trigger_sos(self.db, req, user_id="sos_preservation_empty")
+        self.assertFalse(sos_res_empty.success)
+        self.assertEqual(sos_res_empty.overall_status, "no_trusted_contact")
+        self.assertGreater(len(sos_res_empty.nearest_havens), 0)
+        self.assertIn("112", [h.phone for h in sos_res_empty.nearest_havens])
+
+        # 14b. With registered contact: dispatches via Exotel and reports success
+        contact = EmergencyContact(name="Haven Contact", phone="+919876543210", relation="Guardian", user_id="sos_preservation_test")
+        self.db.add(contact)
+        self.db.commit()
+
+        with patch.object(exotel_service, "send_emergency_sms", return_value={"status": "sent", "success": True, "sid": "s1"}), \
+             patch.object(exotel_service, "make_emergency_call", return_value={"status": "initiated", "success": True, "sid": "c1"}):
+            sos_res = assist.trigger_sos(self.db, req, user_id="sos_preservation_test")
+            self.assertTrue(sos_res.success)
+            self.assertEqual(sos_res.overall_status, "completed")
+            self.assertGreater(len(sos_res.nearest_havens), 0)
+            self.assertEqual(sos_res.nearest_havens[0].type, "National Emergency Service")
+            self.assertTrue(sos_res.nearest_havens[0].is_verified)
+            self.assertIn("112", [h.phone for h in sos_res.nearest_havens])
 
     # 15. Emergency event logging in database
     def test_req15_emergency_event_logging(self):

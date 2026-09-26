@@ -140,7 +140,7 @@ export async function requestCurrentLocation(highAccuracy = true): Promise<Share
 
         let address = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
         let city = "";
-        let country = "India";
+        const country = "India";
 
         try {
           const details: LocationDetails = await reverseGeocodeCoordinates(latitude, longitude);

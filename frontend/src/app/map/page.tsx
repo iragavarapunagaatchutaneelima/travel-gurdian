@@ -50,35 +50,53 @@ function LivingMapContent() {
   const routeIdParam = searchParams.get("routeId") || "A";
   const startNavParam = searchParams.get("startNav") === "true";
 
-  const [origin, setOrigin] = useState<City>(() => {
-    if (fromLat && fromLng) {
-      return {
-        id: fromLoc,
-        name: fromName || "Origin",
-        state: fromAddress || "Selected Location",
-        latitude: parseFloat(fromLat),
-        longitude: parseFloat(fromLng),
-        region: "Selected Location",
-        highways: ["Corridor Road"]
-      };
-    }
-    return CITIES[fromLoc.toLowerCase()] || CITIES["chennai"];
-  });
+  const cleanPlaceId = (id: string | null | undefined): string => {
+    if (!id || id === "undefined" || id === "null" || id.trim() === "") return "";
+    return id.trim();
+  };
 
-  const [dest, setDest] = useState<City>(() => {
-    if (destLat && destLng) {
+  const parseLocation = (
+    locParam: string | null,
+    nameParam: string | null,
+    addressParam: string | null,
+    latParam: string | null,
+    lngParam: string | null,
+    placeIdParam: string | null,
+    defaultCityKey: "chennai" | "bangalore"
+  ): City => {
+    const lat = latParam ? parseFloat(latParam) : NaN;
+    const lng = lngParam ? parseFloat(lngParam) : NaN;
+    const hasCoords = !isNaN(lat) && !isNaN(lng);
+
+    if (hasCoords) {
+      const cleanName = nameParam && nameParam.trim() ? nameParam.trim() : (addressParam || "Selected Location");
+      const cleanAddress = addressParam && addressParam.trim() ? addressParam.trim() : cleanName;
       return {
-        id: toLoc,
-        name: destName || "Destination",
-        state: destAddress || "Selected Location",
-        latitude: parseFloat(destLat),
-        longitude: parseFloat(destLng),
+        id: cleanPlaceId(placeIdParam) || locParam || "custom-location",
+        name: cleanName,
+        state: cleanAddress,
+        latitude: lat,
+        longitude: lng,
         region: "Selected Location",
         highways: ["Corridor Road"]
       };
     }
-    return CITIES[toLoc.toLowerCase()] || CITIES["bangalore"];
-  });
+
+    const cityKey = (locParam || "").toLowerCase();
+    if (CITIES[cityKey]) {
+      return CITIES[cityKey];
+    }
+
+    return CITIES[defaultCityKey];
+  };
+
+  const [origin, setOrigin] = useState<City>(() =>
+    parseLocation(fromLoc, fromName, fromAddress, fromLat, fromLng, fromPlaceId, "chennai")
+  );
+
+  const [dest, setDest] = useState<City>(() =>
+    parseLocation(toLoc, destName, destAddress, destLat, destLng, destPlaceId, "bangalore")
+  );
 
   const [allRoutes, setAllRoutes] = useState<RouteOption[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteOption | null>(null);
@@ -136,9 +154,9 @@ function LivingMapContent() {
   const [offlinePackInfo, setOfflinePackInfo] = useState<any>(null);
 
   const destinationDetails: LocationDetails = {
-    placeId: destPlaceId || (toLoc.startsWith("ChIJ") ? toLoc : ""),
+    placeId: cleanPlaceId(destPlaceId) || (toLoc.startsWith("ChIJ") ? toLoc : ""),
     name: dest.name,
-    formattedAddress: dest.state,
+    formattedAddress: destAddress || dest.state,
     latitude: dest.latitude,
     longitude: dest.longitude
   };
@@ -332,31 +350,8 @@ function LivingMapContent() {
 
   // Load Route Data (Section 6 & 13)
   const loadRoutesData = useCallback(() => {
-    let orig: City = CITIES[fromLoc.toLowerCase()] || CITIES["chennai"];
-    if (fromLat && fromLng) {
-      orig = {
-        id: fromLoc,
-        name: fromName || orig.name,
-        state: fromAddress || orig.state,
-        latitude: parseFloat(fromLat),
-        longitude: parseFloat(fromLng),
-        region: "Selected Location",
-        highways: ["Corridor Road"]
-      };
-    }
-
-    let dst: City = CITIES[toLoc.toLowerCase()] || CITIES["bangalore"];
-    if (destLat && destLng) {
-      dst = {
-        id: toLoc,
-        name: destName || dst.name,
-        state: destAddress || dst.state,
-        latitude: parseFloat(destLat),
-        longitude: parseFloat(destLng),
-        region: "Selected Location",
-        highways: ["Corridor Road"]
-      };
-    }
+    const orig = parseLocation(fromLoc, fromName, fromAddress, fromLat, fromLng, fromPlaceId, "chennai");
+    const dst = parseLocation(toLoc, destName, destAddress, destLat, destLng, destPlaceId, "bangalore");
 
     setOrigin(orig);
     setDest(dst);
@@ -364,17 +359,17 @@ function LivingMapContent() {
     setRouteError(null);
 
     const originDetails: LocationDetails = {
-      placeId: fromPlaceId || (fromLoc.startsWith("ChIJ") ? fromLoc : ""),
+      placeId: cleanPlaceId(fromPlaceId) || (fromLoc.startsWith("ChIJ") ? fromLoc : ""),
       name: orig.name,
-      formattedAddress: orig.state,
+      formattedAddress: fromAddress || orig.state,
       latitude: orig.latitude,
       longitude: orig.longitude
     };
 
     const destDetailsObj: LocationDetails = {
-      placeId: destPlaceId || (toLoc.startsWith("ChIJ") ? toLoc : ""),
+      placeId: cleanPlaceId(destPlaceId) || (toLoc.startsWith("ChIJ") ? toLoc : ""),
       name: dst.name,
-      formattedAddress: dst.state,
+      formattedAddress: destAddress || dst.state,
       latitude: dst.latitude,
       longitude: dst.longitude
     };
@@ -386,10 +381,8 @@ function LivingMapContent() {
         setSelectedRoute(route);
         setRouteLoading(false);
 
-        if (startNavParam) {
-          setTimeout(() => {
-            startNavigation();
-          }, 600);
+        if (startNavParam && route) {
+          startNavigation(route);
         }
       })
       .catch((err) => {
@@ -883,87 +876,90 @@ function LivingMapContent() {
         {/* ============================================================
             FLOATING CONTROLS: TOP-LEFT HEADER CHIP
             ============================================================ */}
-        <div className="absolute top-3 left-3 z-20 flex flex-col gap-2 max-w-[85vw] sm:max-w-md pointer-events-none">
-          <div className="p-3 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-lg text-left pointer-events-auto flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <button
-                onClick={() => router.push("/plan")}
-                className="p-1.5 rounded-xl hover:bg-elevated-surface text-(--muted-foreground) transition-colors"
-                title="Back to Journey Planner"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-(--primary) uppercase tracking-wider">
-                    {selectedRoute ? selectedRoute.name : "Google Road Corridor"}
-                  </span>
-                  {selectedRoute && (
-                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Fit: {selectedRoute.safetyScore}/100
+        {(navStatus === "READY" || navStatus === "ENDED") && (
+          <div className="absolute top-3 left-3 z-20 flex flex-col gap-2 max-w-[85vw] sm:max-w-md pointer-events-none">
+            <div className="p-3 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-lg text-left pointer-events-auto flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <button
+                  onClick={() => router.push("/plan")}
+                  className="p-1.5 rounded-xl hover:bg-elevated-surface text-(--muted-foreground) transition-colors"
+                  title="Back to Journey Planner"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-(--primary) uppercase tracking-wider">
+                      {selectedRoute ? selectedRoute.name : "Google Road Corridor"}
                     </span>
+                    {selectedRoute && (
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        Fit: {selectedRoute.safetyScore}/100
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-xs sm:text-sm font-extrabold text-foreground truncate mt-0.5">
+                    {origin.name} ➔ {dest.name}
+                  </h2>
+                  {selectedRoute && (
+                    <p className="text-[10px] text-(--muted-foreground) font-medium">
+                      {travelMode} • {selectedRoute.distance} • {selectedRoute.time}
+                    </p>
                   )}
                 </div>
-                <h2 className="text-xs sm:text-sm font-extrabold text-foreground truncate mt-0.5">
-                  {origin.name} ➔ {dest.name}
-                </h2>
-                {selectedRoute && (
-                  <p className="text-[10px] text-(--muted-foreground) font-medium">
-                    {travelMode} • {selectedRoute.distance} • {selectedRoute.time}
-                  </p>
-                )}
               </div>
+
+              <button
+                onClick={() => setShowDetailsPanel(v => !v)}
+                className="p-1.5 rounded-xl bg-elevated-surface text-foreground border border-border shrink-0 hover:bg-surface transition-colors"
+                title="Toggle Route Summary"
+              >
+                {showDetailsPanel ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
             </div>
 
-            <button
-              onClick={() => setShowDetailsPanel(v => !v)}
-              className="p-1.5 rounded-xl bg-elevated-surface text-foreground border border-border shrink-0 hover:bg-surface transition-colors"
-              title="Toggle Route Summary"
-            >
-              {showDetailsPanel ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
+            {/* Expandable Details Drawer */}
+            {showDetailsPanel && selectedRoute && (
+              <div className="p-4 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-xl text-left pointer-events-auto text-xs space-y-2.5 animate-slideDown">
+                <div className="grid grid-cols-2 gap-2 pb-2 border-b border-border text-[11px]">
+                  <div>
+                    <span className="text-[10px] text-(--muted-foreground) font-semibold block">Emergency Access</span>
+                    <span className="font-bold text-foreground">{selectedRoute.emergencyAccessScore}/100</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-(--muted-foreground) font-semibold block">Toll Info</span>
+                    <span className="font-bold text-foreground">{selectedRoute.tollInfo || "Standard Highway"}</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-(--muted-foreground) leading-relaxed">
+                  {selectedRoute.notes}
+                </p>
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    onClick={() => setShowIncidentModal(true)}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all"
+                  >
+                    + Report Hazard
+                  </button>
+                  <button
+                    onClick={handleDownloadOfflinePack}
+                    disabled={isDownloading}
+                    className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-(--primary) bg-(--primary)/10 hover:bg-(--primary)/20 border border-(--primary)/30 transition-all flex items-center gap-1"
+                  >
+                    <Download className="h-3 w-3" />
+                    <span>{isDownloading ? "Saving..." : downloadSuccess ? "Downloaded" : "Offline Pack"}</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-
-          {/* Expandable Details Drawer */}
-          {showDetailsPanel && selectedRoute && (
-            <div className="p-4 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-xl text-left pointer-events-auto text-xs space-y-2.5 animate-slideDown">
-              <div className="grid grid-cols-2 gap-2 pb-2 border-b border-border text-[11px]">
-                <div>
-                  <span className="text-[10px] text-(--muted-foreground) font-semibold block">Emergency Access</span>
-                  <span className="font-bold text-foreground">{selectedRoute.emergencyAccessScore}/100</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-(--muted-foreground) font-semibold block">Toll Info</span>
-                  <span className="font-bold text-foreground">{selectedRoute.tollInfo || "Standard Highway"}</span>
-                </div>
-              </div>
-              <p className="text-[11px] text-(--muted-foreground) leading-relaxed">
-                {selectedRoute.notes}
-              </p>
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  onClick={() => setShowIncidentModal(true)}
-                  className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all"
-                >
-                  + Report Hazard
-                </button>
-                <button
-                  onClick={handleDownloadOfflinePack}
-                  disabled={isDownloading}
-                  className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold text-(--primary) bg-(--primary)/10 hover:bg-(--primary)/20 border border-(--primary)/30 transition-all flex items-center gap-1"
-                >
-                  <Download className="h-3 w-3" />
-                  <span>{isDownloading ? "Saving..." : downloadSuccess ? "Downloaded" : "Offline Pack"}</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* ============================================================
             FLOATING CONTROLS: TOP-RIGHT (Section 11: Compact ☰ Layers Menu)
             ============================================================ */}
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-2 pointer-events-auto">
+        {(navStatus === "READY" || navStatus === "ENDED") && (
+          <div className="absolute top-3 right-3 z-20 flex items-center gap-2 pointer-events-auto">
           
           {/* Map style toggle (Street vs Satellite) */}
           <div className="flex items-center rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border p-1 shadow-md">
@@ -1045,12 +1041,12 @@ function LivingMapContent() {
                     { key: "fuel", label: "Fuel", icon: Fuel, count: selectedRoute?.pois?.filter(p => p.type === "petrol").length || 0, color: "text-amber-500", bg: "bg-amber-500/10" },
                     { key: "rest", label: "Food & Rest", icon: Coffee, count: selectedRoute?.pois?.filter(p => p.type === "food" || p.type === "rest").length || 0, color: "text-emerald-500", bg: "bg-emerald-500/10" },
                     { key: "incidents", label: "Hazards", icon: AlertTriangle, count: communityIncidents.length, color: "text-rose-500", bg: "bg-rose-500/10" },
-                  ].map((layer) => {
+                  ].map(layer => {
                     const Icon = layer.icon;
                     const isChecked = activeLayers[layer.key as keyof typeof activeLayers];
                     return (
-                      <label
-                        key={layer.key}
+                      <label 
+                        key={layer.key} 
                         className={`flex items-center justify-between p-2 rounded-2xl cursor-pointer transition-colors text-xs font-semibold ${
                           isChecked ? "bg-elevated-surface text-foreground" : "text-(--muted-foreground) hover:bg-surface"
                         }`}
@@ -1101,13 +1097,14 @@ function LivingMapContent() {
           </div>
 
         </div>
+        )}
 
         {/* GPS Error Notification */}
-        {gpsError && (
+        {(gpsError || navGpsError) && (
           <div className="absolute top-16 left-3 right-3 sm:left-auto sm:right-3 sm:max-w-md z-30 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs font-semibold flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{gpsError}</span>
+              <span>{gpsError || navGpsError}</span>
             </div>
             <button onClick={() => setGpsError(null)} className="p-1 hover:opacity-70">
               <X className="h-3.5 w-3.5" />
@@ -1181,54 +1178,56 @@ function LivingMapContent() {
         {/* ============================================================
             FLOATING BOTTOM BAR: CONTROLS & NAVIGATION LAUNCHER
             ============================================================ */}
-        <div className="absolute bottom-3 left-3 right-3 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pointer-events-none">
-          
-          {/* Alternative Route Switcher (Left) */}
-          {allRoutes.length > 1 && (
-            <div className="p-1.5 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-lg flex items-center gap-1.5 pointer-events-auto">
-              <span className="text-[10px] font-black uppercase text-(--muted-foreground) px-2 hidden sm:inline">
-                Corridors:
-              </span>
-              {allRoutes.map((r) => {
-                const isSelected = selectedRoute?.id === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => setSelectedRoute(r)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                      isSelected 
-                        ? "bg-(--primary) text-white shadow-sm" 
-                        : "bg-elevated-surface text-foreground hover:bg-surface border border-border"
-                    }`}
-                  >
-                    Route {r.id} ({r.safetyScore})
-                  </button>
-                );
-              })}
+        {navStatus !== "ACTIVE" && navStatus !== "OFF_ROUTE" && navStatus !== "REROUTING" && navStatus !== "REROUTING_PENDING" && navStatus !== "ARRIVED" && (
+          <div className="absolute bottom-3 left-3 right-3 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pointer-events-none">
+            
+            {/* Alternative Route Switcher (Left) */}
+            {allRoutes.length > 1 && (
+              <div className="p-1.5 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border shadow-lg flex items-center gap-1.5 pointer-events-auto">
+                <span className="text-[10px] font-black uppercase text-(--muted-foreground) px-2 hidden sm:inline">
+                  Corridors:
+                </span>
+                {allRoutes.map((r) => {
+                  const isSelected = selectedRoute?.id === r.id;
+                  return (
+                    <button
+                      key={r.id}
+                      onClick={() => setSelectedRoute(r)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                        isSelected 
+                          ? "bg-(--primary) text-white shadow-sm" 
+                          : "bg-elevated-surface text-foreground hover:bg-surface border border-border"
+                      }`}
+                    >
+                      Route {r.id} ({r.safetyScore})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Core Action: START LIVE NAVIGATION (Center/Right) */}
+            <div className="flex items-center gap-2 pointer-events-auto w-full sm:w-auto">
+              <button
+                onClick={() => setShowIncidentModal(true)}
+                className="px-3.5 py-3 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border hover:bg-elevated-surface text-foreground font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                title="Report road hazard"
+              >
+                <AlertTriangle className="h-4 w-4 text-rose-500" />
+                <span className="hidden sm:inline">Report Hazard</span>
+              </button>
+
+              <button
+                onClick={() => startNavigation(selectedRoute || undefined)}
+                className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <Navigation className="h-4 w-4 fill-white" />
+                <span>START LIVE NAVIGATION</span>
+              </button>
             </div>
-          )}
 
-          {/* Core Action: START LIVE NAVIGATION (Center/Right) */}
-          <div className="flex items-center gap-2 pointer-events-auto w-full sm:w-auto">
-            <button
-              onClick={() => setShowIncidentModal(true)}
-              className="px-3.5 py-3 rounded-2xl bg-(--surface)/95 backdrop-blur-md border border-border hover:bg-elevated-surface text-foreground font-bold text-xs shadow-md transition-all flex items-center gap-1.5 active:scale-95"
-              title="Report road hazard"
-            >
-              <AlertTriangle className="h-4 w-4 text-rose-500" />
-              <span className="hidden sm:inline">Report Hazard</span>
-            </button>
-
-            <button
-              onClick={startNavigation}
-              className="flex-1 sm:flex-initial px-6 py-3 rounded-2xl bg-linear-to-r from-emerald-600 via-teal-600 to-indigo-600 hover:opacity-95 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-xl shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-95 transition-all"
-            >
-              <Navigation className="h-4 w-4 fill-white" />
-              <span>START LIVE NAVIGATION</span>
-            </button>
           </div>
-
-        </div>
+        )}
 
         {/* Phase 4 Live Navigation Overlay with Phase 5 Safety Check-In */}
         <LiveNavigationOverlay
@@ -1347,9 +1346,12 @@ function LivingMapContent() {
 
       </main>
 
-      <div className="md:hidden">
-        <BottomNav />
-      </div>
+      {/* Mobile Bottom Navigation (Visible only when not actively in live navigation session) */}
+      {(navStatus === "READY" || navStatus === "ENDED") && (
+        <div className="md:hidden shrink-0">
+          <BottomNav />
+        </div>
+      )}
     </div>
   );
 }

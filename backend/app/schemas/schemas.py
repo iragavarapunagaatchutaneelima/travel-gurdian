@@ -71,13 +71,22 @@ class EmergencyContactBase(BaseModel):
     phone: str
     email: Optional[str] = None
     relation: str
+    is_enabled: bool = True
 
 class EmergencyContactCreate(EmergencyContactBase):
     pass
 
+class EmergencyContactUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    relation: Optional[str] = None
+    is_enabled: Optional[bool] = None
+
 class EmergencyContactResponse(EmergencyContactBase):
     id: int
     user_id: str
+    is_enabled: bool = True
 
     class Config:
         from_attributes = True
@@ -88,7 +97,12 @@ class SafeCheckInBase(BaseModel):
     checkin_text: Optional[str] = None
 
 class SafeCheckInCreate(SafeCheckInBase):
-    pass
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class SafeCheckInLocationUpdate(BaseModel):
+    latitude: float
+    longitude: float
 
 class SafeCheckInResponse(SafeCheckInBase):
     id: int
@@ -96,9 +110,29 @@ class SafeCheckInResponse(SafeCheckInBase):
     is_completed: bool
     is_triggered: bool
     created_at: datetime
+    last_known_latitude: Optional[float] = None
+    last_known_longitude: Optional[float] = None
+    last_location_time: Optional[datetime] = None
+    escalation_status: str = "pending"
+    dispatched_at: Optional[datetime] = None
+    dispatch_sms_sid: Optional[str] = None
+    dispatch_call_sid: Optional[str] = None
+    dispatch_recipient_name: Optional[str] = None
+    dispatch_recipient_phone: Optional[str] = None
+    dispatch_error: Optional[str] = None
+    idempotency_key: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class SchedulerStatusResponse(BaseModel):
+    is_running: bool
+    poll_interval_seconds: int
+    last_poll_at: Optional[datetime] = None
+    total_evaluations: int
+    total_escalations: int
+    active_pending_count: int
+    server_time: datetime
 
 # SOS Trigger Schemas
 class SOSRequest(BaseModel):
@@ -108,11 +142,15 @@ class SOSRequest(BaseModel):
 
 class SafeHaven(BaseModel):
     name: str
-    type: str  # Hospital, Police Station, Embassy
-    latitude: float
-    longitude: float
-    distance_km: float
+    type: str  # Hospital, Police Station, National Emergency
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    distance_km: Optional[float] = None
     phone: str
+    is_verified: bool = True
+    is_demo: bool = False
+    data_source: str = "National Emergency Response System (112 ERSS)"
+    note: Optional[str] = None
 
 class SOSResponse(BaseModel):
     success: bool
@@ -126,6 +164,7 @@ class SOSResponse(BaseModel):
     overall_status: Optional[str] = None
     recipient_name: Optional[str] = None
     recipient_phone_masked: Optional[str] = None
+    transaction_id: Optional[str] = None
 
 # Exotel Emergency Action Schemas
 class EmergencyActionRequest(BaseModel):
@@ -204,4 +243,14 @@ class ExotelDiagnosticResponse(BaseModel):
     currency: Optional[str] = None
     safe_message: str
     error: Optional[str] = None
+
+class ExotelConfigStatusResponse(BaseModel):
+    is_configured: bool
+    region: str = "Singapore"
+    host: str = "api.exotel.com"
+    account_sid_configured: bool = False
+    api_key_configured: bool = False
+    api_token_configured: bool = False
+    exophone_configured: bool = False
+    safe_message: Optional[str] = None
 

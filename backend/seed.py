@@ -211,16 +211,8 @@ def seed_db():
     for a in alerts:
         db.add(a)
 
-    # 4. Seed Emergency Contacts for Testing
-    print("Seeding default emergency contact...")
-    default_contact = models.EmergencyContact(
-        name="Sarah Miller",
-        phone="+1-555-0199",
-        email="sarah.miller@example.com",
-        relation="Spouse/Partner",
-        user_id="default_user"
-    )
-    db.add(default_contact)
+    # 4. Emergency Contacts: Zero fake defaults (Strict user-configured contacts)
+    print("Zero default emergency contacts seeded (managed exclusively via emergency portal)...")
     
     db.commit()
     db.close()
