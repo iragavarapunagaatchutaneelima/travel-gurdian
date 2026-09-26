@@ -1,16 +1,18 @@
 // TRAVEL GUARDIAN SERVICE WORKER (PHASE 8 & 14)
-// Cache Version: travel-guardian-v11 -- fixes cross-origin requests (Google
-// Maps tiles/markers) being wrongly intercepted and turned into broken images.
-const CACHE_VERSION = 'travel-guardian-v11';
+// Cache Version: travel-guardian-v12 -- adds dashboard/safety-check to the
+// pre-cached app shell (new primary nav pages since v11).
+const CACHE_VERSION = 'travel-guardian-v12';
 const STATIC_CACHE = `travel-guardian-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `travel-guardian-runtime-${CACHE_VERSION}`;
 
 // Application shell assets required for offline boot
 const APP_SHELL = [
   '/',
+  '/dashboard',
   '/plan',
   '/map',
   '/emergency',
+  '/safety-check',
   '/offline',
   '/offline-mode',
   '/assist',
@@ -21,20 +23,21 @@ const APP_SHELL = [
 ];
 
 // Install Event — Pre-cache Application Shell
+async function precacheAppShell() {
+  const cache = await caches.open(STATIC_CACHE);
+  for (const url of APP_SHELL) {
+    try {
+      await cache.add(url);
+    } catch (err) {
+      // One missing/failed dev asset must not fail the entire install.
+      console.warn(`[SW] Pre-caching failed for: ${url}`, err);
+    }
+  }
+}
+
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
-      // Use catch on each entry so one missing dev asset doesn't fail entire install
-      return Promise.allSettled(
-        APP_SHELL.map((url) =>
-          cache.add(url).catch((err) => {
-            console.warn(`[SW] Pre-caching failed for: ${url}`, err);
-          })
-        )
-      );
-    })
-  );
+  event.waitUntil(precacheAppShell());
 });
 
 // Activate Event — Clean up obsolete Service Worker caches
