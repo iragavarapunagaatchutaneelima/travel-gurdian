@@ -464,7 +464,9 @@ export async function POST(req: Request) {
     // General Route Explanation / Safety Overview
     else {
       const res = runTool("getRouteSummary");
-      reply = `Travel Guardian Assistant: Active route is ${res.data.routeName} (${res.data.distance}, est. ${res.data.estimatedDuration}). Traffic condition is ${res.data.trafficScore}, road quality is ${res.data.roadCondition}. How can I assist with your journey?`;
+      reply = res.data.available
+        ? `Travel Guardian Assistant: Active route is ${res.data.routeName} (${res.data.distance}, est. ${res.data.estimatedDuration}). Traffic condition is ${res.data.trafficScore ?? "unknown"}, road quality is ${res.data.roadCondition ?? "unknown"}. How can I assist with your journey?`
+        : `Travel Guardian Assistant: ${res.data.message} Plan a journey first, or ask me about your safety fit, ETA, next check-in, or nearby havens.`;
     }
 
     return NextResponse.json({

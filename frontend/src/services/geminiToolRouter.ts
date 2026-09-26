@@ -254,14 +254,32 @@ export function executeToolCall(
       }
 
       case "getRouteSummary": {
-        const routeData = {
-          routeName: context.activeRoute?.name || "Active Route",
-          distance: context.activeRoute?.distance || "Unknown",
-          estimatedDuration: context.activeRoute?.time || "Unknown",
-          trafficScore: context.activeRoute?.trafficScore || "Moderate",
-          roadCondition: context.activeRoute?.roadScore || "Good",
-          nightSafety: context.activeRoute?.nightSafety || "Safe"
-        };
+        // Never invent traffic/road/night-safety ratings when no route has
+        // actually been calculated -- "Moderate"/"Good"/"Safe" defaults here
+        // previously looked exactly like a real assessment of a route that
+        // doesn't exist, which is precisely the kind of fabricated safety
+        // fact this assistant must never produce.
+        const hasActiveRoute = !!context.activeRoute;
+        const routeData = hasActiveRoute
+          ? {
+              available: true,
+              routeName: context.activeRoute!.name || "Active Route",
+              distance: context.activeRoute!.distance || "Unknown",
+              estimatedDuration: context.activeRoute!.time || "Unknown",
+              trafficScore: context.activeRoute!.trafficScore ?? null,
+              roadCondition: context.activeRoute!.roadScore ?? null,
+              nightSafety: context.activeRoute!.nightSafety ?? null
+            }
+          : {
+              available: false,
+              routeName: null,
+              distance: null,
+              estimatedDuration: null,
+              trafficScore: null,
+              roadCondition: null,
+              nightSafety: null,
+              message: "No route has been planned or selected yet, so there is no route summary to report."
+            };
         return {
           result: {
             toolCallId: id,
@@ -274,10 +292,16 @@ export function executeToolCall(
       }
 
       case "getArrivalEstimate": {
+        // "0" km remaining when there's simply no live navigation progress
+        // reads as a real, precise answer -- report null/unavailable instead.
+        const hasLiveProgress = !!context.progress;
         const arrivalData = {
-          etaString: context.progress?.etaString || context.activeRoute?.time || "--:--",
-          distanceRemainingKm: context.progress ? (context.progress.distanceRemainingMeters / 1000).toFixed(1) : context.activeRoute?.distance || "0",
-          progressPercent: context.progress?.progressPercent ?? 0
+          available: hasLiveProgress || !!context.activeRoute,
+          etaString: context.progress?.etaString || context.activeRoute?.time || null,
+          distanceRemainingKm: hasLiveProgress
+            ? Number((context.progress!.distanceRemainingMeters / 1000).toFixed(1))
+            : context.activeRoute?.distanceKm ?? null,
+          progressPercent: context.progress?.progressPercent ?? null
         };
         return {
           result: {
