@@ -474,8 +474,8 @@ export default function PlanJourneyScreen() {
               </div>
             </div>
 
-            {/* Route Cards Grid (Priority-Based Deterministic Ranking) */}
-            <div className={`grid grid-cols-1 ${routes.length === 1 ? "md:grid-cols-1 max-w-2xl" : routes.length === 2 ? "md:grid-cols-2 max-w-5xl" : "md:grid-cols-2 lg:grid-cols-3"} gap-5`}>
+            {/* Route Cards Grid — at most 2 materially different routes (route-diversity analysis in googleRoutes.ts) */}
+            <div className={`grid grid-cols-1 ${routes.length === 1 ? "md:grid-cols-1 max-w-2xl" : "md:grid-cols-2 max-w-5xl"} gap-5`}>
               {routes.map((route, idx) => {
                 const isPrimaryRank = idx === 0;
                 const isSecondaryRank = idx === 1;

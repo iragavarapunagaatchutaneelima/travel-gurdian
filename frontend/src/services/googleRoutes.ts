@@ -6,6 +6,61 @@ import { fetchRouteCorridorPOIs, assessRouteSafety } from "./safetyEngine";
 import { getActiveIncidents } from "./incidentService";
 
 /**
+ * Route-diversity analysis (mentor requirement: never show 3-4 near-identical
+ * route options). Routes are compared by how much of their road corridor
+ * overlaps, using a coarse geographic grid so it works on any polyline
+ * without needing Google's road-segment IDs. Two routes sharing most of
+ * their grid cells are the same corridor with a minor detour, not a real
+ * alternative, so only one of them is kept.
+ */
+const ROUTE_DIVERSITY_GRID_DEGREES = 0.01; // ~1.1km at the equator
+const ROUTE_DIVERSITY_OVERLAP_THRESHOLD = 0.6; // >=60% shared corridor = near-duplicate
+
+function corridorCells(waypoints: [number, number][]): Set<string> {
+  const cells = new Set<string>();
+  for (const [lng, lat] of waypoints) {
+    cells.add(`${Math.round(lat / ROUTE_DIVERSITY_GRID_DEGREES)}:${Math.round(lng / ROUTE_DIVERSITY_GRID_DEGREES)}`);
+  }
+  return cells;
+}
+
+/** Fraction of the smaller route's corridor that the two routes share (0 = fully distinct, 1 = identical). */
+function corridorOverlapRatio(a: [number, number][], b: [number, number][]): number {
+  if (!a?.length || !b?.length) return 0;
+  const cellsA = corridorCells(a);
+  const cellsB = corridorCells(b);
+  let shared = 0;
+  for (const cell of cellsA) {
+    if (cellsB.has(cell)) shared++;
+  }
+  return shared / Math.min(cellsA.size, cellsB.size);
+}
+
+/**
+ * Greedily keeps the best-ranked route, then adds the next-best route only if
+ * it is NOT a near-duplicate corridor of every route already kept. Never
+ * fabricates or reorders scores -- diversity only decides which of the
+ * already-scored routes get shown, and caps the result at `maxCount`.
+ */
+function selectDiverseRoutes<T extends { waypoints?: [number, number][] }>(
+  rankedCandidates: T[],
+  maxCount: number
+): T[] {
+  if (rankedCandidates.length <= 1) return rankedCandidates;
+  const selected: T[] = [rankedCandidates[0]];
+  for (let i = 1; i < rankedCandidates.length && selected.length < maxCount; i++) {
+    const candidate = rankedCandidates[i];
+    const isMaterialyDifferent = selected.every(
+      (kept) => corridorOverlapRatio(kept.waypoints || [], candidate.waypoints || []) < ROUTE_DIVERSITY_OVERLAP_THRESHOLD
+    );
+    if (isMaterialyDifferent) {
+      selected.push(candidate);
+    }
+  }
+  return selected;
+}
+
+/**
  * Decodes Google encoded polyline string into an array of [longitude, latitude] coordinates
  * suitable for Google Maps and GeoJSON spatial rendering.
  *
@@ -238,9 +293,17 @@ export async function calculateGoogleRoutes(
         // Deterministic sort: highest composite score first
         scored.sort((a, b) => b._compositeScore - a._compositeScore);
 
-        const routeLetters: Array<"A" | "B" | "C" | "D"> = ["A", "B", "C", "D"];
-        return scored.map((r, idx) => {
-          const letter = routeLetters[idx] || ("D" as const);
+        // Mentor requirement: never show 3-4 confusing route options, and
+        // never show two routes that are really the same corridor with a
+        // minor detour. Keep the best-scored route, then at most one more
+        // that is materially different (see selectDiverseRoutes above).
+        // Scores themselves are never altered here -- only which
+        // already-scored routes get surfaced.
+        const diverseRoutes = selectDiverseRoutes(scored, 2);
+
+        const routeLetters: Array<"A" | "B"> = ["A", "B"];
+        return diverseRoutes.map((r, idx) => {
+          const letter = routeLetters[idx] || ("B" as const);
           let rankBadge = "ALTERNATIVE ROUTE";
           let rankLabel = `#${idx + 1} — ALTERNATIVE OPTION`;
           let rec: RouteOption["recommendation"] = "USE CAUTION";
@@ -253,14 +316,9 @@ export async function calculateGoogleRoutes(
             corridorName = priority === "Maximum Safety" ? "Primary Safety Corridor" : priority === "Time Priority" ? "Direct Express Route" : "Optimal Safety Corridor";
           } else if (idx === 1) {
             rankBadge = "SAFE ALTERNATIVE";
-            rankLabel = "#2 — SAFE ALTERNATIVE (RECOMMENDED)";
+            rankLabel = "#2 — SAFE ALTERNATIVE (DIFFERENT CORRIDOR)";
             rec = "RECOMMENDED";
-            corridorName = "Secondary Safety Corridor";
-          } else if (idx === 2) {
-            rankBadge = "ALTERNATIVE ROUTE";
-            rankLabel = "#3 — ALTERNATIVE ROUTE (CONSIDER IF NEEDED)";
-            rec = "USE CAUTION";
-            corridorName = "Alternative Transit Pathway";
+            corridorName = "Alternative Corridor";
           }
 
           return {
