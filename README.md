@@ -1,295 +1,438 @@
-# Travel Guardian
+# 🛡️ Travel Guardian
 
-> **Intelligent, Production-Quality Travel Safety & Navigation Platform**
+**A truthful, offline-first personal travel safety companion.**
 
-Travel Guardian is a full-stack, AI-assisted travel safety and navigation application designed to protect travelers across regional corridors and highway networks. It combines multi-profile route intelligence, live Google Maps Platform spatial mapping, Gemini 1.5 Flash AI tool calling, dead-man check-in safety timers, offline survival packs, and multi-channel emergency SOS dispatch via India's National Emergency line (112) and Exotel telecommunications.
+Travel Guardian plans real road routes across India (car, motorized two-wheeler, or on foot), scores them on a deterministic Safety Fit index built from verified Google Places data, tracks you live with turn-by-turn navigation and off-route detection, keeps a Dead-Man's-Switch safety check-in timer, and — when something goes wrong — dispatches your trusted guardian by SMS and voice call through Exotel. An AI assistant (Gemini) answers questions grounded in your real GPS position, route, and check-in state, and never invents a place, a score, or a location it doesn't actually have.
 
----
+The project's guiding rule: **if the app doesn't know something, it says so — it never fabricates data.** No fake hospitals, no fake safety scores, no fake GPS, no fake "message sent" confirmations.
 
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Problem Statement](#problem-statement)
-- [Solution](#solution)
-- [Key Features](#key-features)
-- [System Architecture](#system-architecture)
-- [Architecture Diagrams](#architecture-diagrams)
-- [Technology Stack](#technology-stack)
-- [Environment Configuration](#environment-configuration)
-- [Run & Installation Instructions](#run--installation-instructions)
-- [Verification & Testing](#verification--testing)
-- [Project Documentation](#project-documentation)
+> **Emergency disclaimer:** Travel Guardian is a personal safety aid, not a substitute for official emergency services. In a genuine emergency, always dial your local emergency number (112 in India) directly.
 
 ---
 
-## 🔎 Overview
+## Table of Contents
 
-Travel Guardian bridges the critical gap between conventional turn-by-turn navigation apps (which optimize exclusively for speed or distance) and personal security. By evaluating road lighting, historical incident rates, verified safe havens, and cellular signal dead zones, Travel Guardian empowers solo travelers, women, families, and night drivers to make informed safety decisions.
-
----
-
-## ⚠️ Problem Statement
-
-Modern travelers face several unaddressed safety risks:
-1. **Speed vs. Safety Blindspots**: Navigation services frequently route drivers through unlit, isolated rural roads to save 2–3 minutes, creating extreme vulnerability during nighttime or vehicle breakdowns.
-2. **AI Hallucinations in Emergency**: Generic AI chatbots fabricate nearby hospitals, fake police stations, and invented distances when travelers need urgent assistance.
-3. **Connectivity Vulnerability**: In cellular dead zones, cloud routing and emergency dispatch tools fail completely without offline vector corridors and emergency protocols.
-4. **Passive Panic Buttons**: Traditional SOS buttons often rely on manual initiation during high-stress scenarios rather than automated fail-safe check-in timers.
-
----
-
-## 🛡️ Solution
-
-Travel Guardian resolves these issues through a multi-tiered architecture:
-- **Deterministic Safety Fit Scoring**: Transparent 0–100 safety score evaluating lighting, police frequency, verified trauma centers, and traffic health.
-- **Strictly Grounded AI Guardian**: Gemini 1.5 Flash assistant with deterministic tool calling; queries real GPS coordinates to locate verified havens with zero hallucination.
-- **Two-Way Chat & Map Synchronization**: Chat queries ("What's near me?") plot verified pins directly onto the interactive Google Maps canvas, and map pin selection injects context into the assistant.
-- **Automated Dead-Man Safety Check-In**: Configurable countdown cycles with grace periods. If unconfirmed, alerts escalate to trusted guardians via SMS/voice calls.
-- **Exotel Emergency Telecommunications**: Masked caller IDs, regulatory E.164 phone normalization, request debouncing, and direct 112 dialing integration.
-- **Offline Survival Architecture**: Pre-cached corridor routes, turn-by-turn instructions, and printable survival PDFs.
+- [What it does](#what-it-does)
+- [Tech stack](#tech-stack)
+- [Architecture](#architecture)
+- [Project structure](#project-structure)
+- [Prerequisites](#prerequisites)
+- [Getting the API keys you need](#getting-the-api-keys-you-need)
+- [Setup — step by step](#setup--step-by-step)
+- [Running the project](#running-the-project)
+- [Environment variables reference](#environment-variables-reference)
+- [Testing](#testing)
+- [Docker](#docker)
+- [Deployment](#deployment)
+- [Security model](#security-model)
+- [Known limitations](#known-limitations)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## 🌟 Key Features
+## What it does
 
-1. **Multi-Profile Journey Planning (`/plan`)**:
-   - Real road corridors via Google Routes API v2 (`TWO_WHEELER` for motorized motorcycles) and Google Directions (`DRIVE`, `WALK`).
-   - Priority-based deterministic ranking: Maximum Safety (Safety-First), Time Priority (Fastest), and Balanced.
-   - Dynamic route hierarchy: `#1 — HIGHEST PRIORITY (HIGHLY RECOMMENDED)`, `#2 — SECOND PRIORITY (SAFE ALTERNATIVE)`, `#3 — THIRD PRIORITY (ALTERNATIVE OPTION)`.
-   - Tailored profiles: Solo Traveler, Solo Woman Traveller (Police & Emergency Focus), Family Travel, and Group.
-2. **Interactive Live Navigation & Map (`/map`)**:
-   - Google Maps JavaScript API interactive mapping with live GPS tracking, heading, and speed telemetry.
-   - Translucent dark glassmorphism HUD (`LiveNavigationOverlay`) displaying live ETA, Speed, Heading, and Safety metrics.
-   - Layers for 24/7 verified hospitals, police posts, EV charging, fuel bunks, and rest plazas.
-3. **AI Guardian Assistant (`/assist`)**:
-   - Dedicated split-view layout on desktop and responsive tab view on mobile.
-   - Grounded tool execution over verified application state (`findNearbyPlace`, `readSafetyState`, `readCheckInState`, `getArrivalEstimate`).
-   - Route-aware and travel-direction-aware search for fuel stations/petrol bunks and medical havens.
-4. **Emergency Portal & 112 Safety Lock (`/emergency`)**:
-   - Protected **112 Safety Lock**: DEACTIVATED by default with explicit confirmation modal opt-in preventing accidental or unauthorized emergency service calls. Zero automated test calls permitted.
-   - Strict destination restriction: SMS and Voice alerts resolve strictly to stored, registered trusted guardians.
-   - Standardized Section 21 SMS alert structure containing human-readable address, GPS coordinates, and direct Google Maps link.
-   - Exotel Cloud Telephony (Singapore Regional Cluster) integration with truthful status reporting.
-5. **Offline Survival Guardian (`/offline-mode`)**:
-   - Zero-signal emergency checklists, nearest offline POI indexes, and PDF route generators.
-6. **Unified Design System & Themes (`/settings`)**:
-   - Daylight Travel Light Theme and Deep Night Corridor Dark Theme.
-   - Accessible WCAG AA color tokens, smooth theme switching, and reduced-motion compliance.
+| Feature | Description |
+|---|---|
+| 🗺️ **Plan Journey** | Enter an origin and destination (autocomplete-backed), pick Car, Bike (motorized two-wheeler), or Walk, and get 2–3 real Google-routed alternatives, each with a deterministic Safety Fit score (0–100) computed from real hospitals, police stations, fuel stops, and rest stops found along the corridor. |
+| 🧭 **Live Navigation** | Turn-by-turn guidance with real GPS tracking, dynamic ETA, off-route detection, and one-tap rerouting through live Google traffic data. |
+| ⏱️ **Safety Check-In (Dead-Man's Switch)** | Set a check-in timer before a risky leg of your trip. If you don't confirm you're safe before it expires, your trusted guardian is notified automatically. |
+| 🆘 **Emergency SOS** | One button sends your live GPS location by SMS and initiates a voice call to your registered trusted guardian via Exotel. A separately locked, explicitly-confirmed `tel:112` dialer is always available for genuine emergencies. |
+| 🤝 **Trusted Guardian Contacts** | A backend-authoritative contact list (not a browser guess) with a deterministic primary contact, shared consistently across every screen. |
+| 🤖 **AI Guardian Assistant** | A Gemini-powered chat assistant that answers "Where am I?", "What's my safety score?", "Find a petrol station near me" — always grounded in your actual live state, never Gemini's imagination. |
+| 📴 **Offline Mode** | Downloadable offline corridor packs (cached maps, safety data, and a printable PDF survival card) for when connectivity drops. |
 
 ---
 
-## 🏛️ System Architecture
+## Tech stack
 
-```mermaid
-flowchart TD
-    subgraph Client["Frontend (Next.js 16 + React 19 + Tailwind v4)"]
-        UI[User Interface & Pages]
-        SharedLoc[Shared Location Service]
-        AIAssist[Travel Assistant UI]
-        SyncMap[Guardian Map Sync]
-        CheckIn[Safety Check-In Hook]
-        ThemeProv[next-themes Provider]
-    end
+### Frontend
+- **[Next.js 16](https://nextjs.org/)** (App Router, Turbopack) — React framework, server and client components
+- **[React 19](https://react.dev/)** + TypeScript 5
+- **[Tailwind CSS 4](https://tailwindcss.com/)** — utility-first styling, with `next-themes` for dark mode
+- **[Google Maps JavaScript API](https://developers.google.com/maps/documentation/javascript)** — map rendering, Places Autocomplete, Geocoding, legacy Directions (Car/Walk)
+- **[Google Routes API (v2)](https://developers.google.com/maps/documentation/routes)** — motorized two-wheeler (`TWO_WHEELER`) routing with real toll data, called server-side
+- **[Google Gemini API](https://ai.google.dev/)** — the AI Guardian assistant's language model
+- **[jsPDF](https://github.com/parallax/jsPDF)** — offline survival card generation
+- **[Lucide React](https://lucide.dev/)** — icon set
+- A hand-rolled Service Worker (no Workbox) for offline app-shell caching
 
-    subgraph ServerAPIs["Next.js Server Routes"]
-        APIAI["/api/ai (Tool Calling)"]
-    end
+### Backend
+- **[FastAPI](https://fastapi.tiangolo.com/)** (Python) — REST API
+- **[SQLAlchemy 2](https://www.sqlalchemy.org/)** — ORM, SQLite by default (MySQL-ready via `DATABASE_URL`)
+- **[Pydantic 2](https://docs.pydantic.dev/)** / `pydantic-settings` — request/response validation and environment-driven config
+- **[Exotel](https://exotel.com/)** REST API — emergency SMS and outbound voice calls (Singapore cluster)
+- **[Uvicorn](https://www.uvicorn.org/)** — ASGI server
+- A background daemon thread polls for overdue safety check-ins and triggers escalation
 
-    subgraph CloudServices["External Cloud & AI Services"]
-        GoogleMaps[Google Maps Platform & Places API]
-        Gemini[Google Gemini 1.5 Flash]
-    end
+### Infrastructure & tooling
+- **Docker** — `Dockerfile` for both frontend and backend, plus a `docker-compose.yml` for local MySQL
+- **ESLint 9** / **TypeScript compiler** — linting and type checking (the production build fails on real type errors; there is no `ignoreBuildErrors` escape hatch)
+- **`tsx`** — runs the TypeScript test scripts directly, no separate build step
+- **Python `unittest`** + **FastAPI `TestClient`** — backend unit and HTTP-integration tests
 
-    subgraph BackendAPI["Backend Services (FastAPI + Python 3.11)"]
-        FastAPIApp[FastAPI Server]
-        ExotelSvc[Exotel Emergency Service]
-        DB[(SQLite / Database)]
-    end
+---
 
-    subgraph Telephony["Public Telecom & Emergency"]
-        ExotelCloud[Exotel Telephony Cloud]
-        Emergency112[National 112 Hotline]
-        TrustedContacts[Trusted Contacts SMS/Voice]
-    end
+## Architecture
 
-    UI --> SharedLoc
-    SharedLoc --> GoogleMaps
-    AIAssist <--> SyncMap
-    AIAssist --> APIAI
-    APIAI --> Gemini
-    APIAI --> GoogleMaps
-    SyncMap --> GoogleMaps
-    CheckIn --> FastAPIApp
-    UI -->|Emergency 112| Emergency112
-    FastAPIApp --> ExotelSvc
-    ExotelSvc --> ExotelCloud
-    ExotelCloud --> TrustedContacts
-    FastAPIApp --> DB
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Browser (client)                        │
+│   Next.js pages  ·  Google Maps JS SDK  ·  Service Worker        │
+└───────────────┬───────────────────────────────┬─────────────────┘
+                │ same-origin fetch              │ Google Maps SDK
+                ▼                                ▼
+┌───────────────────────────────┐   ┌─────────────────────────────┐
+│   Next.js server (App Router) │   │  maps.googleapis.com        │
+│                                │   │  (Maps JS, Places, Geocoder,│
+│  /api/routes/compute  ───────►│──►│   legacy Directions)        │
+│    (hardened proxy to         │   └─────────────────────────────┘
+│     Routes API v2, server key)│   ┌─────────────────────────────┐
+│  /api/ai  ────────────────────│──►│  Gemini API + Places API    │
+│    (Gemini + tool router,     │   │  (New, server-side lookup)  │
+│     grounded in real state)   │   └─────────────────────────────┘
+│  /backend-api/*  ─────────────│──┐
+│    (same-origin rewrite,      │  │
+│     browser never sees the    │  │
+│     real backend origin)      │  │
+└────────────────────────────────┘  │
+                                     ▼
+                     ┌───────────────────────────────┐
+                     │      FastAPI backend           │
+                     │  /api/assist   — contacts,     │
+                     │                  check-ins, SOS │
+                     │  /api/emergency — Exotel SMS/   │
+                     │                   call dispatch │
+                     │  /api/guide, /api/assess,       │
+                     │  /api/alerts                    │
+                     │  Device-identity cookie          │
+                     │  (no login system, but no        │
+                     │   trusting client-supplied IDs   │
+                     │   either)                        │
+                     └───────────┬──────────┬───────────┘
+                                 ▼          ▼
+                     ┌───────────────┐  ┌──────────────────┐
+                     │  SQLite/MySQL │  │  Exotel REST API  │
+                     │  (SQLAlchemy) │  │  (SMS + voice)    │
+                     └───────────────┘  └──────────────────┘
+```
+
+**Why the `/backend-api/*` proxy exists:** the browser never talks to the FastAPI backend directly. Next.js rewrites same-origin requests to the real backend URL (`BACKEND_API_URL`, a server-only environment variable), so the strict Content-Security-Policy never needs to name the backend's origin, and the backend's real address is never exposed to client-side code.
+
+**Why routes are computed two ways:** Car and Walk use the browser's Google Maps JS SDK (`DirectionsService`) directly. Bike (motorized two-wheeler) is routed through a server-side proxy to the newer Routes API v2, because the classic `BICYCLING` travel mode is for human-powered bicycles, not motorcycles/scooters, and only the v2 API supports `TWO_WHEELER`.
+
+---
+
+## Project structure
+
+```
+travel-gurdian/
+├── frontend/                    Next.js application
+│   ├── src/
+│   │   ├── app/                 App Router pages & layouts
+│   │   │   ├── api/             Server route handlers (ai, routes/compute)
+│   │   │   ├── plan/            Journey planning
+│   │   │   ├── map/             Live navigation map
+│   │   │   ├── emergency/       SOS & trusted contacts
+│   │   │   ├── assist/          AI Guardian chat
+│   │   │   ├── settings/        App preferences
+│   │   │   └── components/      Shared UI components
+│   │   ├── services/            API clients, Google Maps/Places/Routes,
+│   │   │                        safety engine, Gemini tool router
+│   │   ├── hooks/                useLiveNavigation, useSafetyCheckIn, etc.
+│   │   ├── types/                Shared TypeScript types
+│   │   ├── data/                 Static reference data (cities, route shapes)
+│   │   └── scripts/               Standalone test scripts (run via tsx)
+│   ├── public/                   Static assets, manifest.json, sw.js
+│   └── Dockerfile
+├── backend/                       FastAPI application
+│   ├── app/
+│   │   ├── api/                  Route handlers (assist, emergency, guide,
+│   │   │                         assess, alerts)
+│   │   ├── core/                 Settings, database engine, device identity
+│   │   ├── models/                SQLAlchemy models
+│   │   ├── schemas/                Pydantic request/response schemas
+│   │   └── services/               Business logic (assist, assess, sense,
+│   │                                exotel_service, checkin_scheduler)
+│   ├── tests/                      unittest suite (+ HTTP integration tests)
+│   ├── seed.py                     Idempotent reference-data seeding
+│   └── Dockerfile
+├── docs/                           Architecture notes, Exotel setup guide
+├── docker-compose.yml              Local MySQL + backend + frontend stack
+├── .env.example                    Root-level env var reference
+├── LICENSE
+└── README.md                       You are here
 ```
 
 ---
 
-## 📊 Core User Workflows
+## Prerequisites
 
-### 1. "What's Near Me?" — Real GPS AI Synchronization
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Traveler
-    participant App as Travel Guardian UI
-    participant GPS as Geolocation API
-    participant AI as Gemini Tool Router
-    participant Map as Guardian Map Sync
-
-    Traveler->>App: "What's near me?" / "Find safe cafe"
-    App->>GPS: Request Current Coordinates
-    GPS-->>App: Latitude, Longitude (±Accuracy)
-    App->>AI: queryTravelAssistant(prompt, { coordinates })
-    AI->>AI: executeToolCall('findNearbyPlace')
-    AI-->>App: Verified Places (Real Haversine Distances)
-    App->>Map: Update Pinned Places
-    Map->>Map: Drop Safe Haven Markers & Fit Bounds
-    App-->>Traveler: Summarized verified places in chat
-    Traveler->>Map: Clicks marker
-    Map-->>Traveler: Shows directions & "Call 112/Phone"
-```
-
-### 2. Emergency Escalation Workflow
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Traveler
-    participant App as Emergency Hub UI
-    participant Backend as FastAPI Emergency API
-    participant Exotel as Exotel Telephony Gateway
-    participant Contact as Trusted Contact Phone
-
-    Traveler->>App: Trigger Emergency SOS
-    App->>App: Confirm with anti-accidental dialog
-    App->>Backend: POST /api/emergency/notify-trusted-contact
-    Backend->>Backend: Resolve DB trusted contacts & normalize (+91)
-    Backend->>Exotel: Dispatch emergency SMS & trigger voice call
-    Exotel-->>Contact: Emergency SMS with live Google Maps coordinates
-    Exotel-->>Contact: Outbound emergency IVR phone call
-    Backend-->>App: 200 OK (Masked status response)
-    App-->>Traveler: "Emergency alert dispatched successfully"
-```
-
----
-
-## 💻 Technology Stack
-
-| Layer | Technology | Purpose | Status |
-|---|---|---|---|
-| **Frontend Framework** | Next.js 16 (Turbopack) | Server Components, routing, and PWA shell | Active |
-| **Language** | TypeScript 5.9 | Static type checking and safety interfaces | Strict |
-| **Styling & Tokens** | Tailwind CSS v4 + Vanilla CSS | CSS variables, responsive design, dark mode | Active |
-| **Mapping Engine** | Google Maps JavaScript API | Interactive maps, route polylines, GPS markers | Active |
-| **Places & Geocoding** | Google Places & Geocoder API | Autocomplete, reverse geocoding, and routing | Active |
-| **AI Intelligence** | Gemini 1.5 Flash + Tool Router | Deterministic tool execution without hallucinations | Active |
-| **Backend API** | FastAPI (Python 3.11) | REST endpoints, models, Exotel integration | Active |
-| **Database** | SQLite / SQLAlchemy | User profiles, emergency contacts, incident reports | Active |
-| **Telecommunications** | Exotel REST API | Emergency SMS dispatch and outbound voice IVR | Integrated |
-| **Offline Engine** | Service Worker + Cache API | Offline corridor caching and PDF survival cards | Active |
-| **Icons** | Lucide React | Consistent accessible iconography | Active |
-
----
-
-## ⚙️ Environment Configuration
-
-### Frontend (`frontend/.env.local`)
-| Variable | Description | Exposure |
+| Tool | Version | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Public Google Maps JavaScript API key | Public |
-| `GOOGLE_ROUTES_API_KEY` | Server-only Routes API key used by `/api/routes/compute` (falls back to the key above if unset) | Server-Only |
-| `GEMINI_API_KEY` | Google AI Studio API key for the AI Guardian assistant | Server-Only |
-| `GEMINI_MODEL` | Target Gemini model, e.g. `gemini-2.5-flash` (the UI always displays whatever this is actually set to) | Server-Only |
-| `BACKEND_API_URL` | Real FastAPI backend origin. The browser never talks to this directly -- Next.js proxies same-origin `/backend-api/*` requests to it (see `next.config.ts`), which is also what keeps the CSP `connect-src` from needing to name the backend host. | Server-Only |
-
-### Backend (`backend/.env`)
-| Variable | Description | Exposure |
-|---|---|---|
-| `DATABASE_URL` | SQLAlchemy database connection string | Private |
-| `CORS_ORIGINS` | JSON array of allowed frontend origins | Private |
-| `EXOTEL_ACCOUNT_SID` | Exotel Account SID | Private |
-| `EXOTEL_API_KEY` | Exotel API Key | Private |
-| `EXOTEL_API_TOKEN` | Exotel API Token | Private |
-| `EXOTEL_SUBDOMAIN` | Exotel cluster subdomain (e.g., `api.exotel.com`) | Private |
-| `EXOTEL_EXOPHONE` | Approved Exotel virtual number (Caller ID), required for live calls | Private |
-| `EXOTEL_APP_ID` | Optional ExoML Voice App ID for automated outbound emergency calls | Private |
-| `EXOTEL_DRY_RUN` | **Defaults to `true`.** While true, every Exotel SMS/call request is fully built and validated but never actually sent; the response reports `status: "dry_run"`. Set to `false` only once real, KYC-approved credentials and an ExoPhone are configured. | Private |
-| `SEED_RESET` | Defaults to `false`. When true, `python seed.py` wipes and re-inserts demo destinations/alerts. Emergency contacts and check-ins are never touched by seeding regardless. | Private |
-| `DISABLE_API_DOCS` | Defaults to `false`. Set to `true` in production to hide `/docs`, `/redoc`, `/openapi.json`. | Private |
-
-*(Never commit actual secret values or credentials to Git).*
+| **Node.js** | 20+ (22 recommended) | Next.js 16 requires a modern runtime |
+| **npm** | 10+ | ships with Node 20+ |
+| **Python** | 3.11+ | backend runtime (the Docker image pins 3.11) |
+| **Git** | any recent version | |
+| **A Google Cloud project** with billing enabled | — | for Maps, Places, Geocoding, Routes, and (optionally) the Places API (New) |
+| **A Google AI Studio / Gemini API key** | — | for the AI Guardian assistant |
+| **An Exotel account** (optional for local dev) | — | only needed to send *real* SMS/calls; the app runs safely in dry-run mode without one |
 
 ---
 
-## 🚀 Run & Installation Instructions
+## Getting the API keys you need
 
-### Prerequisites
-- Node.js 18.17+ or 20+
-- Python 3.10+
-- Git
+### 1. Google Maps Platform key(s)
 
-### 1. Frontend Setup
+1. Create (or open) a project in the [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable **billing** on the project (required, or Directions/Places calls fail with `OVER_QUERY_LIMIT`).
+3. Enable these APIs under **APIs & Services → Library**:
+   - Maps JavaScript API
+   - Places API (both classic and, ideally, the newer "Places API (New)")
+   - Geocoding API
+   - Directions API
+   - Routes API
+4. Create an API key under **APIs & Services → Credentials**.
+5. **Restrict it** under Application restrictions → HTTP referrers, to:
+   - `http://localhost:3000/*`
+   - `http://127.0.0.1:3000/*`
+   - your production domain, once you have one
+6. (Recommended) Create a **second key** with no HTTP referrer restriction (server calls don't send a browser referer), restricted instead to your server's IP address if possible. Use this as `GOOGLE_ROUTES_API_KEY`. If you skip this, the app falls back to the browser key for server-side calls, which still works.
+
+### 2. Gemini API key
+
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
+2. Create an API key.
+3. This is the `GEMINI_API_KEY` — it is **server-only** and must never be prefixed with `NEXT_PUBLIC_`.
+
+### 3. Exotel credentials (optional for local development)
+
+The app runs safely without these — `EXOTEL_DRY_RUN` defaults to `true`, so emergency SMS/call requests are fully built and validated but **never actually sent** until you deliberately turn dry-run off with real, KYC-approved credentials.
+
+If you do want live dispatch:
+
+1. Sign up at [Exotel](https://exotel.com/) and complete their KYC verification (required before outbound calls/SMS work).
+2. From the Exotel dashboard, note your **Account SID**, generate an **API Key** and **API Token**.
+3. Provision (or use an existing) **ExoPhone** (virtual number) for outbound Caller ID.
+4. Only set `EXOTEL_DRY_RUN=false` once all of the above are real and approved.
+
+---
+
+## Setup — step by step
+
 ```bash
+# 1. Clone the repository
+git clone https://github.com/iragavarapunagaatchutaneelima/travel-gurdian.git
+cd travel-gurdian
+
+# 2. Install frontend dependencies
 cd frontend
 npm install
-npm run dev
-```
-Access the application at [http://localhost:3000](http://localhost:3000).
 
-To build the production bundle:
-```bash
-npm run build
-npm run start
-```
+# 3. Configure the frontend environment
+cp .env.example .env.local
+# Now edit frontend/.env.local and fill in:
+#   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+#   GOOGLE_ROUTES_API_KEY   (optional, falls back to the key above)
+#   GEMINI_API_KEY
+#   GEMINI_MODEL            (defaults fine as gemini-2.5-flash)
+#   BACKEND_API_URL         (defaults fine as http://localhost:8000/api)
 
-### 2. Backend Setup
-```bash
-cd backend
+cd ../backend
+
+# 4. Create and activate a Python virtual environment
 python -m venv venv
-
 # Windows:
-.\venv\Scripts\activate
+venv\Scripts\activate
 # macOS/Linux:
 source venv/bin/activate
 
+# 5. Install backend dependencies
 pip install -r requirements.txt
+
+# 6. Configure the backend environment
+cp .env.example .env
+# Edit backend/.env — the defaults (SQLite, dry-run Exotel) work out of the
+# box for local development. Fill in real EXOTEL_* values only if you intend
+# to test live dispatch.
+
+# 7. Seed reference data (destinations, alerts) — safe to re-run, never
+#    touches contacts or check-ins
 python seed.py
-uvicorn app.main:app --reload --port 8000
 ```
-API documentation is available at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ---
 
-## 🧪 Verification & Testing
+## Running the project
 
-### Frontend Type Safety & Production Build
-```bash
-cd frontend
-npx tsc --noEmit
-npm run build
-```
+You need **two terminals** — the backend and the frontend run as separate processes.
 
-### Backend Unit & Integration Tests
+### Terminal 1 — Backend (FastAPI)
+
 ```bash
 cd backend
-.\venv\Scripts\activate
-python -m unittest discover -s tests
+venv\Scripts\activate        # or: source venv/bin/activate
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-All 13 Exotel communication and API tests validate successfully.
+
+The API is now live at `http://127.0.0.1:8000`. Interactive docs (unless `DISABLE_API_DOCS=true`) are at `http://127.0.0.1:8000/docs`.
+
+### Terminal 2 — Frontend (Next.js)
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open **http://localhost:3000** in your browser.
+
+### From the repository root (convenience scripts)
+
+```bash
+npm run dev              # starts the frontend dev server (backend still needs its own terminal)
+npm run build            # production build of the frontend
+npm run start            # starts the production frontend server
+npm run lint             # ESLint
+npm run typecheck        # tsc --noEmit
+npm run test:frontend    # runs the frontend test scripts (tsx)
+npm run test:backend     # runs the backend unittest suite
+```
+
+### Verifying it's working
+
+1. Open `http://localhost:3000` — the landing page should load with no console errors about the backend.
+2. Go to **Plan Journey**, pick an origin and destination, choose a travel mode, and calculate a route — you should see 2–3 real routes with Safety Fit scores.
+3. Go to **Emergency** — it should say "Synced with Server" (not "Local Cache"), confirming the frontend can reach the backend through the proxy.
+4. Go to **AI Guardian** and ask "Where am I?" — with location permission granted, it answers from your real coordinates; without it, it says so honestly.
 
 ---
 
-## 📚 Project Documentation
+## Environment variables reference
 
-- [Master Project Audit](docs/audits/PROJECT_AUDIT.md) — Comprehensive architectural analysis, root cause audits, and engineering verification.
-- [Issue Inventory & Resolution Tracker](docs/issues/issues.md) — Detailed registry of all identified issues and their verified solutions.
-- [Unresolved Issues Tracker](docs/issues/tobe-resolved.md) — Status of any open architectural items.
-- [Exotel Emergency Setup](docs/EXOTEL_SETUP.md) — Telecommunications configuration for the Exotel Singapore cluster, phone normalization, and DLT compliance.
+### Frontend (`frontend/.env.local`)
 
-## 📄 License & Disclaimer
+| Variable | Required | Exposure | Description |
+|---|---|---|---|
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Yes | Public (browser) | Maps JS, Places Autocomplete, Geocoding, legacy Directions |
+| `GOOGLE_ROUTES_API_KEY` | No | Server-only | Used by `/api/routes/compute` for TWO_WHEELER routing; falls back to the key above if unset |
+| `GEMINI_API_KEY` | Yes (for AI Guardian) | Server-only | AI Guardian's language model |
+| `GEMINI_MODEL` | No (defaults to `gemini-2.5-flash`) | Server-only | The UI always displays whatever this is actually set to |
+| `BACKEND_API_URL` | No (defaults to `http://localhost:8000/api`) | Server-only | Real FastAPI origin; the browser never sees this directly |
 
-Travel Guardian is designed for real-world personal travel safety. Simulated datasets (e.g. mock incident reports or demo emergency keys) are clearly isolated to prevent false alerts during development. Emergency hotline 112 should only be dialed during genuine life-safety emergencies.
+### Backend (`backend/.env`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `PROJECT_NAME` | No | API title (cosmetic) |
+| `API_V1_STR` | No | API prefix, defaults to `/api` |
+| `DATABASE_URL` | No | Defaults to local SQLite; MySQL example in `.env.example` |
+| `CORS_ORIGINS` | No | JSON array of allowed frontend origins |
+| `EXOTEL_ACCOUNT_SID` | For live dispatch | Exotel Account SID |
+| `EXOTEL_API_KEY` | For live dispatch | Exotel API Key |
+| `EXOTEL_API_TOKEN` | For live dispatch | Exotel API Token |
+| `EXOTEL_SUBDOMAIN` | No (defaults to `api.exotel.com`) | Exotel cluster host |
+| `EXOTEL_EXOPHONE` | For live calls | Your Exotel virtual number (Caller ID) |
+| `EXOTEL_APP_ID` | No | Optional ExoML Voice App ID for a custom IVR flow |
+| `EXOTEL_DRY_RUN` | No (**defaults to `true`**) | While true, Exotel requests are built and validated but never sent; set `false` only with real, KYC-approved credentials |
+| `SEED_RESET` | No (defaults to `false`) | When true, `python seed.py` wipes and re-inserts demo destinations/alerts. Contacts and check-ins are never touched by seeding regardless |
+| `DISABLE_API_DOCS` | No (defaults to `false`) | Set `true` in production to hide `/docs`, `/redoc`, `/openapi.json` |
+
+**Never commit real values for any of these.** Only `.env.example` files (with placeholder values) are tracked in git.
+
+---
+
+## Testing
+
+### Backend
+
+```bash
+cd backend
+venv\Scripts\python.exe -m unittest discover tests
+```
+
+Runs the full `unittest` suite (unit tests calling service functions directly, plus HTTP-level integration tests using FastAPI's `TestClient` against an isolated temporary database with `EXOTEL_DRY_RUN` forced on — no real Exotel call is ever possible from the test suite).
+
+### Frontend
+
+```bash
+cd frontend
+npm run test
+```
+
+Runs a set of standalone TypeScript test scripts (via `tsx`) covering navigation math, the Gemini tool router, offline-pack truthfulness, the safety check-in state machine, and production-hardening checks (security headers, no leaked secrets, no fabricated data).
+
+`src/scripts/testMasterEngineeringAudit.ts` is intentionally **not** part of the default test run — it POSTs to a live server's emergency SMS endpoint and should only be run deliberately against a server you control, with Exotel dry-run enabled.
+
+### Type checking & linting
+
+```bash
+npm run typecheck   # tsc --noEmit — the production build also fails on real type errors
+npm run lint         # ESLint
+```
+
+---
+
+## Docker
+
+A `docker-compose.yml` at the repository root brings up MySQL, the backend, and the frontend together:
+
+```bash
+docker compose up --build
+```
+
+This starts:
+- **MySQL 8** on port `3306`
+- **Backend** (FastAPI, `python seed.py` then `uvicorn`) on port `8000`
+- **Frontend** (Next.js production build) on port `3000`
+
+Set real environment variables via a `.env` file at the repository root, or export them before running `docker compose up` — the compose file reads `DATABASE_URL` and `NEXT_PUBLIC_API_URL` from the environment for the backend/frontend containers respectively. For a production Docker deployment, prefer the `/backend-api` proxy pattern described above over exposing the backend port directly.
+
+---
+
+## Deployment
+
+- **Frontend**: designed for [Vercel](https://vercel.com/) or any Node 20+ host that supports Next.js server features (the `/backend-api/*` rewrite and the `/api/ai`, `/api/routes/compute` route handlers require a real Node server, not a static export).
+- **Backend**: any host that can run a long-lived Python/Uvicorn process (the check-in scheduler runs as a background thread inside the app process, so serverless platforms that freeze/kill idle instances are not suitable).
+- Set `BACKEND_API_URL` on the frontend deployment to the backend's real, non-public address (e.g. an internal network address or a backend that only accepts traffic from the frontend).
+- Set `DISABLE_API_DOCS=true` and consider `EXOTEL_DRY_RUN=false` only after Exotel KYC and ExoPhone provisioning are complete.
+- Never set `NEXT_PUBLIC_*` on any value that should stay secret — anything with that prefix is compiled into the client-side JavaScript bundle and is publicly readable.
+
+---
+
+## Security model
+
+- **No login system**, but no trusting the client either: each browser is assigned a random, `httpOnly` device-identity cookie (`tg_device_id`) by the backend on first request. All contact, check-in, and emergency-log endpoints resolve "who is this" from that cookie, not from a client-suppliable parameter.
+- **The backend is never reachable directly from the browser** — only through the same-origin `/backend-api/*` Next.js proxy, which is also what keeps the Content-Security-Policy tight without needing to name the backend's real host.
+- **The `/api/routes/compute` proxy** validates payload shape and coordinate ranges, rejects requests claiming a different origin, rate-limits per source IP, and never forwards a client-supplied `Referer` header to Google.
+- **Exotel dispatch defaults to dry-run** — nothing is ever sent to a real phone number unless you explicitly configure and enable it.
+- **No fabricated data, anywhere**: if Google Places returns nothing, the app says so; if GPS is unavailable, it says so; if the backend is unreachable, it says so. There is no silent fallback to made-up hospitals, safety scores, or GPS coordinates.
+
+If you discover a security issue, please open a private security advisory on the repository rather than a public issue.
+
+---
+
+## Known limitations
+
+- Route safety scores currently cluster in a fairly narrow band (roughly 85–96); the underlying weighting model is deterministic and honest, but not yet finely differentiated between close alternatives.
+- Toll information reflects exactly what Google reports — for many Indian routes this is genuinely "unavailable" rather than a false "no tolls."
+- Live Exotel dispatch requires your own Exotel account, completed KYC, and a provisioned ExoPhone; none of that can be supplied by this codebase.
+- Service worker / offline behavior has not been exhaustively verified across all browsers.
+
+---
+
+## Contributing
+
+1. Fork the repository and create a feature branch.
+2. Make your changes, keeping the "no fabricated data" principle in mind — any fallback for missing data must say so honestly, not invent a plausible-looking substitute.
+3. Run `npm run typecheck`, `npm run lint`, `npm run test:frontend`, and `npm run test:backend` before opening a pull request.
+4. Never commit real API keys, tokens, or `.env`/`.env.local` files — only `.env.example` templates with placeholder values.
+5. Open a pull request describing what changed and why.
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see [`LICENSE`](./LICENSE) for the full text.
+
+Copyright © 2026 Senapathi Yaswanth and Iragavarapu Naga Atchuta Neelima.
