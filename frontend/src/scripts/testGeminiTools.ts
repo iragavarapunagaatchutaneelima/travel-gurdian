@@ -64,7 +64,15 @@ function runPhase6Tests() {
       nightSafety: "High",
       emergencyAccessScore: 95,
       restStops: 8,
-      waypoints: [[80.27, 13.08], [77.59, 12.97]]
+      waypoints: [[80.27, 13.08], [77.59, 12.97]],
+      // Real (mock) POI so findNearbyPlace's route-POI matching has
+      // something genuine to return -- this tool must never fabricate a
+      // place when no real POI/live-Places data exists, so we test the
+      // real code path here rather than the fabrication it used to fall
+      // back on.
+      pois: [
+        { id: "poi_hospital_1", type: "hospital", name: "Test Corridor Hospital", latitude: 13.0, longitude: 80.0, distanceAhead: "1.0 km", status: "Verified Listing" }
+      ]
     } as any,
     currentPosition: {
       latitude: 13.0827,
@@ -125,12 +133,23 @@ function runPhase6Tests() {
   assert(etaRes.result.data.etaString === "18:30", "getArrivalEstimate returned dynamic ETA 18:30");
   assert(etaRes.result.data.progressPercent === 42, "getArrivalEstimate returned 42% progress");
 
-  // TEST 8: findNearbyPlace
+  // TEST 8: findNearbyPlace -- must return only the REAL mock route POI
+  // above, never a fabricated place.
   const placeCall: ToolCallRequest = { id: "c5", name: "findNearbyPlace", arguments: { placeType: "hospital" } };
   const placeRes = executeToolCall(placeCall, mockContext);
   assert(placeRes.result.success, "findNearbyPlace for hospitals succeeded");
-  assert(placeRes.result.data.count > 0, "findNearbyPlace returned verified safe havens");
-  assert(placeRes.result.data.places[0].type === "Hospital", "First place is verified Hospital");
+  assert(placeRes.result.data.count > 0, "findNearbyPlace returned the real route POI");
+  assert(placeRes.result.data.places[0].type === "Hospital", "First place is the real route Hospital POI");
+  assert(placeRes.result.data.places[0].isAlongRoute === true, "Returned place is marked as sourced from the active route, not fabricated");
+
+  // TEST 8b: with NO route POIs and no live-Places data available, the tool
+  // must return an honest empty result, never an invented place.
+  const emptyContext: LiveTravelContext = { ...mockContext, activeRoute: { ...(mockContext.activeRoute as any), pois: [] } };
+  const emptyPlaceCall: ToolCallRequest = { id: "c5b", name: "findNearbyPlace", arguments: { placeType: "hospital" } };
+  const emptyPlaceRes = executeToolCall(emptyPlaceCall, emptyContext);
+  assert(emptyPlaceRes.result.success, "findNearbyPlace with no data still succeeds (not an error)");
+  assert(emptyPlaceRes.result.data.count === 0, "findNearbyPlace returns zero results when nothing real is available, never a fabricated place");
+  assert(Array.isArray(emptyPlaceRes.result.data.places) && emptyPlaceRes.result.data.places.length === 0, "places array is empty, not fabricated");
 
   // TEST 9: Action Proposals require explicit confirmation (Zero autonomous execution)
   const prop112Call: ToolCallRequest = { id: "c6", name: "proposeCall112", arguments: { reason: "User request" } };

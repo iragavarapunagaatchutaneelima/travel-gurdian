@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # restart or `python seed.py` never silently deletes real user data.
     SEED_RESET: bool = False
 
+    # Set to true in production to disable the public Swagger/ReDoc/OpenAPI
+    # endpoints (/docs, /redoc, /openapi.json), which currently expose the
+    # full API surface (including emergency/contacts endpoints) to anyone.
+    DISABLE_API_DOCS: bool = False
+
     class Config:
         case_sensitive = True
         env_file = (_env_path, ".env")

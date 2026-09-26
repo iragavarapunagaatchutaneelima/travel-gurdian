@@ -134,11 +134,16 @@ async function runPhase5Tests() {
   assert(!formatted.includes("User is in danger"), "Neutral non-sensational wording verified");
   assert(formatted.includes("Bangalore"), "Destination context included");
 
-  // TEST 8: Notification Service Dispatch & Truthfulness
+  // TEST 8: Notification Service Dispatch & Truthfulness.
+  // sendTrustedContactAlert now calls the REAL backend
+  // (/emergency/notify-trusted-contact) instead of a local simulation. This
+  // Node script has no backend to reach, so the honest, expected outcome is
+  // a reported FAILED status -- never a fabricated "SENT"/"NOT_CONFIGURED"
+  // success-shaped result.
   clearEscalationHistory();
   const notifResult = await sendTrustedContactAlert(alertPayload);
-  assert(notifResult.providerStatus === "NOT_CONFIGURED", "Truthful providerStatus is NOT_CONFIGURED");
-  assert(notifResult.recipientCount === 1, "Only enabled contacts included in notification count (1 active)");
+  assert(notifResult.providerStatus === "FAILED", "Truthful providerStatus is FAILED when the backend cannot be reached");
+  assert(notifResult.recipientCount === 1, "recipientCount reflects the enabled recipient dispatch was attempted for, even though it failed");
   assert(!notifResult.message.includes("SMS sent successfully"), "Zero fake SMS delivery claims verified");
 
   // TEST 9: Duplicate Escalation Guard

@@ -98,7 +98,13 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Travel Guardian API - SENSE • ASSESS • GUIDE • ASSIST • EMERGENCY EXOTEL",
     version="1.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # DISABLE_API_DOCS=true hides /docs, /redoc, and /openapi.json in
+    # production, where they would otherwise expose the full API surface
+    # (including emergency/contact endpoints) to anyone.
+    docs_url=None if settings.DISABLE_API_DOCS else "/docs",
+    redoc_url=None if settings.DISABLE_API_DOCS else "/redoc",
+    openapi_url=None if settings.DISABLE_API_DOCS else "/openapi.json"
 )
 
 # Set up CORS middleware

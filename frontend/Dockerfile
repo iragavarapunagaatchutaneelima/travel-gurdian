@@ -1,5 +1,6 @@
-# Use Node image
-FROM node:18-alpine
+# Use Node image. Next.js 16 requires a modern Node runtime; this matches
+# the version used in local development (Node 22).
+FROM node:22-alpine
 
 # Set work directory
 WORKDIR /workspace
