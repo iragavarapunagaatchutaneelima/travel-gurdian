@@ -138,8 +138,11 @@ class SchedulerStatusResponse(BaseModel):
 
 # SOS Trigger Schemas
 class SOSRequest(BaseModel):
-    latitude: float
-    longitude: float
+    # Optional: GPS may genuinely be unavailable. Sending a fabricated
+    # coordinate (e.g. 0,0 / "Null Island") when the client has no real fix
+    # would be worse than honestly reporting "location unavailable".
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     custom_message: Optional[str] = None
 
 class SafeHaven(BaseModel):
@@ -158,8 +161,8 @@ class SOSResponse(BaseModel):
     success: bool
     message: str
     broadcasted_contacts: List[str]
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     nearest_havens: List[SafeHaven]
     sms_status: Optional[str] = None
     call_status: Optional[str] = None

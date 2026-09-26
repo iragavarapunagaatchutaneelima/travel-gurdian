@@ -122,18 +122,12 @@ export default function LocationSearchInput({
       onSelectLocation(details);
       setInputValue(details.name);
     } catch (err) {
-      console.warn("Failed to fetch full place details, falling back to suggestion info:", err);
-      // Fallback LocationDetails
-      const fallback: LocationDetails = {
-        placeId: suggestion.placeId,
-        name: suggestion.mainText,
-        formattedAddress: suggestion.fullDescription,
-        latitude: 13.0827,
-        longitude: 80.2707,
-        types: suggestion.types
-      };
-      onSelectLocation(fallback);
-      setInputValue(suggestion.mainText);
+      // Never silently substitute a fake location (e.g. a hardcoded city's
+      // coordinates) for a place whose real coordinates could not be
+      // resolved -- that would route the user somewhere they never chose.
+      console.warn("Failed to fetch place details:", err);
+      onSelectLocation(null);
+      setSearchError("Could not resolve the exact location for that place. Please try selecting it again or choose a different result.");
     } finally {
       setIsLoading(false);
     }

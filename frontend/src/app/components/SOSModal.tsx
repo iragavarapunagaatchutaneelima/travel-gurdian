@@ -11,6 +11,10 @@ interface SOSModalProps {
 }
 
 export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
+  // Opening the modal NEVER starts a countdown to real dispatch by itself --
+  // the user must explicitly tap "Send SOS Now" first. Only after that
+  // explicit confirmation does a short, cancellable countdown run.
+  const [confirmed, setConfirmed] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [sosResult, setSosResult] = useState<SOSResponse | null>(null);
@@ -18,14 +22,11 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
 
   useEffect(() => {
     if (!isOpen) {
+      setConfirmed(false);
       setCountdown(null);
       setSosResult(null);
       setError(null);
-      return;
     }
-
-    // Start 3-second countdown automatically on trigger
-    setCountdown(5);
   }, [isOpen]);
 
   useEffect(() => {
@@ -44,11 +45,18 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
     return () => clearInterval(interval);
   }, [countdown]);
 
+  const handleConfirmSend = () => {
+    setConfirmed(true);
+    setCountdown(5);
+  };
+
   const sendSOS = () => {
     setLoading(true);
     setError(null);
 
-    // Get current coordinates
+    // Get current coordinates. If GPS is unavailable, dispatch WITHOUT a
+    // fabricated location rather than sending a fake 0,0 ("Null Island")
+    // coordinate -- the backend already handles a missing location honestly.
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
@@ -61,7 +69,6 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
             setSosResult(res);
           } catch (e: any) {
             setError("Emergency communication failed. Please dial 112 directly.");
-            fallbackSOS(position.coords.latitude, position.coords.longitude);
           } finally {
             setLoading(false);
           }
@@ -70,8 +77,6 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
           console.warn("Geolocation unavailable or denied.", err);
           try {
             const res = await TravelGuardianAPI.triggerSOS({
-              latitude: 0.0,
-              longitude: 0.0,
               custom_message: "SOS! Urgent assistance requested. Live GPS coordinates unavailable."
             });
             setSosResult(res);
@@ -83,22 +88,12 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
         }
       );
     } else {
-      fallbackSOS(0.0, 0.0);
-    }
-  };
-
-  const fallbackSOS = async (lat: number, lon: number) => {
-    try {
-      const res = await TravelGuardianAPI.triggerSOS({
-        latitude: lat,
-        longitude: lon,
-        custom_message: "Emergency broadcast activated."
-      });
-      setSosResult(res);
-    } catch {
-      setError("Emergency communication failed. Dispatch systems offline. Please dial 112 directly.");
-    } finally {
-      setLoading(false);
+      TravelGuardianAPI.triggerSOS({
+        custom_message: "Emergency broadcast activated. Live GPS coordinates unavailable."
+      })
+        .then(setSosResult)
+        .catch(() => setError("Emergency communication failed. Dispatch systems offline. Please dial 112 directly."))
+        .finally(() => setLoading(false));
     }
   };
 
@@ -130,7 +125,41 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
           </button>
         </div>
 
-        {/* 1. Countdown screen */}
+        {/* 0. Explicit confirmation screen -- shown first, always. Opening
+             this modal must never by itself start a countdown to real
+             dispatch. */}
+        {!confirmed && !loading && !sosResult && !error && (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div
+              className="flex h-20 w-20 items-center justify-center rounded-full"
+              style={{ backgroundColor: "#FEF2F2", border: "3px solid #EF4444" }}
+            >
+              <ShieldAlert className="h-9 w-9" style={{ color: "#DC2626" }} />
+            </div>
+            <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", marginTop: "20px" }}>Send SOS Broadcast?</h3>
+            <p style={{ fontSize: "13px", color: "#64748B", maxWidth: "360px", marginTop: "8px", lineHeight: 1.5 }}>
+              This will attempt to send your live GPS coordinates and an emergency SMS/call to your configured trusted contact via Exotel. Nothing is sent until you confirm.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={onClose}
+                className="rounded-xl px-6 py-2.5 text-xs font-bold transition-all"
+                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.12)", color: "#0F172A" }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleConfirmSend}
+                className="rounded-xl px-6 py-2.5 text-xs font-bold text-white shadow-sm transition-all"
+                style={{ backgroundColor: "#EF4444" }}
+              >
+                SEND SOS NOW
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 1. Countdown screen (only after explicit confirmation above) */}
         {countdown !== null && (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <div

@@ -11,7 +11,7 @@ import {
   LocationSnapshot
 } from "../types/safetyCheckIn";
 import { NavigationPosition } from "../types/navigation";
-import { getTrustedContacts } from "../services/trustedContactService";
+import { getTrustedContacts, refreshTrustedContactsFromBackend } from "../services/trustedContactService";
 import { 
   createLocationSnapshot, 
   sendTrustedContactAlert, 
@@ -91,6 +91,13 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
   useEffect(() => {
     onStateChange?.(status);
   }, [status, onStateChange]);
+
+  // Keep the trusted-contact cache fresh from the backend so escalation
+  // (which reads getTrustedContacts() synchronously) reflects the real,
+  // current contact list rather than a stale localStorage snapshot.
+  useEffect(() => {
+    refreshTrustedContactsFromBackend().catch(() => {});
+  }, []);
 
   // Authoritative Source of Truth: Recover active timer from backend on mount
   useEffect(() => {

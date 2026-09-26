@@ -14,7 +14,7 @@ import { useLiveNavigation } from "@/hooks/useLiveNavigation";
 import LiveNavigationOverlay from "../components/LiveNavigationOverlay";
 import { useSafetyCheckIn } from "@/hooks/useSafetyCheckIn";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
-import { getTrustedContacts } from "@/services/trustedContactService";
+import { getTrustedContacts, refreshTrustedContactsFromBackend } from "@/services/trustedContactService";
 import { TrustedContact } from "@/types/safetyCheckIn";
 import { 
   CheckCircle2, Loader, MapPin, 
@@ -241,7 +241,13 @@ function LivingMapContent() {
       window.addEventListener("offline", handleOffline);
     }
 
+    // Backend is the source of truth for trusted contacts; show the cache
+    // immediately, then refresh from the server so an edit made on another
+    // screen (or another device) is reflected here too.
     setTrustedContacts(getTrustedContacts());
+    refreshTrustedContactsFromBackend()
+      .then(setTrustedContacts)
+      .catch(() => {});
     setCommunityIncidents(getActiveIncidents());
 
     try {

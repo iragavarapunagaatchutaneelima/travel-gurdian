@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import Link from "next/link";
-import { getTrustedContacts } from "../../services/trustedContactService";
+import { getTrustedContacts, refreshTrustedContactsFromBackend } from "../../services/trustedContactService";
 import { TrustedContact } from "../../types/safetyCheckIn";
 
 export default function SettingsPage() {
@@ -28,6 +28,9 @@ export default function SettingsPage() {
   useEffect(() => {
     setMounted(true);
     setTrustedContacts(getTrustedContacts());
+    refreshTrustedContactsFromBackend()
+      .then(setTrustedContacts)
+      .catch(() => {});
   }, []);
 
   const handleResetCache = () => {

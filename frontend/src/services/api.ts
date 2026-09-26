@@ -128,7 +128,7 @@ export const TravelGuardianAPI = {
     return this.callAPI<EmergencyContactResponse[]>("/assist/contacts");
   },
 
-  async createEmergencyContact(contact: Omit<EmergencyContactResponse, "id" | "user_id">): Promise<EmergencyContactResponse> {
+  async createEmergencyContact(contact: Omit<EmergencyContactResponse, "id" | "user_id" | "is_primary">): Promise<EmergencyContactResponse> {
     return this.callAPI<EmergencyContactResponse>("/assist/contacts", {
       method: "POST",
       body: JSON.stringify(contact)

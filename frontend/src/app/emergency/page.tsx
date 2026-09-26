@@ -3,12 +3,12 @@
 import React, { useState, useEffect } from "react";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
-import { 
-  getTrustedContacts, 
-  saveTrustedContacts,
-  addTrustedContact, 
-  updateTrustedContact, 
-  removeTrustedContact, 
+import {
+  getTrustedContacts,
+  refreshTrustedContactsFromBackend,
+  addTrustedContact,
+  updateTrustedContact,
+  removeTrustedContact,
   toggleContactEnabled,
   MAX_TRUSTED_CONTACTS,
   MIN_TRUSTED_CONTACTS,
@@ -84,18 +84,8 @@ export default function EmergencyScreen() {
     setSyncStatus("syncing");
     setSyncMessage("Synchronizing contacts with server...");
     try {
-      const backendContacts = await TravelGuardianAPI.getEmergencyContacts();
-      const mapped: TrustedContact[] = backendContacts.map((bc) => ({
-        id: `tc_${bc.id}`,
-        backendId: bc.id,
-        name: bc.name,
-        phone: bc.phone,
-        relationship: bc.relation,
-        enabled: bc.is_enabled !== undefined ? bc.is_enabled : true,
-        createdAt: Date.now()
-      }));
+      const mapped = await refreshTrustedContactsFromBackend();
       setContacts(mapped);
-      saveTrustedContacts(mapped);
       setSyncStatus("synced");
       setSyncMessage("Synced with Server");
     } catch (err: any) {
@@ -569,8 +559,12 @@ export default function EmergencyScreen() {
                   <h3 className="font-extrabold text-xs uppercase tracking-wider text-(--muted-foreground)">
                     Current Location Telemetry
                   </h3>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    GPS Synchronized
+                  <span className={`text-[10px] font-bold ${locationSnapshot ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                    {locationLoading
+                      ? "Waiting for location permission..."
+                      : locationSnapshot
+                        ? "GPS Synchronized"
+                        : "Live location unavailable"}
                   </span>
                 </div>
               </div>

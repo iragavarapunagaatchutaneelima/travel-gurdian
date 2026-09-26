@@ -8,7 +8,7 @@ import GuardianMapSync, { PinnedPlace } from "../components/GuardianMapSync";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
 import { useSafetyCheckIn } from "../../hooks/useSafetyCheckIn";
 import { useSharedLocation } from "../../hooks/useSharedLocation";
-import { getTrustedContacts } from "../../services/trustedContactService";
+import { getTrustedContacts, refreshTrustedContactsFromBackend } from "../../services/trustedContactService";
 import { searchNearbyPlaces } from "../../services/googlePlaces";
 import { TrustedContact } from "../../types/safetyCheckIn";
 import { LiveTravelContext } from "../../types/gemini";
@@ -54,6 +54,9 @@ export default function AssistHub() {
 
   useEffect(() => {
     setTrustedContacts(getTrustedContacts());
+    refreshTrustedContactsFromBackend()
+      .then(setTrustedContacts)
+      .catch(() => {});
   }, []);
 
   // When GPS location is available and no places pinned yet, discover initial safe havens
@@ -169,8 +172,18 @@ export default function AssistHub() {
             <div>
               <h1 className="text-base md:text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
                 <span>AI Guardian Assistant</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  REAL GPS ACTIVE
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  hasLocation
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                }`}>
+                  {hasLocation
+                    ? "GPS ACTIVE"
+                    : permissionStatus === "denied"
+                      ? "LOCATION PERMISSION DENIED"
+                      : permissionStatus === "unavailable"
+                        ? "LIVE LOCATION UNAVAILABLE"
+                        : "WAITING FOR LOCATION"}
                 </span>
               </h1>
               <p className="text-xs text-(--muted-foreground) hidden sm:block">

@@ -1,8 +1,40 @@
 import { TrustedContact } from "../types/safetyCheckIn";
+import { TravelGuardianAPI } from "./api";
 
 const STORAGE_KEY = "tg_trusted_contacts";
 export const MIN_TRUSTED_CONTACTS = 0;
 export const MAX_TRUSTED_CONTACTS = 5;
+
+/**
+ * Fetches the authoritative trusted-contact list from the backend database
+ * and refreshes the local cache. Every screen that shows or relies on
+ * trusted contacts (Emergency, Map, Settings, Assist, Safety Check-In)
+ * should call this on mount instead of reading only the localStorage cache,
+ * so a contact added/edited/removed on one screen is reflected everywhere
+ * else -- the backend is the single source of truth, not whichever screen
+ * happened to sync last.
+ *
+ * Throws on backend failure so callers can decide how to surface it
+ * (falling back to the last-known cache is a reasonable degraded mode, but
+ * that decision belongs to the caller, not this function).
+ */
+export async function refreshTrustedContactsFromBackend(): Promise<TrustedContact[]> {
+  const backendContacts = await TravelGuardianAPI.getEmergencyContacts();
+  const mapped: TrustedContact[] = backendContacts
+    .slice()
+    .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.id - b.id)
+    .map((bc) => ({
+      id: `tc_${bc.id}`,
+      backendId: bc.id,
+      name: bc.name,
+      phone: bc.phone,
+      relationship: bc.relation,
+      enabled: bc.is_enabled !== undefined ? bc.is_enabled : true,
+      createdAt: Date.now()
+    }));
+  saveTrustedContacts(mapped);
+  return mapped;
+}
 
 export function getTrustedContacts(): TrustedContact[] {
   if (typeof window === "undefined") {

@@ -54,6 +54,7 @@ export interface EmergencyContactResponse {
   relation: string;
   user_id: string;
   is_enabled: boolean;
+  is_primary: boolean;
 }
 
 export interface SafeCheckInResponse {
@@ -88,8 +89,10 @@ export interface SchedulerStatusResponse {
 }
 
 export interface SOSRequest {
-  latitude: number;
-  longitude: number;
+  // Optional: real GPS may be unavailable, and a fabricated 0,0 coordinate
+  // is worse than honestly omitting location.
+  latitude?: number;
+  longitude?: number;
   custom_message?: string;
 }
 
@@ -110,8 +113,8 @@ export interface SOSResponse {
   success: boolean;
   message: string;
   broadcasted_contacts: string[];
-  latitude: number;
-  longitude: number;
+  latitude?: number | null;
+  longitude?: number | null;
   nearest_havens: SafeHaven[];
   sms_status?: "sent" | "failed" | "pending" | "throttled" | "skipped" | "dry_run";
   call_status?: "initiated" | "failed" | "pending" | "throttled" | "skipped" | "dry_run";
