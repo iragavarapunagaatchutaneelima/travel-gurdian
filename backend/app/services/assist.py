@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models import models
 from app.schemas import schemas
-from app.services import exotel_service
+from app.services import comms_service
 from fastapi import HTTPException, status
 
 logger = logging.getLogger("travel_guardian.assist")
@@ -91,7 +91,7 @@ def _resolve_primary_contact(
 
 def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "default_user") -> schemas.SOSResponse:
     """
-    Activates immediate SOS Broadcast alerts, triggers Exotel SMS and Voice Call to stored
+    Activates immediate SOS Broadcast alerts, triggers Twilio SMS and Voice Call to stored
     active trusted contact(s), logs the event, and identifies nearby safe havens.
     """
     contacts = db.query(models.EmergencyContact).filter(
@@ -100,7 +100,7 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
     ).order_by(models.EmergencyContact.is_primary.desc(), models.EmergencyContact.id.asc()).all()
     broadcast_list = []
     for c in contacts:
-        contact_type = f"{c.name} ({c.relation}) via {exotel_service.mask_phone_number(c.phone)}"
+        contact_type = f"{c.name} ({c.relation}) via {comms_service.mask_phone_number(c.phone)}"
         if c.email:
             contact_type += f" & {c.email}"
         broadcast_list.append(contact_type)
@@ -119,14 +119,14 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
     if contacts:
         primary_contact = contacts[0]
         target_name = primary_contact.name
-        target_masked = exotel_service.mask_phone_number(primary_contact.phone)
+        target_masked = comms_service.mask_phone_number(primary_contact.phone)
 
         # Check debounce lock
-        acquired, reason = exotel_service.check_and_acquire_emergency_lock(user_id)
+        acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
 
         if acquired:
-            # Dispatch Exotel SMS
-            sms_res = exotel_service.send_emergency_sms(
+            # Dispatch Twilio SMS
+            sms_res = comms_service.send_emergency_sms(
                 to_phone=primary_contact.phone,
                 user_name=target_name,
                 latitude=lat,
@@ -136,8 +136,8 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
             sms_status = sms_res.get("status", "failed")
             sms_sid = sms_res.get("sid")
 
-            # Initiate Exotel Call
-            call_res = exotel_service.make_emergency_call(
+            # Initiate Twilio Call
+            call_res = comms_service.make_emergency_call(
                 to_phone=primary_contact.phone,
                 user_name=target_name
             )
@@ -161,15 +161,15 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
                 overall_status = "dry_run"
                 is_success = False
                 response_msg = (
-                    f"DRY RUN: Exotel dispatch to {target_name} ({target_masked}) was validated but NOT actually sent "
-                    "because EXOTEL_DRY_RUN is enabled on the server. No real SMS or call was made."
+                    f"DRY RUN: Twilio dispatch to {target_name} ({target_masked}) was validated but NOT actually sent "
+                    "because TWILIO_DRY_RUN is enabled on the server. No real SMS or call was made."
                 )
             else:
                 overall_status = "failed"
                 is_success = False
                 sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS dispatch failed"
                 call_err = call_res.get("safe_message") or call_res.get("error") or "Voice call initiation failed"
-                response_msg = f"Emergency communication failed. Dispatch to trusted contact failed via Exotel (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
+                response_msg = f"Emergency communication failed. Dispatch to trusted contact failed via Twilio (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
         else:
             overall_status = "throttled"
             sms_status = "throttled"
@@ -273,10 +273,10 @@ def send_trusted_contact_sms(
             detail="No trusted emergency contact is configured. Please add a trusted contact in Settings or Emergency portal."
         )
 
-    masked_phone = exotel_service.mask_phone_number(primary.phone)
+    masked_phone = comms_service.mask_phone_number(primary.phone)
 
     # Check debounce
-    acquired, reason = exotel_service.check_and_acquire_emergency_lock(user_id)
+    acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
     if not acquired:
         return schemas.EmergencySMSResponse(
             success=False,
@@ -288,7 +288,7 @@ def send_trusted_contact_sms(
             error="Debounced"
         )
 
-    res = exotel_service.send_emergency_sms(
+    res = comms_service.send_emergency_sms(
         to_phone=primary.phone,
         user_name=primary.name,
         latitude=request.latitude,
@@ -339,10 +339,10 @@ def make_trusted_contact_call(
             detail="No trusted emergency contact is configured. Please add a trusted contact in Settings or Emergency portal."
         )
 
-    masked_phone = exotel_service.mask_phone_number(primary.phone)
+    masked_phone = comms_service.mask_phone_number(primary.phone)
 
     # Check debounce
-    acquired, reason = exotel_service.check_and_acquire_emergency_lock(user_id)
+    acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
     if not acquired:
         return schemas.EmergencyCallResponse(
             success=False,
@@ -354,7 +354,7 @@ def make_trusted_contact_call(
             error="Debounced"
         )
 
-    res = exotel_service.make_emergency_call(
+    res = comms_service.make_emergency_call(
         to_phone=primary.phone,
         user_name=primary.name
     )
@@ -401,10 +401,10 @@ def notify_trusted_contact(
             detail="No trusted emergency contact is configured. Please add a trusted contact in Settings or Emergency portal."
         )
 
-    masked_phone = exotel_service.mask_phone_number(primary.phone)
+    masked_phone = comms_service.mask_phone_number(primary.phone)
 
     # Check debounce
-    acquired, reason = exotel_service.check_and_acquire_emergency_lock(user_id)
+    acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
     if not acquired:
         return schemas.EmergencyNotificationResponse(
             success=False,
@@ -420,7 +420,7 @@ def notify_trusted_contact(
 
     sms_res = {"status": "skipped", "sid": None, "success": True}
     if request.include_sms is not False:
-        sms_res = exotel_service.send_emergency_sms(
+        sms_res = comms_service.send_emergency_sms(
             to_phone=primary.phone,
             user_name=primary.name,
             latitude=request.latitude,
@@ -431,7 +431,7 @@ def notify_trusted_contact(
 
     call_res = {"status": "skipped", "sid": None, "success": True}
     if request.include_call is not False:
-        call_res = exotel_service.make_emergency_call(
+        call_res = comms_service.make_emergency_call(
             to_phone=primary.phone,
             user_name=primary.name
         )
@@ -459,15 +459,15 @@ def notify_trusted_contact(
         overall = "dry_run"
         is_success = False
         msg = (
-            f"DRY RUN: Exotel dispatch to {primary.name} ({masked_phone}) was validated but NOT actually sent "
-            "because EXOTEL_DRY_RUN is enabled on the server. No real SMS or call was made."
+            f"DRY RUN: Twilio dispatch to {primary.name} ({masked_phone}) was validated but NOT actually sent "
+            "because TWILIO_DRY_RUN is enabled on the server. No real SMS or call was made."
         )
     else:
         overall = "failed"
         is_success = False
         sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS failed"
         call_err = call_res.get("safe_message") or call_res.get("error") or "Call failed"
-        msg = f"Emergency communication failed. Dispatch to trusted contact failed via Exotel (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
+        msg = f"Emergency communication failed. Dispatch to trusted contact failed via Twilio (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
 
     # Persist audit logs
     log_emergency_event(
@@ -587,8 +587,8 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
             )
             return checkin
 
-        # 5. Trigger Exotel emergency communication
-        masked_phone = exotel_service.mask_phone_number(active_contact.phone)
+        # 5. Trigger Twilio emergency communication
+        masked_phone = comms_service.mask_phone_number(active_contact.phone)
         maps_link = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}" if (lat is not None and lon is not None) else None
         loc_text = f" Last known location: {maps_link}." if maps_link else ""
         user_note = f" Check-in note: '{checkin.checkin_text.strip()}'." if checkin.checkin_text else ""
@@ -598,7 +598,7 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
             f"{user_note}{loc_text} Please attempt to reach them immediately or contact emergency services (112)."
         )
 
-        sms_res = exotel_service.send_emergency_sms(
+        sms_res = comms_service.send_emergency_sms(
             to_phone=active_contact.phone,
             user_name=active_contact.name,
             latitude=lat,
@@ -606,7 +606,7 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
             custom_message=escalation_message
         )
 
-        call_res = exotel_service.make_emergency_call(
+        call_res = comms_service.make_emergency_call(
             to_phone=active_contact.phone,
             user_name=active_contact.name
         )
@@ -627,9 +627,9 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
         elif sms_status == "dry_run" or call_status == "dry_run":
             checkin.escalation_status = "dry_run"
             overall_status = "dry_run"
-            err_msg = "DRY RUN: escalation request validated but not sent (EXOTEL_DRY_RUN=true)."
+            err_msg = "DRY RUN: escalation request validated but not sent (TWILIO_DRY_RUN=true)."
         else:
-            checkin.escalation_status = "exotel_failure"
+            checkin.escalation_status = "twilio_failure"
             overall_status = "failed"
             sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS failed"
             call_err = call_res.get("safe_message") or call_res.get("error") or "Call failed"
@@ -663,7 +663,7 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
     except Exception as exc:
         db.rollback()
         logger.error(f"Unexpected error during checkin escalation: {exc}", exc_info=True)
-        checkin.escalation_status = "exotel_failure"
+        checkin.escalation_status = "twilio_failure"
         checkin.dispatch_error = str(exc)
         checkin.dispatched_at = datetime.datetime.now(datetime.timezone.utc)
         try:

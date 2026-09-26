@@ -5,7 +5,7 @@ from app.core.database import get_db
 from app.core.identity import get_device_id
 from app.models import models
 from app.schemas import schemas
-from app.services import assist, exotel_service
+from app.services import assist, comms_service
 
 router = APIRouter()
 
@@ -28,7 +28,7 @@ def create_contact(contact: schemas.EmergencyContactCreate, user_id: str = Depen
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contact name cannot be blank.")
 
     try:
-        normalized_phone = exotel_service.normalize_phone_number(contact.phone)
+        normalized_phone = comms_service.normalize_phone_number(contact.phone)
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid phone number: {ve}")
 
@@ -87,7 +87,7 @@ def update_contact(
 
     if update.phone is not None:
         try:
-            normalized_phone = exotel_service.normalize_phone_number(update.phone)
+            normalized_phone = comms_service.normalize_phone_number(update.phone)
         except ValueError as ve:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid phone number: {ve}")
 
@@ -240,7 +240,7 @@ def update_checkin_gps(location: schemas.SafeCheckInLocationUpdate, user_id: str
 def run_timer_check(db: Session = Depends(get_db)):
     """
     Execute background evaluation check for overdue check-in timers.
-    Idempotently escalates any overdue, unconfirmed check-ins via Exotel.
+    Idempotently escalates any overdue, unconfirmed check-ins via Twilio.
     """
     triggered_logs = assist.check_pending_checkins(db)
     return triggered_logs
@@ -260,12 +260,12 @@ def get_checkin_scheduler_status():
 @router.post("/sos", response_model=schemas.SOSResponse)
 def trigger_sos_broadcast(request: schemas.SOSRequest, user_id: str = Depends(get_device_id), db: Session = Depends(get_db)):
     """
-    Activate immediate SOS Broadcast alerts, notify guardians via Exotel SMS/call, and identify safe havens.
+    Activate immediate SOS Broadcast alerts, notify guardians via Twilio SMS/call, and identify safe havens.
     """
     return assist.trigger_sos(db, request, user_id)
 
 
-# --- EXOTEL EMERGENCY COMMUNICATION ENDPOINTS ---
+# --- TWILIO EMERGENCY COMMUNICATION ENDPOINTS ---
 
 @router.post("/emergency/sms", response_model=schemas.EmergencySMSResponse)
 @router.post("/sms", response_model=schemas.EmergencySMSResponse)
@@ -275,7 +275,7 @@ def send_emergency_sms_to_trusted_contact(
     db: Session = Depends(get_db)
 ):
     """
-    Sends an Exotel emergency SMS strictly to the user's registered Trusted Contact.
+    Sends an Twilio emergency SMS strictly to the user's registered Trusted Contact.
     Destination numbers supplied by frontend are ignored/rejected.
     """
     return assist.send_trusted_contact_sms(db, request, user_id)
@@ -289,7 +289,7 @@ def make_emergency_call_to_trusted_contact(
     db: Session = Depends(get_db)
 ):
     """
-    Initiates an Exotel outbound voice call strictly to the user's registered Trusted Contact.
+    Initiates an Twilio outbound voice call strictly to the user's registered Trusted Contact.
     Destination numbers supplied by frontend are ignored/rejected.
     """
     return assist.make_trusted_contact_call(db, request, user_id)
@@ -308,39 +308,35 @@ def notify_trusted_contact(
     return assist.notify_trusted_contact(db, request, user_id)
 
 
-@router.get("/emergency/config-status", response_model=schemas.ExotelConfigStatusResponse)
-@router.get("/config-status", response_model=schemas.ExotelConfigStatusResponse)
-def get_exotel_config_status():
+@router.get("/emergency/config-status", response_model=schemas.TwilioConfigStatusResponse)
+@router.get("/config-status", response_model=schemas.TwilioConfigStatusResponse)
+def get_twilio_config_status():
     """
-    Returns boolean indicating whether Exotel server-side credentials are configured.
-    Never exposes keys, tokens, or SIDs.
+    Returns boolean indicating whether Twilio server-side credentials are configured.
+    Never exposes the auth token or account SID.
     """
-    from app.services.exotel_service import validate_exotel_configuration, _get_exotel_host
     from app.core.config import settings
-    is_valid, cfg_err = validate_exotel_configuration()
-    return schemas.ExotelConfigStatusResponse(
+    is_valid, cfg_err = comms_service.validate_configuration()
+    return schemas.TwilioConfigStatusResponse(
         is_configured=is_valid,
-        dry_run=settings.EXOTEL_DRY_RUN,
-        region="Singapore",
-        host=_get_exotel_host(),
-        account_sid_configured=bool(settings.EXOTEL_ACCOUNT_SID),
-        api_key_configured=bool(settings.EXOTEL_API_KEY and not settings.EXOTEL_API_KEY.startswith("your_")),
-        api_token_configured=bool(settings.EXOTEL_API_TOKEN and not settings.EXOTEL_API_TOKEN.startswith("your_")),
-        exophone_configured=bool(settings.EXOTEL_EXOPHONE),
-        safe_message=cfg_err or "Exotel configuration is active for Singapore region."
+        dry_run=settings.TWILIO_DRY_RUN,
+        host="api.twilio.com",
+        account_sid_configured=bool(settings.TWILIO_ACCOUNT_SID and not settings.TWILIO_ACCOUNT_SID.startswith("your_")),
+        auth_token_configured=bool(settings.TWILIO_AUTH_TOKEN and not settings.TWILIO_AUTH_TOKEN.startswith("your_")),
+        sender_configured=bool(settings.TWILIO_PHONE_NUMBER),
+        safe_message=cfg_err or "Twilio configuration is active."
     )
 
 
-@router.get("/emergency/diagnostic", response_model=schemas.ExotelDiagnosticResponse)
-@router.get("/diagnostic", response_model=schemas.ExotelDiagnosticResponse)
-def get_exotel_diagnostic():
+@router.get("/emergency/diagnostic", response_model=schemas.TwilioDiagnosticResponse)
+@router.get("/diagnostic", response_model=schemas.TwilioDiagnosticResponse)
+def get_twilio_diagnostic():
     """
-    Safe diagnostic inspection: checks Singapore API host, Account SID,
-    and runs a live ping against Exotel's Balance API without initiating any calls or SMS.
-    Never exposes keys or tokens.
+    Safe diagnostic inspection: checks Twilio Account SID and runs a live
+    read-only auth check against the Twilio Account resource without
+    initiating any calls or SMS. Never exposes the auth token.
     """
-    from app.services.exotel_service import test_exotel_authentication
-    return test_exotel_authentication()
+    return comms_service.test_authentication()
 
 
 @router.get("/emergency/logs", response_model=List[schemas.EmergencyEventLogResponse])

@@ -9,6 +9,18 @@ Written in plain English. This document is the deep-dive companion to [`README.m
 > **Total commits:** 19 · **Contributors:** 2 human developers + AI-assisted engineering passes
 > **Codebase size:** ~19,900 lines of TypeScript/TSX (frontend) + ~3,150 lines of Python (backend)
 
+> **⚠️ Post-publication update (27 September 2026):** everywhere this report
+> mentions **Exotel** as the emergency SMS/voice-call provider, that has since
+> been **replaced with Twilio** behind a new `EmergencyCommunicationProvider`
+> abstraction (`backend/app/services/communication/`), so the app is not
+> tied to one vendor. The `exotel_service.py` file, `EXOTEL_*` environment
+> variables, and `docs/EXOTEL_SETUP.md` referenced below no longer exist —
+> see `backend/app/services/comms_service.py`, `TWILIO_*` in
+> `backend/.env.example`, and [`docs/TWILIO_SETUP.md`](docs/TWILIO_SETUP.md)
+> instead. The architecture, safety rules (dry-run default, `is_primary`
+> contact resolution, device-identity scoping) and behavior described below
+> are otherwise unchanged — only the vendor name and env var prefix changed.
+
 ---
 
 ## Table of Contents

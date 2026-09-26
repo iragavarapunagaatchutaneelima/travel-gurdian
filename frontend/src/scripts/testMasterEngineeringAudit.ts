@@ -161,16 +161,16 @@ async function runMasterAudit() {
   // ---------------------------------------------------------------------------
   // 3. EMERGENCY TRUSTED CONTACT ONLY & REAL SMS FORMATTING
   // ---------------------------------------------------------------------------
-  console.log("\n--- PART 3: EMERGENCY TRUSTED CONTACT & EXOTEL AUDIT ---");
+  console.log("\n--- PART 3: EMERGENCY TRUSTED CONTACT & TWILIO AUDIT ---");
 
   try {
-    // Check backend Exotel configuration status
+    // Check backend Twilio configuration status
     const cfgRes = await fetch(`${BACKEND_URL}/api/emergency/config-status`);
     testAssert(cfgRes.status === 200, "Emergency Backend: /api/emergency/config-status returns HTTP 200");
     const cfgData = await cfgRes.json();
     testAssert(
-      cfgData.region === "Singapore",
-      "Emergency Backend: Exotel region is configured as Singapore",
+      cfgData.host === "api.twilio.com",
+      "Emergency Backend: Twilio host is configured as api.twilio.com",
       `Host: ${cfgData.host}, Account configured: ${cfgData.account_sid_configured}`
     );
 
@@ -200,8 +200,6 @@ async function runMasterAudit() {
       "Destination is strictly the traveler's registered private guardian."
     );
 
-    // Verify SMS message formatting structure
-    const sampleBody = (await import("../../../backend/app/services/exotel_service.js" as any).catch(() => null));
     console.log("       [Verified] SMS alert includes: Emergency Alert header, User needs help, human location, coordinates, Google Maps link.");
   } catch (e: any) {
     testAssert(false, "Emergency Backend verification", e?.message);

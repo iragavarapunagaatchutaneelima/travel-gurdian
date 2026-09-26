@@ -138,7 +138,7 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
             </div>
             <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A", marginTop: "20px" }}>Send SOS Broadcast?</h3>
             <p style={{ fontSize: "13px", color: "#64748B", maxWidth: "360px", marginTop: "8px", lineHeight: 1.5 }}>
-              This will attempt to send your live GPS coordinates and an emergency SMS/call to your configured trusted contact via Exotel. Nothing is sent until you confirm.
+              This will attempt to send your live GPS coordinates and an emergency SMS/call to your configured trusted contact via Twilio. Nothing is sent until you confirm.
             </p>
             <div className="flex gap-3 mt-6">
               <button
@@ -226,7 +226,7 @@ export default function SOSModal({ isOpen, onClose }: SOSModalProps) {
                 <div>
                   <h4 style={{ fontSize: "13px", fontWeight: 800, textTransform: "uppercase" }}>EMERGENCY COMMUNICATION FAILED</h4>
                   <p style={{ fontSize: "11px", color: "#B91C1C", marginTop: "2px" }}>
-                    {sosResult.message || "Exotel emergency communication failed. Please dial 112 directly if in danger."}
+                    {sosResult.message || "Twilio emergency communication failed. Please dial 112 directly if in danger."}
                   </p>
                 </div>
               </div>

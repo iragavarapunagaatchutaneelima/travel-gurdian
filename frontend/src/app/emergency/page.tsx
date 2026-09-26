@@ -72,7 +72,7 @@ export default function EmergencyScreen() {
   const [humanLocation, setHumanLocation] = useState<string | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
 
-  // Exotel Emergency Communication States
+  // Twilio Emergency Communication States
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [actionStatusText, setActionStatusText] = useState<string | null>(null);
   const [smsStatus, setSmsStatus] = useState<"pending" | "sent" | "failed" | null>(null);
@@ -330,7 +330,7 @@ export default function EmergencyScreen() {
   const activeContacts = contacts.filter(c => c.enabled);
   const primaryContact = activeContacts.length > 0 ? activeContacts[0] : null;
 
-  // Exotel SMS Alert to Configured Contact
+  // Twilio SMS Alert to Configured Contact
   const handleAlertTrustedContactSMS = async () => {
     if (!primaryContact) {
       setAlertMessage({ text: "Please add a trusted contact before sending an alert.", type: "warning" });
@@ -338,7 +338,7 @@ export default function EmergencyScreen() {
     }
 
     setIsActionLoading(true);
-    setActionStatusText(`Sending SMS alert to ${primaryContact.name} via Exotel...`);
+    setActionStatusText(`Sending SMS alert to ${primaryContact.name} via Twilio...`);
     setSmsStatus("pending");
 
     try {
@@ -360,7 +360,7 @@ export default function EmergencyScreen() {
         // Dry-run is a deliberate safety gate, not a failure -- shown as a
         // warning, never doubled up with "Emergency communication failed".
         setSmsStatus("failed");
-        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Exotel dispatch is disabled (EXOTEL_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
+        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Twilio dispatch is disabled (TWILIO_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
         setActionStatusText("Dry-run: SMS validated but not sent.");
       } else {
         setSmsStatus("failed");
@@ -379,7 +379,7 @@ export default function EmergencyScreen() {
     }
   };
 
-  // Exotel Voice Call to Configured Contact
+  // Twilio Voice Call to Configured Contact
   const handleCallTrustedContact = async () => {
     if (!primaryContact) {
       setAlertMessage({ text: "Please add a trusted contact before making an emergency call.", type: "warning" });
@@ -387,7 +387,7 @@ export default function EmergencyScreen() {
     }
 
     setIsActionLoading(true);
-    setActionStatusText(`Initiating emergency call to ${primaryContact.name} via Exotel...`);
+    setActionStatusText(`Initiating emergency call to ${primaryContact.name} via Twilio...`);
     setCallStatus("pending");
 
     try {
@@ -407,7 +407,7 @@ export default function EmergencyScreen() {
         setActionStatusText("Call initiated successfully.");
       } else if (res && res.status === "dry_run") {
         setCallStatus("failed");
-        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Exotel dispatch is disabled (EXOTEL_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
+        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Twilio dispatch is disabled (TWILIO_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
         setActionStatusText("Dry-run: call validated but not placed.");
       } else {
         setCallStatus("failed");
@@ -458,7 +458,7 @@ export default function EmergencyScreen() {
         setActionStatusText("Partial delivery completed.");
       } else if (res && res.overall_status === "dry_run") {
         setOverallStatus("failed");
-        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Exotel dispatch is disabled (EXOTEL_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
+        setAlertMessage({ text: res.safe_message || "DRY RUN: server-side Twilio dispatch is disabled (TWILIO_DRY_RUN=true). Nothing was actually sent.", type: "warning" });
         setActionStatusText("Dry-run: SOS validated but not sent.");
       } else {
         setOverallStatus("failed");

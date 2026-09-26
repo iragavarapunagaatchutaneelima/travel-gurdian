@@ -95,7 +95,7 @@ class SafeCheckIn(Base):
     last_known_latitude = Column(Float, nullable=True)
     last_known_longitude = Column(Float, nullable=True)
     last_location_time = Column(DateTime, nullable=True)
-    escalation_status = Column(String(50), default="pending", nullable=False)  # pending, confirmed_safe, escalating, escalated, exotel_failure, no_trusted_contact, cancelled, dry_run
+    escalation_status = Column(String(50), default="pending", nullable=False)  # pending, confirmed_safe, escalating, escalated, twilio_failure, no_trusted_contact, cancelled, dry_run
     dispatched_at = Column(DateTime, nullable=True)
     dispatch_sms_sid = Column(String(100), nullable=True)
     dispatch_call_sid = Column(String(100), nullable=True)
@@ -113,7 +113,7 @@ class EmergencyEventLog(Base):
     recipient_name = Column(String(100), nullable=True)
     recipient_phone_masked = Column(String(30), nullable=True)
     status = Column(String(50), nullable=False)  # "initiated", "sent", "failed", "completed"
-    sid = Column(String(100), nullable=True)  # Exotel Call SID or SMS SID
+    sid = Column(String(100), nullable=True)  # Twilio Call SID or Message SID
     error_message = Column(String(255), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)

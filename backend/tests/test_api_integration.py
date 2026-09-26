@@ -9,7 +9,7 @@ or -- critically -- the device-identity cookie mechanism added to close the
 TestClient so that layer is verified too.
 
 Uses its own isolated SQLite file (not the real travel_guardian.db) and
-forces EXOTEL_DRY_RUN so no test here can ever trigger a real Exotel call
+forces TWILIO_DRY_RUN so no test here can ever trigger a real Twilio call
 even if something regresses.
 """
 import os
@@ -22,7 +22,7 @@ import unittest
 _tmp_db_fd, _tmp_db_path = tempfile.mkstemp(suffix=".db")
 os.close(_tmp_db_fd)
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp_db_path}"
-os.environ["EXOTEL_DRY_RUN"] = "true"
+os.environ["TWILIO_DRY_RUN"] = "true"
 os.environ["SEED_RESET"] = "false"
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -84,7 +84,7 @@ class TestApiIntegration(unittest.TestCase):
         # Clean up so this test is order-independent.
         client_a.delete(f"/api/assist/contacts/{contact_id}")
 
-    def test_exotel_dry_run_never_reports_success_over_http(self):
+    def test_twilio_dry_run_never_reports_success_over_http(self):
         client = TestClient(app)
         create_res = client.post(
             "/api/assist/contacts",

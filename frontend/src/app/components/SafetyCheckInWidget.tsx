@@ -383,7 +383,7 @@ export default function SafetyCheckInWidget({
               <Shield className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
               <div>
                 <span className="font-bold block">Authoritative Dead-Man's Switch Engine</span>
-                Timers run on the backend scheduler. If safety is unconfirmed when expired, Exotel emergency communication dispatches to active guardians automatically even if this browser tab is closed.
+                Timers run on the backend scheduler. If safety is unconfirmed when expired, Twilio emergency communication dispatches to active guardians automatically even if this browser tab is closed.
               </div>
             </div>
 

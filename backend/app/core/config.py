@@ -21,22 +21,21 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3001",
     ]
 
-    # Exotel Emergency Communication Configuration (Server-Side Only).
+    # Twilio Emergency Communication Configuration (Server-Side Only).
     # No default account SID is baked in: real credentials must always come
-    # from the environment, never from source.
-    EXOTEL_API_KEY: Optional[str] = None
-    EXOTEL_API_TOKEN: Optional[str] = None
-    EXOTEL_ACCOUNT_SID: Optional[str] = None
-    EXOTEL_EXOPHONE: Optional[str] = None
-    EXOTEL_SUBDOMAIN: Optional[str] = "api.exotel.com"
-    EXOTEL_APP_ID: Optional[str] = None
+    # from the environment, never from source. Never expose these through
+    # NEXT_PUBLIC_* on the frontend.
+    TWILIO_ACCOUNT_SID: Optional[str] = None
+    TWILIO_AUTH_TOKEN: Optional[str] = None
+    TWILIO_PHONE_NUMBER: Optional[str] = None
 
-    # When true (the default), Exotel dispatch is fully simulated: the real
+    # When true (the default), Twilio dispatch is fully simulated: the real
     # request is built and validated but never sent over the network, and the
     # result is reported back as status "dry_run" rather than "sent"/"failed".
-    # Production deployments must explicitly set EXOTEL_DRY_RUN=false once
-    # KYC, an ExoPhone, and (for calls) an App ID are provisioned.
-    EXOTEL_DRY_RUN: bool = True
+    # Production deployments must explicitly set TWILIO_DRY_RUN=false once
+    # a real, funded (non-trial, or trial with verified recipients) Twilio
+    # account and phone number are provisioned.
+    TWILIO_DRY_RUN: bool = True
 
     # When false (the default), the destructive parts of seed.py (wiping
     # existing contacts/check-ins/reports) are skipped so a container

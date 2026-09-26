@@ -68,7 +68,7 @@ export interface SafeCheckInResponse {
   last_known_latitude?: number | null;
   last_known_longitude?: number | null;
   last_location_time?: string | null;
-  escalation_status: string; // pending, confirmed_safe, escalating, escalated, exotel_failure, no_trusted_contact, cancelled
+  escalation_status: string; // pending, confirmed_safe, escalating, escalated, twilio_failure, no_trusted_contact, cancelled
   dispatched_at?: string | null;
   dispatch_sms_sid?: string | null;
   dispatch_call_sid?: string | null;

@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.models.models import SafeCheckIn, EmergencyContact, EmergencyEventLog
 from app.schemas.schemas import SafeCheckInCreate, SafeCheckInLocationUpdate
-from app.services import assist, exotel_service, checkin_scheduler
+from app.services import assist, comms_service, checkin_scheduler
 
 
 class TestDeadMansSwitchEscalation(unittest.TestCase):
@@ -20,8 +20,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     3. No confirmation (triggers escalation)
     4. Duplicate trigger / Idempotency guard (zero duplicate dispatches)
     5. No trusted contact handling
-    6. Exotel failure handling & truthful error reporting
-    7. Successful Exotel dispatch & SID auditing
+    6. Twilio failure handling & truthful error reporting
+    7. Successful Twilio dispatch & SID auditing
     8. Server restart recovery
     """
 
@@ -29,10 +29,10 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     def setUpClass(cls):
         cls.engine = create_engine("sqlite:///:memory:")
         # These tests exercise the mocked HTTP request/response plumbing in
-        # exotel_service, not real Exotel network calls (urllib.request.urlopen
+        # comms_service, not real Twilio network calls (urllib.request.urlopen
         # is patched per-test). Dry-run is a safety gate that sits ABOVE that
         # plumbing, so it must be disabled here to actually reach the mocks.
-        settings.EXOTEL_DRY_RUN = False
+        settings.TWILIO_DRY_RUN = False
         Base.metadata.create_all(cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 
@@ -43,7 +43,7 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         self.db.query(EmergencyEventLog).delete()
         self.db.commit()
         assist._active_escalating_ids.clear()
-        exotel_service._emergency_request_locks.clear()
+        comms_service._emergency_request_locks.clear()
 
     def tearDown(self):
         self.db.close()
@@ -51,8 +51,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     # =========================================================================
     # SCENARIO 1: NORMAL CONFIRMATION
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
     def test_normal_confirmation_prevents_escalation(self, mock_call, mock_sms):
         """
         User creates a check-in and confirms safety before expiry.
@@ -95,7 +95,7 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         escalated = assist.check_pending_checkins(self.db)
         self.assertEqual(len(escalated), 0, "Confirmed check-in must never be escalated!")
 
-        # 6. Verify zero Exotel calls or SMS
+        # 6. Verify zero Twilio calls or SMS
         mock_sms.assert_not_called()
         mock_call.assert_not_called()
 
@@ -108,8 +108,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     # =========================================================================
     # SCENARIO 2: TIMER EXPIRY DETECTION
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
     def test_timer_expiry_detection(self, mock_call, mock_sms):
         """
         Backend accurately identifies expired check-ins whose target_time <= now.
@@ -160,8 +160,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     # =========================================================================
     # SCENARIO 3: NO CONFIRMATION (AUTOMATIC ESCALATION)
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
     def test_no_confirmation_triggers_automatic_escalation(self, mock_call, mock_sms):
         """
         When user abandons check-in without confirming, backend escalates to trusted contact with GPS.
@@ -206,7 +206,7 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         self.assertEqual(res.dispatch_call_sid, "CA_no_conf")
         self.assertEqual(res.dispatch_recipient_name, "Charlie Contact")
 
-        # Verify Exotel was invoked with correct parameters
+        # Verify Twilio was invoked with correct parameters
         mock_sms.assert_called_once()
         sms_kwargs = mock_sms.call_args[1]
         self.assertEqual(sms_kwargs["to_phone"], "+919876543212")
@@ -222,8 +222,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     # =========================================================================
     # SCENARIO 4: DUPLICATE TRIGGER / IDEMPOTENCY
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
     def test_duplicate_trigger_idempotency(self, mock_call, mock_sms):
         """
         Ensures the same expired check-in cannot trigger repeated emergency calls or SMS.
@@ -263,8 +263,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         # Second trigger (e.g. next scheduler tick)
         res2 = assist.check_pending_checkins(self.db)
         self.assertEqual(len(res2), 0, "Second poll must ignore already triggered check-in!")
-        self.assertEqual(mock_sms.call_count, 1, "Exotel SMS must NOT be called again!")
-        self.assertEqual(mock_call.call_count, 1, "Exotel Call must NOT be called again!")
+        self.assertEqual(mock_sms.call_count, 1, "Twilio SMS must NOT be called again!")
+        self.assertEqual(mock_call.call_count, 1, "Twilio Call must NOT be called again!")
 
         # Third direct call to escalate_checkin on the same checkin object
         chk_refreshed = self.db.query(SafeCheckIn).filter(SafeCheckIn.id == chk.id).first()
@@ -276,8 +276,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     # =========================================================================
     # SCENARIO 5: NO TRUSTED CONTACT
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
     def test_no_trusted_contact_handling(self, mock_call, mock_sms):
         """
         When check-in expires but user has zero active emergency contacts,
@@ -304,7 +304,7 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         self.assertEqual(res.escalation_status, "no_trusted_contact")
         self.assertIn("No active trusted contact configured", res.dispatch_error)
 
-        # Exotel should not have been called
+        # Twilio should not have been called
         mock_sms.assert_not_called()
         mock_call.assert_not_called()
 
@@ -317,28 +317,28 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         self.assertEqual(log.event_type, "dead_man_switch_escalation")
 
     # =========================================================================
-    # SCENARIO 6: EXOTEL FAILURE HANDLING
+    # SCENARIO 6: TWILIO FAILURE HANDLING
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
-    def test_exotel_failure_handling(self, mock_call, mock_sms):
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
+    def test_twilio_failure_handling(self, mock_call, mock_sms):
         """
-        If Exotel fails (e.g., auth failure, 403, network drop), backend records
-        escalation_status='exotel_failure', records error details truthfully,
+        If Twilio fails (e.g., auth failure, 403, network drop), backend records
+        escalation_status='twilio_failure', records error details truthfully,
         and does not get stuck in an endless retry loop.
         """
         mock_sms.return_value = {
             "status": "failed",
             "sid": None,
             "success": False,
-            "error": "Exotel API 403 Forbidden (KYC pending)",
-            "safe_message": "Exotel credentials active but SMS capability requires verification."
+            "error": "Twilio API 403 Forbidden (KYC pending)",
+            "safe_message": "Twilio credentials active but SMS capability requires verification."
         }
         mock_call.return_value = {
             "status": "failed",
             "sid": None,
             "success": False,
-            "error": "Exotel API 403 Forbidden",
+            "error": "Twilio API 403 Forbidden",
             "safe_message": "Voice call failed."
         }
 
@@ -368,8 +368,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
 
         # Status must reflect truthful failure
         self.assertTrue(res.is_triggered)
-        self.assertEqual(res.escalation_status, "exotel_failure")
-        self.assertIn("Exotel credentials active but SMS capability requires verification", res.dispatch_error)
+        self.assertEqual(res.escalation_status, "twilio_failure")
+        self.assertIn("Twilio credentials active but SMS capability requires verification", res.dispatch_error)
 
         # Audit log written with failed status
         logs = self.db.query(EmergencyEventLog).filter(EmergencyEventLog.user_id == "traveler_fail").all()
@@ -381,13 +381,13 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         self.assertEqual(len(next_poll), 0)
 
     # =========================================================================
-    # SCENARIO 7: SUCCESSFUL EXOTEL DISPATCH
+    # SCENARIO 7: SUCCESSFUL TWILIO DISPATCH
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
-    def test_successful_exotel_dispatch(self, mock_call, mock_sms):
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
+    def test_successful_twilio_dispatch(self, mock_call, mock_sms):
         """
-        When Exotel accepts both SMS and call, backend records:
+        When Twilio accepts both SMS and call, backend records:
         - escalation_status='escalated'
         - SMS SID and Call SID
         - recipient masked phone & name
@@ -436,7 +436,7 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         self.assertEqual(res.dispatch_sms_sid, "SM_live_success_999")
         self.assertEqual(res.dispatch_call_sid, "CA_live_success_888")
         self.assertEqual(res.dispatch_recipient_name, "Frank Guardian")
-        self.assertEqual(res.dispatch_recipient_phone, exotel_service.mask_phone_number("+919876543216"))
+        self.assertEqual(res.dispatch_recipient_phone, comms_service.mask_phone_number("+919876543216"))
         self.assertIsNone(res.dispatch_error)
 
         # Audit log verification
@@ -448,8 +448,8 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     # =========================================================================
     # SCENARIO 8: SERVER RESTART
     # =========================================================================
-    @patch("app.services.exotel_service.send_emergency_sms")
-    @patch("app.services.exotel_service.make_emergency_call")
+    @patch("app.services.comms_service.send_emergency_sms")
+    @patch("app.services.comms_service.make_emergency_call")
     def test_server_restart_detects_overdue_checkins(self, mock_call, mock_sms):
         """
         Check-in was created before a simulated server shutdown/restart.

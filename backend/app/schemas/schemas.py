@@ -171,7 +171,7 @@ class SOSResponse(BaseModel):
     recipient_phone_masked: Optional[str] = None
     transaction_id: Optional[str] = None
 
-# Exotel Emergency Action Schemas
+# Twilio Emergency Action Schemas
 class EmergencyActionRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -233,31 +233,29 @@ class EmergencyEventLogResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ExotelDiagnosticResponse(BaseModel):
+class TwilioDiagnosticResponse(BaseModel):
+    provider: str = "twilio"
     is_configured: bool
     dry_run: bool = True
     account_sid: str
     host: str
-    subdomain: str
-    cluster: str
-    api_key_configured: bool
-    api_token_configured: bool
-    exophone_configured: bool
-    exophone_masked: Optional[str] = None
+    account_sid_configured: bool
+    auth_token_configured: bool
+    sender_configured: bool
+    sender_masked: Optional[str] = None
     authenticated: bool
     status_code: Optional[int] = None
-    currency: Optional[str] = None
+    account_status: Optional[str] = None
     safe_message: str
     error: Optional[str] = None
 
-class ExotelConfigStatusResponse(BaseModel):
+class TwilioConfigStatusResponse(BaseModel):
+    provider: str = "twilio"
     is_configured: bool
     dry_run: bool = True
-    region: str = "Singapore"
-    host: str = "api.exotel.com"
+    host: str = "api.twilio.com"
     account_sid_configured: bool = False
-    api_key_configured: bool = False
-    api_token_configured: bool = False
-    exophone_configured: bool = False
+    auth_token_configured: bool = False
+    sender_configured: bool = False
     safe_message: Optional[str] = None
 

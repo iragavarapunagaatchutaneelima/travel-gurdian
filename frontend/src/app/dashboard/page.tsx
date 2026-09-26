@@ -49,7 +49,7 @@ export default function DashboardScreen() {
     },
     {
       title: "Fail-Safe Check-In Timers",
-      subtitle: "Dead-man countdown timers with automated SMS and voice alerts dispatched via Exotel to trusted guardians.",
+      subtitle: "Dead-man countdown timers with automated SMS and voice alerts dispatched via Twilio to trusted guardians.",
       badge: "Automated Escalation",
     },
     {

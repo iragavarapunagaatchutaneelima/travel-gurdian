@@ -2,7 +2,7 @@
 
 **A truthful, offline-first personal travel safety companion.**
 
-Travel Guardian plans real road routes across India (car, motorized two-wheeler, or on foot), scores them on a deterministic Safety Fit index built from verified Google Places data, tracks you live with turn-by-turn navigation and off-route detection, keeps a Dead-Man's-Switch safety check-in timer, and — when something goes wrong — dispatches your trusted guardian by SMS and voice call through Exotel. An AI assistant (Gemini) answers questions grounded in your real GPS position, route, and check-in state, and never invents a place, a score, or a location it doesn't actually have.
+Travel Guardian plans real road routes across India (car, motorized two-wheeler, or on foot), scores them on a deterministic Safety Fit index built from verified Google Places data, tracks you live with turn-by-turn navigation and off-route detection, keeps a Dead-Man's-Switch safety check-in timer, and — when something goes wrong — dispatches your trusted guardian by SMS and voice call through Twilio. An AI assistant (Gemini) answers questions grounded in your real GPS position, route, and check-in state, and never invents a place, a score, or a location it doesn't actually have.
 
 The project's guiding rule: **if the app doesn't know something, it says so — it never fabricates data.** No fake hospitals, no fake safety scores, no fake GPS, no fake "message sent" confirmations.
 
@@ -38,7 +38,7 @@ The project's guiding rule: **if the app doesn't know something, it says so — 
 | 🗺️ **Plan Journey** | Enter an origin and destination (autocomplete-backed), pick Car, Bike (motorized two-wheeler), or Walk, and get 2–3 real Google-routed alternatives, each with a deterministic Safety Fit score (0–100) computed from real hospitals, police stations, fuel stops, and rest stops found along the corridor. |
 | 🧭 **Live Navigation** | Turn-by-turn guidance with real GPS tracking, dynamic ETA, off-route detection, and one-tap rerouting through live Google traffic data. |
 | ⏱️ **Safety Check-In (Dead-Man's Switch)** | Set a check-in timer before a risky leg of your trip. If you don't confirm you're safe before it expires, your trusted guardian is notified automatically. |
-| 🆘 **Emergency SOS** | One button sends your live GPS location by SMS and initiates a voice call to your registered trusted guardian via Exotel. A separately locked, explicitly-confirmed `tel:112` dialer is always available for genuine emergencies. |
+| 🆘 **Emergency SOS** | One button sends your live GPS location by SMS and initiates a voice call to your registered trusted guardian via Twilio. A separately locked, explicitly-confirmed `tel:112` dialer is always available for genuine emergencies. |
 | 🤝 **Trusted Guardian Contacts** | A backend-authoritative contact list (not a browser guess) with a deterministic primary contact, shared consistently across every screen. |
 | 🤖 **AI Guardian Assistant** | A Gemini-powered chat assistant that answers "Where am I?", "What's my safety score?", "Find a petrol station near me" — always grounded in your actual live state, never Gemini's imagination. |
 | 📴 **Offline Mode** | Downloadable offline corridor packs (cached maps, safety data, and a printable PDF survival card) for when connectivity drops. |
@@ -62,7 +62,7 @@ The project's guiding rule: **if the app doesn't know something, it says so — 
 - **[FastAPI](https://fastapi.tiangolo.com/)** (Python) — REST API
 - **[SQLAlchemy 2](https://www.sqlalchemy.org/)** — ORM, SQLite by default (MySQL-ready via `DATABASE_URL`)
 - **[Pydantic 2](https://docs.pydantic.dev/)** / `pydantic-settings` — request/response validation and environment-driven config
-- **[Exotel](https://exotel.com/)** REST API — emergency SMS and outbound voice calls (Singapore cluster)
+- **[Twilio](https://twilio.com/)** REST API — emergency SMS and outbound voice calls (Singapore cluster)
 - **[Uvicorn](https://www.uvicorn.org/)** — ASGI server
 - A background daemon thread polls for overdue safety check-ins and triggers escalation
 
@@ -102,7 +102,7 @@ The project's guiding rule: **if the app doesn't know something, it says so — 
                      │      FastAPI backend           │
                      │  /api/assist   — contacts,     │
                      │                  check-ins, SOS │
-                     │  /api/emergency — Exotel SMS/   │
+                     │  /api/emergency — Twilio SMS/   │
                      │                   call dispatch │
                      │  /api/guide, /api/assess,       │
                      │  /api/alerts                    │
@@ -113,7 +113,7 @@ The project's guiding rule: **if the app doesn't know something, it says so — 
                      └───────────┬──────────┬───────────┘
                                  ▼          ▼
                      ┌───────────────┐  ┌──────────────────┐
-                     │  SQLite/MySQL │  │  Exotel REST API  │
+                     │  SQLite/MySQL │  │  Twilio REST API  │
                      │  (SQLAlchemy) │  │  (SMS + voice)    │
                      └───────────────┘  └──────────────────┘
 ```
@@ -154,11 +154,11 @@ travel-gurdian/
 │   │   ├── models/                SQLAlchemy models
 │   │   ├── schemas/                Pydantic request/response schemas
 │   │   └── services/               Business logic (assist, assess, sense,
-│   │                                exotel_service, checkin_scheduler)
+│   │                                comms_service, checkin_scheduler)
 │   ├── tests/                      unittest suite (+ HTTP integration tests)
 │   ├── seed.py                     Idempotent reference-data seeding
 │   └── Dockerfile
-├── docs/                           Architecture notes, Exotel setup guide
+├── docs/                           Architecture notes, Twilio setup guide
 ├── docker-compose.yml              Local MySQL + backend + frontend stack
 ├── .env.example                    Root-level env var reference
 ├── LICENSE
@@ -177,7 +177,7 @@ travel-gurdian/
 | **Git** | any recent version | |
 | **A Google Cloud project** with billing enabled | — | for Maps, Places, Geocoding, Routes, and (optionally) the Places API (New) |
 | **A Google AI Studio / Gemini API key** | — | for the AI Guardian assistant |
-| **An Exotel account** (optional for local dev) | — | only needed to send *real* SMS/calls; the app runs safely in dry-run mode without one |
+| **A Twilio account** (optional for local dev) | — | only needed to send *real* SMS/calls; the app runs safely in dry-run mode without one |
 
 ---
 
@@ -206,16 +206,16 @@ travel-gurdian/
 2. Create an API key.
 3. This is the `GEMINI_API_KEY` — it is **server-only** and must never be prefixed with `NEXT_PUBLIC_`.
 
-### 3. Exotel credentials (optional for local development)
+### 3. Twilio credentials (optional for local development)
 
-The app runs safely without these — `EXOTEL_DRY_RUN` defaults to `true`, so emergency SMS/call requests are fully built and validated but **never actually sent** until you deliberately turn dry-run off with real, KYC-approved credentials.
+The app runs safely without these — `TWILIO_DRY_RUN` defaults to `true`, so emergency SMS/call requests are fully built and validated but **never actually sent**, and dry-run mode never requires real credentials at all.
 
-If you do want live dispatch:
+If you do want live dispatch (see [docs/TWILIO_SETUP.md](docs/TWILIO_SETUP.md) for the full walkthrough):
 
-1. Sign up at [Exotel](https://exotel.com/) and complete their KYC verification (required before outbound calls/SMS work).
-2. From the Exotel dashboard, note your **Account SID**, generate an **API Key** and **API Token**.
-3. Provision (or use an existing) **ExoPhone** (virtual number) for outbound Caller ID.
-4. Only set `EXOTEL_DRY_RUN=false` once all of the above are real and approved.
+1. Sign up at [Twilio](https://twilio.com/) — trial accounts get free credit but can only send to numbers you've verified under **Verified Caller IDs**.
+2. From the [Twilio Console](https://console.twilio.com), copy your **Account SID** and **Auth Token**.
+3. Buy or use the trial's free **Twilio phone number** as your sender/Caller ID.
+4. Only set `TWILIO_DRY_RUN=false` once all of the above are real.
 
 ---
 
@@ -253,8 +253,8 @@ pip install -r requirements.txt
 
 # 6. Configure the backend environment
 cp .env.example .env
-# Edit backend/.env — the defaults (SQLite, dry-run Exotel) work out of the
-# box for local development. Fill in real EXOTEL_* values only if you intend
+# Edit backend/.env — the defaults (SQLite, dry-run Twilio) work out of the
+# box for local development. Fill in real TWILIO_* values only if you intend
 # to test live dispatch.
 
 # 7. Seed reference data (destinations, alerts) — safe to re-run, never
@@ -328,13 +328,10 @@ npm run test:backend     # runs the backend unittest suite
 | `API_V1_STR` | No | API prefix, defaults to `/api` |
 | `DATABASE_URL` | No | Defaults to local SQLite; MySQL example in `.env.example` |
 | `CORS_ORIGINS` | No | JSON array of allowed frontend origins |
-| `EXOTEL_ACCOUNT_SID` | For live dispatch | Exotel Account SID |
-| `EXOTEL_API_KEY` | For live dispatch | Exotel API Key |
-| `EXOTEL_API_TOKEN` | For live dispatch | Exotel API Token |
-| `EXOTEL_SUBDOMAIN` | No (defaults to `api.exotel.com`) | Exotel cluster host |
-| `EXOTEL_EXOPHONE` | For live calls | Your Exotel virtual number (Caller ID) |
-| `EXOTEL_APP_ID` | No | Optional ExoML Voice App ID for a custom IVR flow |
-| `EXOTEL_DRY_RUN` | No (**defaults to `true`**) | While true, Exotel requests are built and validated but never sent; set `false` only with real, KYC-approved credentials |
+| `TWILIO_ACCOUNT_SID` | For live dispatch | Twilio Account SID (starts with `AC`) |
+| `TWILIO_AUTH_TOKEN` | For live dispatch | Twilio Auth Token |
+| `TWILIO_PHONE_NUMBER` | For live dispatch | Your Twilio phone number (sender ID / Caller ID) |
+| `TWILIO_DRY_RUN` | No (**defaults to `true`**) | While true, Twilio requests are built and validated but never sent, and no credentials are required; set `false` only with real credentials |
 | `SEED_RESET` | No (defaults to `false`) | When true, `python seed.py` wipes and re-inserts demo destinations/alerts. Contacts and check-ins are never touched by seeding regardless |
 | `DISABLE_API_DOCS` | No (defaults to `false`) | Set `true` in production to hide `/docs`, `/redoc`, `/openapi.json` |
 
@@ -351,7 +348,7 @@ cd backend
 venv\Scripts\python.exe -m unittest discover tests
 ```
 
-Runs the full `unittest` suite (unit tests calling service functions directly, plus HTTP-level integration tests using FastAPI's `TestClient` against an isolated temporary database with `EXOTEL_DRY_RUN` forced on — no real Exotel call is ever possible from the test suite).
+Runs the full `unittest` suite (unit tests calling service functions directly, plus HTTP-level integration tests using FastAPI's `TestClient` against an isolated temporary database with `TWILIO_DRY_RUN` forced on — no real Twilio call is ever possible from the test suite).
 
 ### Frontend
 
@@ -362,7 +359,7 @@ npm run test
 
 Runs a set of standalone TypeScript test scripts (via `tsx`) covering navigation math, the Gemini tool router, offline-pack truthfulness, the safety check-in state machine, and production-hardening checks (security headers, no leaked secrets, no fabricated data).
 
-`src/scripts/testMasterEngineeringAudit.ts` is intentionally **not** part of the default test run — it POSTs to a live server's emergency SMS endpoint and should only be run deliberately against a server you control, with Exotel dry-run enabled.
+`src/scripts/testMasterEngineeringAudit.ts` is intentionally **not** part of the default test run — it POSTs to a live server's emergency SMS endpoint and should only be run deliberately against a server you control, with Twilio dry-run enabled.
 
 ### Type checking & linting
 
@@ -395,7 +392,7 @@ Set real environment variables via a `.env` file at the repository root, or expo
 - **Frontend**: designed for [Vercel](https://vercel.com/) or any Node 20+ host that supports Next.js server features (the `/backend-api/*` rewrite and the `/api/ai`, `/api/routes/compute` route handlers require a real Node server, not a static export).
 - **Backend**: any host that can run a long-lived Python/Uvicorn process (the check-in scheduler runs as a background thread inside the app process, so serverless platforms that freeze/kill idle instances are not suitable).
 - Set `BACKEND_API_URL` on the frontend deployment to the backend's real, non-public address (e.g. an internal network address or a backend that only accepts traffic from the frontend).
-- Set `DISABLE_API_DOCS=true` and consider `EXOTEL_DRY_RUN=false` only after Exotel KYC and ExoPhone provisioning are complete.
+- Set `DISABLE_API_DOCS=true` and consider `TWILIO_DRY_RUN=false` only after your Twilio account, phone number, and (for a trial account) verified recipient numbers are set up.
 - Never set `NEXT_PUBLIC_*` on any value that should stay secret — anything with that prefix is compiled into the client-side JavaScript bundle and is publicly readable.
 
 ---
@@ -405,7 +402,7 @@ Set real environment variables via a `.env` file at the repository root, or expo
 - **No login system**, but no trusting the client either: each browser is assigned a random, `httpOnly` device-identity cookie (`tg_device_id`) by the backend on first request. All contact, check-in, and emergency-log endpoints resolve "who is this" from that cookie, not from a client-suppliable parameter.
 - **The backend is never reachable directly from the browser** — only through the same-origin `/backend-api/*` Next.js proxy, which is also what keeps the Content-Security-Policy tight without needing to name the backend's real host.
 - **The `/api/routes/compute` proxy** validates payload shape and coordinate ranges, rejects requests claiming a different origin, rate-limits per source IP, and never forwards a client-supplied `Referer` header to Google.
-- **Exotel dispatch defaults to dry-run** — nothing is ever sent to a real phone number unless you explicitly configure and enable it.
+- **Twilio dispatch defaults to dry-run** — nothing is ever sent to a real phone number unless you explicitly configure and enable it.
 - **No fabricated data, anywhere**: if Google Places returns nothing, the app says so; if GPS is unavailable, it says so; if the backend is unreachable, it says so. There is no silent fallback to made-up hospitals, safety scores, or GPS coordinates.
 
 If you discover a security issue, please open a private security advisory on the repository rather than a public issue.
@@ -416,7 +413,7 @@ If you discover a security issue, please open a private security advisory on the
 
 - Route safety scores currently cluster in a fairly narrow band (roughly 85–96); the underlying weighting model is deterministic and honest, but not yet finely differentiated between close alternatives.
 - Toll information reflects exactly what Google reports — for many Indian routes this is genuinely "unavailable" rather than a false "no tolls."
-- Live Exotel dispatch requires your own Exotel account, completed KYC, and a provisioned ExoPhone; none of that can be supplied by this codebase.
+- Live Twilio dispatch requires your own Twilio account and phone number; a trial account can only send to numbers you've verified. None of that can be supplied by this codebase.
 - Service worker / offline behavior has not been exhaustively verified across all browsers.
 
 ---

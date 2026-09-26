@@ -33,14 +33,13 @@ def run_live_test():
             req = urllib.request.Request(f"http://127.0.0.1:8009{path}")
             with urllib.request.urlopen(req, timeout=5) as res:
                 cfg = json.loads(res.read().decode())
-                print(f"[2] Exotel config status ({path}) OK: is_configured={cfg.get('is_configured')}, region={cfg.get('region')}")
+                print(f"[2] Twilio config status ({path}) OK: is_configured={cfg.get('is_configured')}")
                 assert "is_configured" in cfg
-                assert cfg.get("region") == "Singapore"
-                assert cfg.get("host") == "api.exotel.com"
+                assert cfg.get("host") == "api.twilio.com"
                 # Ensure no secrets leaked
                 raw_cfg = json.dumps(cfg)
-                assert "EXOTEL_API_KEY" not in raw_cfg
-                assert "EXOTEL_API_TOKEN" not in raw_cfg
+                assert "TWILIO_ACCOUNT_SID" not in raw_cfg
+                assert "TWILIO_AUTH_TOKEN" not in raw_cfg
 
         # 3. Test contacts CRUD synchronization over live HTTP
         # 3a. Initial state: GET contacts
@@ -174,8 +173,8 @@ def run_live_test():
                 assert "status" in sms_data
                 # Verify secrets are NOT leaked in response
                 raw_resp = json.dumps(sms_data)
-                assert "EXOTEL_API_KEY" not in raw_resp
-                assert "EXOTEL_API_TOKEN" not in raw_resp
+                assert "TWILIO_ACCOUNT_SID" not in raw_resp
+                assert "TWILIO_AUTH_TOKEN" not in raw_resp
 
         # 5. Test emergency Call endpoints (both root and /api)
         call_payload = json.dumps({
@@ -195,8 +194,8 @@ def run_live_test():
                 assert "success" in call_data
                 assert "status" in call_data
                 raw_resp = json.dumps(call_data)
-                assert "EXOTEL_API_KEY" not in raw_resp
-                assert "EXOTEL_API_TOKEN" not in raw_resp
+                assert "TWILIO_ACCOUNT_SID" not in raw_resp
+                assert "TWILIO_AUTH_TOKEN" not in raw_resp
 
         # 6. Test emergency notify-trusted-contact (both root and /api)
         notify_payload = json.dumps({
@@ -227,7 +226,7 @@ def run_live_test():
             print(f"[7] Diagnostic endpoint response: cluster={diag_data.get('cluster')}, auth={diag_data.get('authenticated')}")
             assert "is_configured" in diag_data
             assert "authenticated" in diag_data
-            assert diag_data.get("host") == "api.exotel.com"
+            assert diag_data.get("host") == "api.twilio.com"
 
         # 8. Test SOS broadcast endpoint (/api/assist/sos)
         sos_payload = json.dumps({

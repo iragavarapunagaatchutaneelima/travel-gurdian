@@ -59,7 +59,7 @@ export default function LandingScreen() {
       icon: Clock,
       title: "Safety Check-In & Timers",
       tag: "Automated Escalation",
-      desc: "Dead-man's safety timers with configurable intervals, grace periods, and instant alerts to trusted contacts via Exotel.",
+      desc: "Dead-man's safety timers with configurable intervals, grace periods, and instant alerts to trusted contacts via Twilio.",
       href: "/settings",
       cta: "Configure Check-In",
       color: "text-emerald-600 dark:text-emerald-400",
@@ -183,7 +183,7 @@ export default function LandingScreen() {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Exotel SMS / Voice</span>
+                  <span>Twilio SMS / Voice</span>
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" />

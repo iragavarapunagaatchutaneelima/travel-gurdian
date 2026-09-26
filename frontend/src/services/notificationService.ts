@@ -68,8 +68,8 @@ export function formatAlertMessage(payload: EscalationAlertPayload): string {
 
 /**
  * Sends a trusted contact alert THROUGH THE REAL BACKEND (which resolves the
- * backend's own primary trusted contact and dispatches via Exotel, honoring
- * EXOTEL_DRY_RUN). This never fabricates a "SENT" result client-side: the
+ * backend's own primary trusted contact and dispatches via Twilio, honoring
+ * TWILIO_DRY_RUN). This never fabricates a "SENT" result client-side: the
  * providerStatus returned always reflects what the backend actually did.
  */
 export async function sendTrustedContactAlert(

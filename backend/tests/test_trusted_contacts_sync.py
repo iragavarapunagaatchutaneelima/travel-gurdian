@@ -12,7 +12,7 @@ from app.schemas.schemas import (
 )
 from app.api import assist as assist_api
 from app.api import emergency as emergency_api
-from app.services import assist, exotel_service
+from app.services import assist, comms_service
 
 
 class TestTrustedContactsSync(unittest.TestCase):
@@ -39,7 +39,7 @@ class TestTrustedContactsSync(unittest.TestCase):
         self.db.query(EmergencyContact).delete()
         self.db.query(EmergencyEventLog).delete()
         self.db.commit()
-        exotel_service._emergency_request_locks.clear()
+        comms_service._emergency_request_locks.clear()
 
     def tearDown(self):
         self.db.close()

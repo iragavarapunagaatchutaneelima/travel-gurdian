@@ -31,7 +31,7 @@ def _ensure_schema_migrations():
             # shared placeholder number +919876543210 used throughout the test
             # suite). These are never valid real trusted contacts, and leaving
             # them in place risks a real emergency alert going to a stranger's
-            # number once Exotel dispatch is enabled.
+            # number once Twilio dispatch is enabled.
             demo_deleted = conn.execute(text(
                 "DELETE FROM emergency_contacts WHERE name = 'Sarah Miller' OR phone = '+919876543210'"
             ))
@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Travel Guardian API - SENSE • ASSESS • GUIDE • ASSIST • EMERGENCY EXOTEL",
+    description="Travel Guardian API - SENSE • ASSESS • GUIDE • ASSIST • EMERGENCY TWILIO",
     version="1.1.0",
     lifespan=lifespan,
     # DISABLE_API_DOCS=true hides /docs, /redoc, and /openapi.json in
@@ -123,9 +123,9 @@ app.include_router(guide.router, prefix=f"{settings.API_V1_STR}/guide", tags=["G
 app.include_router(assist.router, prefix=f"{settings.API_V1_STR}/assist", tags=["Assistance / ASSIST"])
 app.include_router(assist.router, prefix="/assist", tags=["Assistance / ASSIST (Root Alias)"], include_in_schema=False)
 
-# Exotel Emergency Routes (both /api/emergency and root /emergency)
-app.include_router(emergency.router, prefix=f"{settings.API_V1_STR}/emergency", tags=["Emergency / EXOTEL"])
-app.include_router(emergency.router, prefix="/emergency", tags=["Emergency / EXOTEL (Root)"])
+# Twilio Emergency Routes (both /api/emergency and root /emergency)
+app.include_router(emergency.router, prefix=f"{settings.API_V1_STR}/emergency", tags=["Emergency / TWILIO"])
+app.include_router(emergency.router, prefix="/emergency", tags=["Emergency / TWILIO (Root)"])
 
 
 @app.get("/")
@@ -138,7 +138,7 @@ def read_root():
             "ASSESS": "Algorithmic trip risk calculators",
             "GUIDE": "Local emergency numbers, culture rules, and pre-travel checklists",
             "ASSIST": "Emergency SOS broadcast systems and guardian check-in timers",
-            "EXOTEL": "Production emergency SMS and voice calling bridge (Singapore Region)"
+            "TWILIO": "Production emergency SMS and voice calling bridge (Singapore Region)"
         },
         "endpoints": {
             "emergency_sms": ["/emergency/sms", f"{settings.API_V1_STR}/emergency/sms"],

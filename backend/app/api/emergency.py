@@ -4,7 +4,7 @@ from typing import List
 from app.core.database import get_db
 from app.core.identity import get_device_id
 from app.schemas import schemas
-from app.services import assist, exotel_service
+from app.services import assist, comms_service
 
 router = APIRouter()
 
@@ -17,9 +17,9 @@ def send_emergency_sms(
     db: Session = Depends(get_db)
 ):
     """
-    Sends an Exotel emergency SMS strictly to the user's registered Trusted Contact.
-    Validates E.164 phone numbers, queries Exotel Singapore cluster, records audit log,
-    and returns verified status with SMS SID.
+    Sends an emergency SMS via Twilio strictly to the user's registered Trusted Contact.
+    Validates E.164 phone numbers, calls the Twilio REST API, records an audit log,
+    and returns verified status with the message SID.
     """
     return assist.send_trusted_contact_sms(db, request, user_id=user_id)
 
@@ -32,8 +32,8 @@ def make_emergency_call(
     db: Session = Depends(get_db)
 ):
     """
-    Initiates an Exotel outbound emergency voice call strictly to the user's registered Trusted Contact.
-    Queries Exotel Singapore cluster (Calls/connect.json), records audit log, and returns Call SID.
+    Initiates an outbound emergency voice call via Twilio strictly to the user's registered
+    Trusted Contact. Calls the Twilio Calls API, records an audit log, and returns the Call SID.
     """
     return assist.make_trusted_contact_call(db, request, user_id=user_id)
 
@@ -47,40 +47,38 @@ def notify_trusted_contact(
 ):
     """
     Combined emergency endpoint: simultaneously triggers SMS alert and outbound voice call
-    to the traveler's registered Trusted Contact. Never returns success unless Exotel actually accepts.
+    to the traveler's registered Trusted Contact. Never returns success unless Twilio actually accepts.
     """
     return assist.notify_trusted_contact(db, request, user_id=user_id)
 
 
-@router.get("/config-status", response_model=schemas.ExotelConfigStatusResponse)
-@router.get("/emergency/config-status", response_model=schemas.ExotelConfigStatusResponse, include_in_schema=False)
+@router.get("/config-status", response_model=schemas.TwilioConfigStatusResponse)
+@router.get("/emergency/config-status", response_model=schemas.TwilioConfigStatusResponse, include_in_schema=False)
 def get_config_status():
     """
-    Readiness inspection: returns configuration status for Exotel Singapore cluster without exposing secrets.
+    Readiness inspection: returns Twilio configuration status without exposing secrets.
     """
     from app.core.config import settings
-    is_valid, cfg_err = exotel_service.validate_exotel_configuration()
-    return schemas.ExotelConfigStatusResponse(
+    is_valid, cfg_err = comms_service.validate_configuration()
+    return schemas.TwilioConfigStatusResponse(
         is_configured=is_valid,
-        dry_run=settings.EXOTEL_DRY_RUN,
-        region="Singapore",
-        host=exotel_service._get_exotel_host(),
-        account_sid_configured=bool(settings.EXOTEL_ACCOUNT_SID),
-        api_key_configured=bool(settings.EXOTEL_API_KEY and not settings.EXOTEL_API_KEY.startswith("your_")),
-        api_token_configured=bool(settings.EXOTEL_API_TOKEN and not settings.EXOTEL_API_TOKEN.startswith("your_")),
-        exophone_configured=bool(settings.EXOTEL_EXOPHONE),
-        safe_message=cfg_err or "Exotel configuration is active for Singapore region."
+        dry_run=settings.TWILIO_DRY_RUN,
+        host="api.twilio.com",
+        account_sid_configured=bool(settings.TWILIO_ACCOUNT_SID and not settings.TWILIO_ACCOUNT_SID.startswith("your_")),
+        auth_token_configured=bool(settings.TWILIO_AUTH_TOKEN and not settings.TWILIO_AUTH_TOKEN.startswith("your_")),
+        sender_configured=bool(settings.TWILIO_PHONE_NUMBER),
+        safe_message=cfg_err or "Twilio configuration is active."
     )
 
 
-@router.get("/diagnostic", response_model=schemas.ExotelDiagnosticResponse)
-@router.get("/emergency/diagnostic", response_model=schemas.ExotelDiagnosticResponse, include_in_schema=False)
+@router.get("/diagnostic", response_model=schemas.TwilioDiagnosticResponse)
+@router.get("/emergency/diagnostic", response_model=schemas.TwilioDiagnosticResponse, include_in_schema=False)
 def get_diagnostic():
     """
-    Safe connectivity check: performs live authenticated test against Exotel Singapore cluster Balance API.
-    Never exposes API keys or tokens.
+    Safe connectivity check: performs a live authenticated read-only check against the
+    Twilio Account resource. Never exposes the auth token, never sends SMS or places calls.
     """
-    return exotel_service.test_exotel_authentication()
+    return comms_service.test_authentication()
 
 
 @router.get("/logs", response_model=List[schemas.EmergencyEventLogResponse])

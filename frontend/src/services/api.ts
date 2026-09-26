@@ -232,7 +232,7 @@ export const TravelGuardianAPI = {
     const broadcastList = contacts.map(c => `${c.name} (${c.relation}) via ${c.phone}`);
     const fallbackResponse: SOSResponse = {
       success: false,
-      message: "Emergency broadcast network offline. Live telemetry could not be dispatched via Exotel. Please call 112 directly if in immediate danger.",
+      message: "Emergency broadcast network offline. Live telemetry could not be dispatched via Twilio. Please call 112 directly if in immediate danger.",
       broadcasted_contacts: broadcastList.length > 0 ? broadcastList : ["Emergency Dispatch Hotline (112)"],
       latitude: request.latitude,
       longitude: request.longitude,
@@ -252,7 +252,7 @@ export const TravelGuardianAPI = {
     }, fallbackResponse);
   },
 
-  // 5. EXOTEL EMERGENCY COMMUNICATION (Strict destination restriction: Trusted Contact only)
+  // 5. TWILIO EMERGENCY COMMUNICATION (Strict destination restriction: Trusted Contact only)
   async sendEmergencySMS(params: EmergencyActionParams): Promise<EmergencySMSResponse> {
     const fallbackResponse: EmergencySMSResponse = {
       success: false,
@@ -300,7 +300,7 @@ export const TravelGuardianAPI = {
     }, fallbackResponse);
   },
 
-  async getExotelConfigStatus(): Promise<{ is_configured: boolean }> {
+  async getTwilioConfigStatus(): Promise<{ is_configured: boolean }> {
     return this.callAPI<{ is_configured: boolean }>("/emergency/config-status", undefined, { is_configured: false });
   }
 };
