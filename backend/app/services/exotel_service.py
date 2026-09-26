@@ -70,7 +70,14 @@ def validate_exotel_configuration(require_exophone: bool = False) -> Tuple[bool,
 
     if require_exophone:
         if not exophone or any(ind in str(exophone) for ind in placeholder_indicators):
-            return False, "EXOTEL_EXOPHONE (Virtual Number) is required as Caller ID for outbound calls."
+            return False, (
+                "EXOTEL_EXOPHONE (your Exotel virtual number) is not configured. "
+                "It is required both as the Caller ID for outbound calls and as the "
+                "SMS sender ID -- without it, calls will be rejected and SMS will not "
+                "be delivered by Indian carriers even if Exotel's API accepts the "
+                "request and bills you for it. Provision an ExoPhone in your Exotel "
+                "dashboard and set EXOTEL_EXOPHONE before enabling live dispatch."
+            )
 
     return True, None
 
@@ -300,6 +307,23 @@ def _extract_sid_and_status(res_dict: Dict[str, Any], entity_type: str = "sms") 
     return sid, status
 
 
+def _user_safe_config_message(cfg_err: Optional[str]) -> str:
+    """
+    validate_exotel_configuration()'s error text is meant for developers/logs
+    and can name internal env vars (EXOTEL_API_KEY, EXOTEL_API_TOKEN,
+    EXOTEL_ACCOUNT_SID). It must never be shown to an end user verbatim, even
+    though those are variable NAMES rather than secret values -- naming
+    internal configuration structure to a random app user is still not
+    something a safe_message should do. The EXOTEL_EXOPHONE-specific message
+    is fine to pass through as-is: it doesn't reference API_KEY/API_TOKEN.
+    """
+    if not cfg_err:
+        return "Emergency communication service is not configured on the server."
+    if "EXOTEL_API_KEY" in cfg_err or "EXOTEL_API_TOKEN" in cfg_err or "EXOTEL_ACCOUNT_SID" in cfg_err:
+        return "Emergency communication service is not configured on the server."
+    return cfg_err
+
+
 def _build_dry_run_result(
     entity_type: str,
     masked_target: str,
@@ -433,7 +457,13 @@ def send_emergency_sms(
     Handles credential validation, phone normalization, safe logging, and strict acceptance checking.
     DOES NOT RETURN SUCCESS UNLESS EXOTEL ACCEPTS THE REQUEST (HTTP 200/201 + SID).
     """
-    is_valid, cfg_err = validate_exotel_configuration()
+    # EXOTEL_EXOPHONE is required for SMS too, not just calls: it is used as
+    # the sender ID. Without it, the code previously fell back to sending as
+    # the literal, unregistered string "TravelGuard" -- Indian carriers will
+    # not deliver an SMS from a sender ID that was never DLT-registered, so
+    # Exotel could accept and bill the request while the message is silently
+    # dropped downstream. Fail honestly, before spending any credits.
+    is_valid, cfg_err = validate_exotel_configuration(require_exophone=True)
     if not is_valid:
         logger.warning("Exotel SMS requested but configuration is invalid or missing.")
         return {
@@ -441,7 +471,7 @@ def send_emergency_sms(
             "status": "failed",
             "sid": None,
             "message": "Emergency communication failed.",
-            "safe_message": "Emergency communication failed: Emergency SMS service is not configured on the server. Please dial 112 directly.",
+            "safe_message": f"Emergency communication failed: {_user_safe_config_message(cfg_err)} Please dial 112 directly.",
             "error": cfg_err
         }
 
@@ -465,9 +495,13 @@ def send_emergency_sms(
         custom_message=custom_message
     )
 
-    from_sender = settings.EXOTEL_EXOPHONE or "TravelGuard"
+    # No "or 'TravelGuard'" fallback: validate_exotel_configuration(require_exophone=True)
+    # above already guarantees settings.EXOTEL_EXOPHONE is a real, configured
+    # value by this point -- sending as an invented sender ID would be
+    # exactly the kind of fabricated behavior this project's whole design
+    # explicitly rules out, and it does not deliver in India regardless.
     payload = {
-        "From": from_sender,
+        "From": settings.EXOTEL_EXOPHONE,
         "To": normalized_to,
         "Body": sms_body
     }
@@ -525,7 +559,7 @@ def make_emergency_call(
     Canonical endpoint: POST https://api.exotel.com/v1/Accounts/<account_sid>/Calls/connect.json
     DOES NOT RETURN SUCCESS UNLESS EXOTEL ACCEPTS THE REQUEST (HTTP 200/201 + SID).
     """
-    is_valid, cfg_err = validate_exotel_configuration()
+    is_valid, cfg_err = validate_exotel_configuration(require_exophone=True)
     if not is_valid:
         logger.warning("Exotel voice call requested but configuration is invalid or missing.")
         return {
@@ -533,7 +567,7 @@ def make_emergency_call(
             "status": "failed",
             "sid": None,
             "message": "Emergency communication failed.",
-            "safe_message": "Emergency communication failed: Emergency voice service is not configured on the server. Please dial 112 directly.",
+            "safe_message": f"Emergency communication failed: {_user_safe_config_message(cfg_err)} Please dial 112 directly.",
             "error": cfg_err
         }
 
@@ -550,7 +584,12 @@ def make_emergency_call(
         }
 
     effective_app_id = app_id or settings.EXOTEL_APP_ID
-    caller_id = settings.EXOTEL_EXOPHONE or ""
+    # Guaranteed non-empty: validate_exotel_configuration(require_exophone=True)
+    # above already returned early if this were missing. Previously this
+    # could be an empty string, which made the `elif caller_id:` branch below
+    # never fire, silently trying to call the trusted contact's own number
+    # to itself with a blank Caller ID.
+    caller_id = settings.EXOTEL_EXOPHONE
 
     if effective_app_id:
         account_sid = settings.EXOTEL_ACCOUNT_SID

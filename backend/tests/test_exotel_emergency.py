@@ -50,6 +50,10 @@ class TestExotelEmergencyIntegration(unittest.TestCase):
             self.assertFalse(sms_res["success"])
             self.assertEqual(sms_res["status"], "failed")
             self.assertIn("not configured", sms_res["safe_message"].lower())
+            # The user-facing safe_message must never name internal env vars,
+            # even generic ones like ACCOUNT_SID (only the raw validation
+            # error from validate_exotel_configuration() may do that).
+            self.assertNotIn("SID", sms_res["safe_message"])
             # Ensure no credentials or keys are exposed
             self.assertNotIn("KEY", sms_res["safe_message"])
             self.assertNotIn("TOKEN", sms_res["safe_message"])
