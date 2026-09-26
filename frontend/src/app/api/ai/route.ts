@@ -27,6 +27,40 @@ export async function POST(req: Request) {
     const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const placesApiKey = process.env.GOOGLE_ROUTES_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
+    // "Where am I?" is intercepted HERE, before Gemini ever sees the prompt.
+    // Gemini has no dedicated location tool declared, so left to its own
+    // judgment it can (and does) pick an unrelated tool like
+    // getRouteSummary/readNavigationState for this question, or answer with
+    // freeform text that isn't grounded in real GPS at all. Answering
+    // directly from context.currentPosition/locationSnapshot guarantees the
+    // reply is always either the real position or an honest "unavailable",
+    // never a guess.
+    {
+      const lowerLocationCheck = sanitizedPrompt.toLowerCase();
+      if (
+        lowerLocationCheck.includes("where am i") ||
+        lowerLocationCheck.includes("my location") ||
+        lowerLocationCheck.includes("current location") ||
+        lowerLocationCheck.includes("what is my location") ||
+        lowerLocationCheck.includes("what's my location")
+      ) {
+        const userLat = context.currentPosition?.latitude ?? context.locationSnapshot?.latitude;
+        const userLng = context.currentPosition?.longitude ?? context.locationSnapshot?.longitude;
+        const locationText = context.locationSnapshot?.formattedText;
+        const reply = (userLat !== undefined && userLat !== null && userLng !== undefined && userLng !== null)
+          ? `Your last known GPS position is ${locationText ? `${locationText} ` : ""}(${userLat.toFixed(5)}, ${userLng.toFixed(5)}).`
+          : "I can't determine your current location because live GPS is unavailable. Please enable location permissions.";
+        return NextResponse.json({
+          reply,
+          toolCalls: [],
+          toolResults: [],
+          proposals: [],
+          mode: "CONNECTED",
+          model: geminiModel
+        });
+      }
+    }
+
     // Real, live-data nearby-places lookup: prefers already-known route POIs
     // (from the tool router), and only if there are none falls back to a
     // genuine Google Places API (New) server-side call. Never fabricates a

@@ -367,8 +367,9 @@ export function assessRouteSafety(
     (incidentScore * wIncidents)
   );
 
-  // Toll road bonus if highway
-  if (route.tollInfo && route.tollInfo.toLowerCase().includes("toll")) {
+  // Toll road bonus only when tolls are actually confirmed -- "possible" or
+  // "unavailable" toll status must not be treated as if it were confirmed.
+  if (route.tollInfo === "Tolls on Route") {
     rawSafetyFit = Math.min(98, rawSafetyFit + 3); // Structured toll corridors have organized patrol
   }
 
@@ -412,7 +413,7 @@ export function assessRouteSafety(
     explanation.push("No active community incident alerts on this roadway.");
   }
 
-  if (route.tollInfo && route.tollInfo.includes("Toll")) {
+  if (route.tollInfo === "Tolls on Route") {
     explanation.push("Toll expressway corridor with standardized infrastructure.");
   }
 

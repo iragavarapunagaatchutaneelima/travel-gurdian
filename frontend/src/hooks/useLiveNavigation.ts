@@ -57,11 +57,34 @@ export function useLiveNavigation({
   const lastRerouteTimeRef = useRef<number>(0);
   const rerouteRequestIdRef = useRef<number>(0);
   const isMountedRef = useRef<boolean>(true);
+  // `navigator.geolocation.watchPosition` is registered once per
+  // startNavigation() call with whatever `handleGpsUpdate` closure existed
+  // at that instant. Because that same function reference keeps being
+  // invoked for every subsequent GPS fix, a `status` value read directly
+  // from the closure would be permanently frozen at whatever it was when
+  // watchPosition was registered (typically "READY", one render before
+  // setStatus("ACTIVE") took effect) -- so an `status === "ACTIVE"` check
+  // inside handleGpsUpdate would never be true and off-route detection could
+  // never fire. statusRef is kept in sync via the effect below and read
+  // instead, exactly like activeRouteRef already is.
+  const statusRef = useRef<NavigationStatus>(status);
+  // Same stale-closure hazard as statusRef: if the destination changes while
+  // a GPS watcher is already running, the frozen handleGpsUpdate closure
+  // would otherwise keep testing arrival against the OLD destination.
+  const destinationRef = useRef<LocationDetails>(destination);
 
-  // Keep activeRouteRef in sync
+  // Keep activeRouteRef and statusRef in sync
   useEffect(() => {
     activeRouteRef.current = activeRoute;
   }, [activeRoute]);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    destinationRef.current = destination;
+  }, [destination]);
 
   // Sync initialRoute when it changes and we are not currently in an active session
   useEffect(() => {
@@ -125,8 +148,8 @@ export function useLiveNavigation({
     setNextManeuver(nxtMan);
 
     // 3. Check Arrival Detection (Persisted over 2 fixes)
-    const destLat = destination.latitude;
-    const destLng = destination.longitude;
+    const destLat = destinationRef.current.latitude;
+    const destLng = destinationRef.current.longitude;
     const arrived = isArrived(navPos.latitude, navPos.longitude, destLat, destLng, navPos.accuracy, 50, 1.2);
 
     if (arrived) {
@@ -145,19 +168,25 @@ export function useLiveNavigation({
     }
 
     // 4. Check Off-Route Detection (Persisted over 3 consecutive fixes to avoid GPS noise)
+    // Reads statusRef.current, NOT the `status` closed over when this
+    // callback was created -- watchPosition (see startNavigation below)
+    // registers this exact function reference once and keeps calling it for
+    // every future fix, so a closed-over `status` would be permanently
+    // frozen at whatever it was at registration time and this check could
+    // never fire.
     const off = isOffRoute(prog.distanceToRouteMeters, navPos.accuracy, 80, 0.6);
     if (off) {
       offRouteCountRef.current += 1;
-      if (offRouteCountRef.current >= 3 && status === "ACTIVE") {
+      if (offRouteCountRef.current >= 3 && statusRef.current === "ACTIVE") {
         setStatus("OFF_ROUTE");
       }
     } else {
       offRouteCountRef.current = 0;
-      if (status === "OFF_ROUTE") {
+      if (statusRef.current === "OFF_ROUTE") {
         setStatus("ACTIVE");
       }
     }
-  }, [destination, status]);
+  }, []);
 
   /**
    * Handle GPS errors.

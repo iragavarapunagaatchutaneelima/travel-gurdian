@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense, useRef, useCallback } from "react";
+import React, { useState, useEffect, Suspense, useRef, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
@@ -153,13 +153,25 @@ function LivingMapContent() {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [offlinePackInfo, setOfflinePackInfo] = useState<any>(null);
 
-  const destinationDetails: LocationDetails = {
+  // Memoized: this was previously a fresh object literal on every render,
+  // which made it an unstable dependency of useLiveNavigation's internal
+  // callbacks (handleGpsUpdate -> startNavigation -> loadRoutesData), which
+  // in turn caused loadRoutesData's effect to re-fire on every single
+  // render. That re-triggered setRouteLoading(true) continuously, which is
+  // why the "Connecting Google Maps Corridor..." overlay never settled and
+  // why a hard reload of this page could hang the renderer under load.
+  const destinationDetails: LocationDetails = useMemo(() => ({
     placeId: cleanPlaceId(destPlaceId) || (toLoc.startsWith("ChIJ") ? toLoc : ""),
     name: dest.name,
     formattedAddress: destAddress || dest.state,
     latitude: dest.latitude,
     longitude: dest.longitude
-  };
+  }), [destPlaceId, toLoc, dest.name, destAddress, dest.state, dest.latitude, dest.longitude]);
+
+  const handleRouteUpdated = useCallback((newRoute: RouteOption) => {
+    setSelectedRoute(newRoute);
+    setAllRoutes(prev => [newRoute, ...prev.filter(r => r.id !== newRoute.id)]);
+  }, []);
 
   // Phase 4 Live Navigation Controller
   const {
@@ -186,10 +198,7 @@ function LivingMapContent() {
     travelMode,
     profile: profileParam,
     priority: priorityParam,
-    onRouteUpdated: (newRoute) => {
-      setSelectedRoute(newRoute);
-      setAllRoutes(prev => [newRoute, ...prev.filter(r => r.id !== newRoute.id)]);
-    }
+    onRouteUpdated: handleRouteUpdated
   });
 
   // Phase 5 Safety Check-In Controller

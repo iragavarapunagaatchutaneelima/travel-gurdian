@@ -322,7 +322,14 @@ export async function calculateGoogleRoutes(
           const totalDistanceMeters = route.distanceMeters || 0;
           const totalDurationSeconds = parseInt(route.duration?.replace("s", "") || "0");
           const routeWarnings: string[] = route.warnings || [];
-          const hasTolls = routeWarnings.some((w: string) => w.toLowerCase().includes("toll"));
+          // Routes API v2 only populates travelAdvisory.tollInfo when it has
+          // real toll pricing data for this route; its absence does not
+          // reliably mean "no tolls" everywhere Google covers, so we only
+          // claim tolls are absent when we have neither a price nor a
+          // warning mentioning tolls -- otherwise we say so honestly.
+          const hasTollPriceData = Array.isArray(route.travelAdvisory?.tollInfo?.estimatedPrice) && route.travelAdvisory.tollInfo.estimatedPrice.length > 0;
+          const hasTollWarning = routeWarnings.some((w: string) => w.toLowerCase().includes("toll"));
+          const hasTolls = hasTollPriceData || hasTollWarning;
 
           const structuredSteps: any[] = [];
           if (route.legs && Array.isArray(route.legs)) {
@@ -364,7 +371,11 @@ export async function calculateGoogleRoutes(
           const durationMinutes = Math.round(totalDurationSeconds / 60);
           const distanceText = formatDistanceMeters(totalDistanceMeters);
           const durationText = formatDurationSeconds(totalDurationSeconds);
-          const tollInfo = hasTolls ? "Tolls on Route" : "No Tolls Reported";
+          const tollInfo = hasTollPriceData
+            ? "Tolls on Route"
+            : hasTollWarning
+              ? "Tolls Possible on Route"
+              : "Toll information unavailable";
 
           const realPOIs = await fetchRouteCorridorPOIs(waypoints, "Bike");
 
@@ -387,7 +398,7 @@ export async function calculateGoogleRoutes(
             fuelStops: realPOIs.filter(p => p.type === "petrol").length,
             foodStops: realPOIs.filter(p => p.type === "food").length,
             hotels: 0,
-            notes: `Verified Google motorized two-wheeler corridor via ${route.description || "highway network"}. Distance: ${distanceText}, estimated time: ${durationText}. ${hasTolls ? "Tolls apply." : "No tolls indicated."}`,
+            notes: `Verified Google motorized two-wheeler corridor via ${route.description || "highway network"}. Distance: ${distanceText}, estimated time: ${durationText}. ${tollInfo}.`,
             type: "safe",
             waypoints,
             pois: realPOIs,
@@ -483,7 +494,6 @@ export async function calculateGoogleRoutes(
             let totalDurationSeconds = 0;
             let totalDurationInTrafficSeconds: number | undefined = undefined;
             const routeWarnings: string[] = route.warnings || [];
-            let hasTolls = false;
 
             const structuredSteps: any[] = [];
 
@@ -509,10 +519,12 @@ export async function calculateGoogleRoutes(
               });
             }
 
-            // Check for toll warnings
-            if (routeWarnings.some((w: string) => w.toLowerCase().includes("toll"))) {
-              hasTolls = true;
-            }
+            // The legacy DirectionsService does not return structured toll
+            // pricing data at all -- only an occasional free-text warning
+            // that happens to mention tolls. Its absence does NOT mean the
+            // route has no tolls, so we never claim "No Tolls Reported"
+            // here; we report what we actually know and nothing more.
+            const hasTollWarning = routeWarnings.some((w: string) => w.toLowerCase().includes("toll"));
 
             const distanceKm = Math.round(totalDistanceMeters / 1000);
             const durationMinutes = Math.round(totalDurationSeconds / 60);
@@ -523,7 +535,7 @@ export async function calculateGoogleRoutes(
               ? formatDurationSeconds(totalDurationInTrafficSeconds)
               : undefined;
 
-            const tollInfo = hasTolls ? "Tolls on Route" : "No Tolls Reported";
+            const tollInfo = hasTollWarning ? "Tolls Possible on Route" : "Toll information unavailable";
 
             // Query real POIs along the route corridor
             const realPOIs = await fetchRouteCorridorPOIs(waypoints, travelMode);
@@ -548,7 +560,7 @@ export async function calculateGoogleRoutes(
               fuelStops: realPOIs.filter(p => p.type === "petrol").length,
               foodStops: realPOIs.filter(p => p.type === "food").length,
               hotels: 0,
-              notes: `Real Google road routing via ${route.summary || "active network"}. Distance: ${distanceText}, estimated time: ${durationText}. ${hasTolls ? "Tolls apply on this route." : "No tolls indicated by Google."}`,
+              notes: `Real Google road routing via ${route.summary || "active network"}. Distance: ${distanceText}, estimated time: ${durationText}. ${tollInfo}.`,
               type: index === 0 ? "safe" : index === 1 ? "fast" : "balanced",
               waypoints,
               pois: realPOIs,
