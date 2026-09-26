@@ -6,7 +6,7 @@ import {
   Shield, LogOut, Menu, X,
   MapPin, Compass, Navigation, AlertTriangle,
   Bot, History, BookOpen, User, Settings, ChevronRight,
-  Sun, Moon, Download, Smartphone, CheckCircle2
+  Sun, Moon, Download, Smartphone, CheckCircle2, ShieldCheck
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePwaManager } from "../../hooks/usePwaManager";
@@ -33,25 +33,26 @@ export default function Header() {
     }
   };
 
-  // 9 Navigation Items
+  // Full drawer menu (primary nav + secondary/account items)
   const navItems = [
     { name: "Home / Dashboard", href: "/dashboard", icon: Compass },
     { name: "Plan Journey", href: "/plan", icon: Navigation },
     { name: "Live Maps", href: "/map", icon: MapPin },
-    { name: "Emergency SOS", href: "/emergency", icon: AlertTriangle, highlight: true },
     { name: "AI Guardian", href: "/assist", icon: Bot },
+    { name: "Safety Check", href: "/safety-check", icon: ShieldCheck },
+    { name: "Emergency SOS", href: "/emergency", icon: AlertTriangle, highlight: true },
     { name: "My Journeys", href: "/history", icon: History },
     { name: "Review Session", href: "/guide", icon: BookOpen },
     { name: "Profile", href: "/profile", icon: User },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
-  // Quick desktop nav links
+  // Primary navigation: Plan Journey, Live Maps, AI Guardian, Safety Check, Emergency.
   const topNavLinks = [
-    { name: "Dashboard", href: "/dashboard", icon: Compass },
     { name: "Plan Journey", href: "/plan", icon: Navigation },
     { name: "Live Map", href: "/map", icon: MapPin },
     { name: "AI Guardian", href: "/assist", icon: Bot },
+    { name: "Safety Check", href: "/safety-check", icon: ShieldCheck },
     { name: "Emergency", href: "/emergency", icon: AlertTriangle, isEmergency: true },
   ];
 

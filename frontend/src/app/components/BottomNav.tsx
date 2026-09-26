@@ -2,17 +2,18 @@
 
 import React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Compass, Navigation, Bot, MapPin, AlertTriangle } from "lucide-react";
+import { Navigation, Bot, MapPin, AlertTriangle, ShieldCheck } from "lucide-react";
 
 export default function BottomNav() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Primary navigation: Plan Journey, Live Maps, AI Guardian, Safety Check, Emergency.
   const navItems = [
-    { name: "Home", href: "/dashboard", icon: Compass },
     { name: "Plan", href: "/plan", icon: Navigation },
     { name: "Live Map", href: "/map", icon: MapPin },
     { name: "AI Guide", href: "/assist", icon: Bot },
+    { name: "Safety", href: "/safety-check", icon: ShieldCheck },
     { name: "SOS", href: "/emergency", icon: AlertTriangle, isEmergency: true },
   ];
 
