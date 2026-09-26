@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -20,6 +21,42 @@ def _ensure_schema_migrations():
             col_names = [r[1] for r in res]
             if "is_enabled" not in col_names and len(col_names) > 0:
                 conn.execute(text("ALTER TABLE emergency_contacts ADD COLUMN is_enabled BOOLEAN DEFAULT 1"))
+                conn.commit()
+            if "is_primary" not in col_names and len(col_names) > 0:
+                conn.execute(text("ALTER TABLE emergency_contacts ADD COLUMN is_primary BOOLEAN DEFAULT 0"))
+                conn.commit()
+
+            # 1b. One-time cleanup of known demo/placeholder contacts left over
+            # from earlier development seeding (e.g. "Sarah Miller" and the
+            # shared placeholder number +919876543210 used throughout the test
+            # suite). These are never valid real trusted contacts, and leaving
+            # them in place risks a real emergency alert going to a stranger's
+            # number once Exotel dispatch is enabled.
+            demo_deleted = conn.execute(text(
+                "DELETE FROM emergency_contacts WHERE name = 'Sarah Miller' OR phone = '+919876543210'"
+            ))
+            if demo_deleted.rowcount:
+                conn.commit()
+                logging.getLogger("travel_guardian").warning(
+                    f"Removed {demo_deleted.rowcount} known demo/placeholder emergency contact(s) on startup."
+                )
+
+            # 1c. Ensure exactly one deterministic primary per user_id: if a
+            # user has enabled contacts but none flagged is_primary, promote
+            # their lowest-id enabled contact.
+            users_without_primary = conn.execute(text(
+                "SELECT DISTINCT user_id FROM emergency_contacts "
+                "WHERE is_enabled = 1 AND user_id NOT IN "
+                "(SELECT user_id FROM emergency_contacts WHERE is_primary = 1)"
+            )).fetchall()
+            for (uid,) in users_without_primary:
+                row = conn.execute(text(
+                    "SELECT id FROM emergency_contacts WHERE user_id = :uid AND is_enabled = 1 "
+                    "ORDER BY id ASC LIMIT 1"
+                ), {"uid": uid}).fetchone()
+                if row:
+                    conn.execute(text("UPDATE emergency_contacts SET is_primary = 1 WHERE id = :id"), {"id": row[0]})
+            if users_without_primary:
                 conn.commit()
 
             # 2. Migration for safe_checkins

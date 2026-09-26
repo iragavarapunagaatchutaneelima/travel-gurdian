@@ -300,6 +300,31 @@ def _extract_sid_and_status(res_dict: Dict[str, Any], entity_type: str = "sms") 
     return sid, status
 
 
+def _build_dry_run_result(
+    entity_type: str,
+    masked_target: str,
+    payload: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Builds a truthful DRY-RUN result for Exotel SMS/Call requests.
+    The real request payload is fully constructed and validated (phone
+    normalization, credential presence, etc. already happened by the time
+    this is called) but is never sent to Exotel. Never reported as "sent" or
+    "initiated" so the UI cannot mistake this for a real dispatch.
+    """
+    safe_payload = {k: (mask_phone_number(v) if k in ("To", "From", "CallerId") else v) for k, v in payload.items()}
+    logger.info(f"[EXOTEL DRY_RUN] {entity_type} request built and validated but NOT sent: {safe_payload}")
+    return {
+        "success": False,
+        "status": "dry_run",
+        "sid": None,
+        "message": f"Exotel {entity_type} dry-run: request validated but not sent (EXOTEL_DRY_RUN=true).",
+        "safe_message": f"DRY RUN: Emergency {entity_type} was validated for {masked_target} but not actually sent because EXOTEL_DRY_RUN is enabled on the server.",
+        "error": None,
+        "dry_run": True
+    }
+
+
 def _make_exotel_request(
     endpoint: str,
     payload: Optional[Dict[str, Any]] = None,
@@ -448,6 +473,10 @@ def send_emergency_sms(
     }
 
     masked_target = mask_phone_number(normalized_to)
+
+    if settings.EXOTEL_DRY_RUN:
+        return _build_dry_run_result("SMS", masked_target, payload)
+
     status_code, res_dict, err_msg = _make_exotel_request("Sms/send.json", payload=payload, method="POST")
 
     if status_code in [200, 201]:
@@ -552,6 +581,10 @@ def make_emergency_call(
         }
 
     masked_target = mask_phone_number(normalized_to)
+
+    if settings.EXOTEL_DRY_RUN:
+        return _build_dry_run_result("call", masked_target, payload)
+
     status_code, res_dict, err_msg = _make_exotel_request("Calls/connect.json", payload=payload, method="POST")
 
     if status_code in [200, 201]:
@@ -600,6 +633,7 @@ def test_exotel_authentication() -> Dict[str, Any]:
 
     result: Dict[str, Any] = {
         "is_configured": is_valid,
+        "dry_run": settings.EXOTEL_DRY_RUN,
         "account_sid": sid,
         "host": host,
         "subdomain": settings.EXOTEL_SUBDOMAIN or "api.exotel.com",

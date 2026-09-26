@@ -1,21 +1,29 @@
 import json
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
+from app.core.config import settings
 from app.models import models
 
 def seed_db():
     models.Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-    
-    # 1. Clear existing data
-    print("Clearing database...")
-    db.query(models.Destination).delete()
-    db.query(models.Alert).delete()
-    db.query(models.EmergencyContact).delete()
-    db.query(models.SafeCheckIn).delete()
-    db.query(models.RiskReport).delete()
-    db.commit()
-    
+
+    # 1. Wipe existing data ONLY when explicitly opted into via SEED_RESET=true.
+    # Running `python seed.py` (or a container restart that calls this at
+    # startup) must never silently delete real trusted contacts, check-ins,
+    # or risk reports. EmergencyContact and SafeCheckIn are NEVER touched by
+    # seeding at all -- they hold real user data, not demo content.
+    if settings.SEED_RESET:
+        print("SEED_RESET=true: clearing demo/reference tables (destinations, alerts, risk reports)...")
+        db.query(models.Destination).delete()
+        db.query(models.Alert).delete()
+        db.query(models.RiskReport).delete()
+        db.commit()
+    elif db.query(models.Destination).count() > 0 or db.query(models.Alert).count() > 0:
+        print("Destinations/alerts already present and SEED_RESET is not set; skipping demo data seed (idempotent no-op).")
+        db.close()
+        return
+
     # 2. Seed Destinations
     print("Seeding destinations...")
     destinations = [

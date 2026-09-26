@@ -71,11 +71,17 @@ def _resolve_primary_contact(
     """
     Resolves the primary active (is_enabled == True) emergency contact from the database.
     Does NOT create fake default or unconfirmed emergency contacts.
+
+    Deterministic ordering: the contact explicitly flagged is_primary=True is
+    always preferred; if none is flagged (should not normally happen once the
+    startup migration runs), the lowest-id enabled contact is used as a
+    stable, reproducible fallback -- never "whichever row the database
+    happens to return first".
     """
     contacts = db.query(models.EmergencyContact).filter(
         models.EmergencyContact.user_id == user_id,
         models.EmergencyContact.is_enabled == True
-    ).all()
+    ).order_by(models.EmergencyContact.is_primary.desc(), models.EmergencyContact.id.asc()).all()
 
     if contacts:
         return contacts[0]
@@ -91,7 +97,7 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
     contacts = db.query(models.EmergencyContact).filter(
         models.EmergencyContact.user_id == user_id,
         models.EmergencyContact.is_enabled == True
-    ).all()
+    ).order_by(models.EmergencyContact.is_primary.desc(), models.EmergencyContact.id.asc()).all()
     broadcast_list = []
     for c in contacts:
         contact_type = f"{c.name} ({c.relation}) via {exotel_service.mask_phone_number(c.phone)}"
@@ -151,6 +157,13 @@ def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "defaul
                 overall_status = "partially_completed"
                 is_success = True
                 response_msg = f"SOS voice call initiated to {target_name} ({target_masked}). SMS alert could not be delivered."
+            elif sms_status == "dry_run" or call_status == "dry_run":
+                overall_status = "dry_run"
+                is_success = False
+                response_msg = (
+                    f"DRY RUN: Exotel dispatch to {target_name} ({target_masked}) was validated but NOT actually sent "
+                    "because EXOTEL_DRY_RUN is enabled on the server. No real SMS or call was made."
+                )
             else:
                 overall_status = "failed"
                 is_success = False
@@ -442,6 +455,13 @@ def notify_trusted_contact(
         overall = "partially_completed"
         is_success = True
         msg = f"Emergency alert partially dispatched to {primary.name} ({masked_phone}). One channel failed."
+    elif sms_status == "dry_run" or call_status == "dry_run":
+        overall = "dry_run"
+        is_success = False
+        msg = (
+            f"DRY RUN: Exotel dispatch to {primary.name} ({masked_phone}) was validated but NOT actually sent "
+            "because EXOTEL_DRY_RUN is enabled on the server. No real SMS or call was made."
+        )
     else:
         overall = "failed"
         is_success = False
@@ -604,6 +624,10 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
             checkin.escalation_status = "escalated"
             overall_status = "completed" if (sms_ok and call_ok) else "partially_completed"
             err_msg = None
+        elif sms_status == "dry_run" or call_status == "dry_run":
+            checkin.escalation_status = "dry_run"
+            overall_status = "dry_run"
+            err_msg = "DRY RUN: escalation request validated but not sent (EXOTEL_DRY_RUN=true)."
         else:
             checkin.escalation_status = "exotel_failure"
             overall_status = "failed"

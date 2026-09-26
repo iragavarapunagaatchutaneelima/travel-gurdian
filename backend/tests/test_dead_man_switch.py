@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.core.config import settings
 from app.core.database import Base
 from app.models.models import SafeCheckIn, EmergencyContact, EmergencyEventLog
 from app.schemas.schemas import SafeCheckInCreate, SafeCheckInLocationUpdate
@@ -27,6 +28,11 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.engine = create_engine("sqlite:///:memory:")
+        # These tests exercise the mocked HTTP request/response plumbing in
+        # exotel_service, not real Exotel network calls (urllib.request.urlopen
+        # is patched per-test). Dry-run is a safety gate that sits ABOVE that
+        # plumbing, so it must be disabled here to actually reach the mocks.
+        settings.EXOTEL_DRY_RUN = False
         Base.metadata.create_all(cls.engine)
         cls.Session = sessionmaker(bind=cls.engine)
 

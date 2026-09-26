@@ -73,6 +73,11 @@ class EmergencyContact(Base):
     relation = Column(String(50), nullable=False)  # Partner, Parent, Friend, etc.
     user_id = Column(String(50), default="default_user", index=True)
     is_enabled = Column(Boolean, default=True, nullable=False)
+    # Explicit, deterministic primary contact flag. Exactly one enabled
+    # contact per user_id should have this set to True; resolution logic
+    # must never rely on "whichever row the database happens to return
+    # first" for something as safety-critical as who gets the SOS alert.
+    is_primary = Column(Boolean, default=False, nullable=False)
 
 class SafeCheckIn(Base):
     __tablename__ = "safe_checkins"
@@ -90,7 +95,7 @@ class SafeCheckIn(Base):
     last_known_latitude = Column(Float, nullable=True)
     last_known_longitude = Column(Float, nullable=True)
     last_location_time = Column(DateTime, nullable=True)
-    escalation_status = Column(String(50), default="pending", nullable=False)  # pending, confirmed_safe, escalating, escalated, exotel_failure, no_trusted_contact, cancelled
+    escalation_status = Column(String(50), default="pending", nullable=False)  # pending, confirmed_safe, escalating, escalated, exotel_failure, no_trusted_contact, cancelled, dry_run
     dispatched_at = Column(DateTime, nullable=True)
     dispatch_sms_sid = Column(String(100), nullable=True)
     dispatch_call_sid = Column(String(100), nullable=True)

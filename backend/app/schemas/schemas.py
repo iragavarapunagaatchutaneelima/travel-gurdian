@@ -82,11 +82,13 @@ class EmergencyContactUpdate(BaseModel):
     email: Optional[str] = None
     relation: Optional[str] = None
     is_enabled: Optional[bool] = None
+    is_primary: Optional[bool] = None
 
 class EmergencyContactResponse(EmergencyContactBase):
     id: int
     user_id: str
     is_enabled: bool = True
+    is_primary: bool = False
 
     class Config:
         from_attributes = True
@@ -230,6 +232,7 @@ class EmergencyEventLogResponse(BaseModel):
 
 class ExotelDiagnosticResponse(BaseModel):
     is_configured: bool
+    dry_run: bool = True
     account_sid: str
     host: str
     subdomain: str
@@ -246,6 +249,7 @@ class ExotelDiagnosticResponse(BaseModel):
 
 class ExotelConfigStatusResponse(BaseModel):
     is_configured: bool
+    dry_run: bool = True
     region: str = "Singapore"
     host: str = "api.exotel.com"
     account_sid_configured: bool = False
