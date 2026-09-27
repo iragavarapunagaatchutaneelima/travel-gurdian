@@ -159,8 +159,14 @@ export async function downloadCorridorMapPack(
   packId: string,
   waypoints: [number, number][],
   corridorName: string = "Travel Corridor",
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal
 ): Promise<OfflineMapPackMetadata> {
+  // Cancellation is checked between fetch batches. Tiles are only written to
+  // IndexedDB after all fetching finishes, so a cancelled download stores nothing.
+  const throwIfCancelled = () => {
+    if (signal?.aborted) throw new DOMException("Download cancelled", "AbortError");
+  };
   // Phase 1: Preparing
   if (onProgress) {
     onProgress({
@@ -208,6 +214,7 @@ export async function downloadCorridorMapPack(
   // avoid overwhelming the browser with thousands of simultaneous requests.
   const batchSize = 16;
   for (let i = 0; i < totalTiles; i += batchSize) {
+    throwIfCancelled();
     const chunk = tiles.slice(i, i + batchSize);
     const results = await Promise.all(chunk.map((coord) => fetchRealTile(coord)));
 
@@ -259,6 +266,8 @@ export async function downloadCorridorMapPack(
       message: "Validating downloaded tile integrity...",
     });
   }
+
+  throwIfCancelled();
 
   // Phase 5: Writing to IndexedDB
   if (onProgress) {

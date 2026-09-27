@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
@@ -80,6 +80,7 @@ function OfflinePacksManagerContent() {
   } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const handleDownloadNewPack = async () => {
     // Only a real, already-computed Google route (waypoints, steps, Places
@@ -116,6 +117,8 @@ function OfflinePacksManagerContent() {
     const origin = endpoint(fromParam, fromName, fromLat, fromLng, first, "origin");
     const dest = endpoint(destParam, destName, destLat, destLng, last, "destination");
     const packId = `pack_${origin.id}_${dest.id}_${Date.now()}`;
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     try {
       // 1. Download bounded vector map corridor with progress callbacks
@@ -131,7 +134,8 @@ function OfflinePacksManagerContent() {
             current: p.current,
             total: p.total,
           });
-        }
+        },
+        controller.signal
       );
 
       // Turn instructions: from the real Google-computed steps when available.
@@ -214,11 +218,17 @@ function OfflinePacksManagerContent() {
         setTimeout(() => setErrorMessage(null), 6000);
       }
     } catch (err: any) {
-      console.error("Vector pack download error:", err);
       setDownloading(false);
       setDownloadProgress(null);
-      setErrorMessage(`Download failure: ${err.message || "Could not complete vector download"}`);
-      setTimeout(() => setErrorMessage(null), 6000);
+      if (err?.name === "AbortError") {
+        setSuccessMessage("Download cancelled. Nothing was saved.");
+        setTimeout(() => setSuccessMessage(null), 5000);
+        return;
+      }
+      console.error("Vector pack download error:", err);
+      setErrorMessage(`Download failure: ${err.message || "Could not complete vector download"}. You can retry.`);
+    } finally {
+      abortRef.current = null;
     }
   };
 
@@ -303,7 +313,18 @@ function OfflinePacksManagerContent() {
                   {downloadProgress.phase}
                 </span>
               </div>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{downloadProgress.percent}%</span>
+              <div className="flex items-center gap-3">
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{downloadProgress.percent}%</span>
+                {downloadProgress.phase !== "WRITING" && (
+                  <button
+                    onClick={() => abortRef.current?.abort()}
+                    className="px-3 py-1 rounded-lg text-xs font-bold"
+                    style={{ border: "1px solid #FCA5A5", color: "#DC2626", backgroundColor: "#FEF2F2" }}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </div>
 
             <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 500 }}>{downloadProgress.message}</p>
