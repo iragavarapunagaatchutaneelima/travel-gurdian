@@ -125,6 +125,39 @@ class TestApiIntegration(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 400)
 
+    def test_client_supplied_contact_phone_is_never_the_recipient(self):
+        """
+        EmergencyActionRequest carries an optional contact_phone (the UI sends
+        it for display). The destination must always come from the device's
+        stored contacts, or anyone could make the backend text/call any number.
+        """
+        from unittest.mock import patch
+        from app.services import comms_service
+
+        attacker_target = "+919876500001"
+        captured = []
+
+        def fake_sms(*args, **kwargs):
+            captured.append(kwargs.get("to_phone", args[0] if args else None))
+            return {"success": False, "status": "dry_run", "message": "x", "safe_message": "x", "sid": None, "error": None}
+
+        # No stored contact: must refuse, never fall back to the supplied number.
+        fresh = TestClient(app)
+        with patch.object(comms_service, "send_emergency_sms", side_effect=fake_sms):
+            res = fresh.post("/api/emergency/sms", json={"custom_message": "x", "contact_phone": attacker_target})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(captured, [])
+
+        # Stored contact: the stored number is used, the supplied one ignored.
+        client = TestClient(app)
+        stored = "+919000000077"
+        self.assertEqual(client.post("/api/assist/contacts", json={"name": "Stored", "phone": stored, "relation": "Friend", "is_enabled": True}).status_code, 201)
+        with patch.object(comms_service, "send_emergency_sms", side_effect=fake_sms):
+            client.post("/api/emergency/sms", json={"custom_message": "x", "contact_phone": attacker_target})
+        self.assertEqual(len(captured), 1)
+        self.assertNotEqual(captured[0], attacker_target)
+        self.assertIn(captured[0].replace(" ", ""), (stored, stored.lstrip("+")))
+
     def test_docs_endpoint_available_by_default(self):
         # DISABLE_API_DOCS defaults to false; this documents the current
         # (open) behavior so a future change to the default is caught here.
