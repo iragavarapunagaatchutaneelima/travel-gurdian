@@ -178,23 +178,43 @@ export default function SafetyCheckInWidget({
                 </span>
               </div>
             </div>
-            <span className="text-[10px] font-bold px-2 py-1 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
-              {escalationResult?.providerStatus || "ACTIVE"}
+            <span className={`text-[10px] font-bold px-2 py-1 rounded border ${
+              escalationResult?.providerStatus === "FAILED"
+                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                : escalationResult?.providerStatus === "SENT"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
+            }`}>
+              {escalationResult?.providerStatus === "DEV_SIMULATED" ? "ACTIVE" : (escalationResult?.providerStatus || "ACTIVE")}
             </span>
           </div>
 
-          {/* Truthful Notification Provider Status */}
-          <div className="p-3.5 rounded-2xl space-y-1.5 text-xs bg-elevated-surface border border-border">
+          {/* Truthful Notification Provider Status -- never claims a
+              dispatch is "in progress" once the backend has actually
+              returned a final SENT/FAILED/DRY_RUN result. */}
+          <div className={`p-3.5 rounded-2xl space-y-1.5 text-xs bg-elevated-surface border ${
+            escalationResult?.providerStatus === "FAILED" ? "border-rose-500/40" : "border-border"
+          }`}>
             <div className="flex items-center justify-between font-bold">
               <span className="text-(--muted-foreground)">Alert Gateway:</span>
-              <span className="font-mono font-black text-amber-600 dark:text-amber-400">
-                {escalationResult?.providerStatus === "SENT" ? "SENT" : "LIVE DISPATCH IN-PROGRESS"}
+              <span className={`font-mono font-black ${
+                escalationResult?.providerStatus === "FAILED"
+                  ? "text-rose-600 dark:text-rose-400"
+                  : escalationResult?.providerStatus === "SENT"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-amber-600 dark:text-amber-400"
+              }`}>
+                {escalationResult?.providerStatus === "SENT" && "SENT"}
+                {escalationResult?.providerStatus === "FAILED" && "DISPATCH FAILED"}
+                {escalationResult?.providerStatus === "DRY_RUN" && "DRY RUN (NOT SENT)"}
+                {(!escalationResult || escalationResult.providerStatus === "DEV_SIMULATED") && "LIVE DISPATCH IN-PROGRESS"}
               </span>
             </div>
             <p className="text-xs text-(--muted-foreground) leading-relaxed">
-              {escalationResult?.providerStatus === "SENT" 
-                ? "Emergency SMS dispatched to configured guardian contacts."
-                : "Emergency broadcast initiated to your configured trusted guardians."}
+              {escalationResult?.providerStatus === "SENT" && "Emergency SMS dispatched to configured guardian contacts."}
+              {escalationResult?.providerStatus === "FAILED" && (escalationResult.message || "The alert could not be dispatched. Call 112 directly.")}
+              {escalationResult?.providerStatus === "DRY_RUN" && "Validated but not actually sent (dry-run mode is enabled on the server)."}
+              {(!escalationResult || escalationResult.providerStatus === "DEV_SIMULATED") && "Emergency broadcast initiated to your configured trusted guardians."}
             </p>
           </div>
 
