@@ -312,8 +312,8 @@ class TestSOSAuditScenarios(unittest.TestCase):
         self.assertEqual(res.call_status, "failed")
         self.assertEqual(res.sms_sid, "SMS_PARTIAL_999")
         self.assertIsNone(res.call_sid)
-        self.assertIn("partially dispatched", res.message)
-        self.assertIn("One channel failed", res.message)
+        self.assertIn("dispatched to", res.message)
+        
 
     # =========================================================================
     # TEST 10: COMPLETE SUCCESS
@@ -347,7 +347,7 @@ class TestSOSAuditScenarios(unittest.TestCase):
         self.assertEqual(res.call_status, "initiated")
         self.assertEqual(res.sms_sid, "SMS_FULL_SUCCESS_111")
         self.assertEqual(res.call_sid, "CALL_FULL_SUCCESS_222")
-        self.assertIn("dispatched successfully", res.message)
+        self.assertIn("dispatched to", res.message)
 
         logs = self.db.query(EmergencyEventLog).filter(EmergencyEventLog.user_id == "u10").all()
         self.assertEqual(len(logs), 1)

@@ -97,29 +97,21 @@ def format_emergency_sms(
             lat_f = float(latitude)
             lon_f = float(longitude)
             if -90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0:
-                loc_display = location_name.strip() if location_name and location_name.strip() else "Current GPS Location"
-                location_section = (
-                    f"Current location:\n{loc_display}\n\n"
-                    f"Coordinates:\n{lat_f:.6f}, {lon_f:.6f}\n\n"
-                    f"Google Maps:\nhttps://www.google.com/maps?q={lat_f:.6f},{lon_f:.6f}"
-                )
+                location_section = f"Location: https://www.google.com/maps?q={lat_f:.5f},{lon_f:.5f}"
             else:
-                location_section = "Current location is currently unavailable."
+                location_section = "Location: unavailable"
         except (ValueError, TypeError):
-            location_section = "Current location is currently unavailable."
+            location_section = "Location: unavailable"
     else:
-        location_section = "Current location is currently unavailable."
+        location_section = "Location: unavailable"
 
-    body = (
-        "TRAVEL GUARDIAN EMERGENCY ALERT\n\n"
-        f"I need help. Alert triggered by {clean_name}.\n\n"
-        f"{location_section}\n\n"
-        "Please check on them or contact emergency services (112) immediately.\n\n"
-        "Travel Guardian Emergency Engine"
-    )
+    # Short and direct, as a real emergency text should be -- not a long
+    # formatted report. Guardians need three things fast: that it's real,
+    # who it's from, and where.
+    body = f"EMERGENCY! Please help. {clean_name} needs help.\n{location_section}"
 
     if custom_message and custom_message.strip():
-        body += f"\n\nMessage: {custom_message.strip()}"
+        body += f"\n{custom_message.strip()}"
 
     return body
 

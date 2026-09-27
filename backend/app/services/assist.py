@@ -63,30 +63,21 @@ def get_emergency_event_logs(
     ).order_by(models.EmergencyEventLog.created_at.desc()).limit(limit).all()
 
 
-def _resolve_primary_contact(
+def _resolve_notify_contacts(
     db: Session,
-    request: Optional[schemas.EmergencyActionRequest] = None,
     user_id: str = "default_user"
-) -> Optional[models.EmergencyContact]:
+) -> List[models.EmergencyContact]:
     """
-    Resolves the primary active (is_enabled == True) emergency contact from the database.
-    Does NOT create fake default or unconfirmed emergency contacts.
-
-    Deterministic ordering: the contact explicitly flagged is_primary=True is
-    always preferred; if none is flagged (should not normally happen once the
-    startup migration runs), the lowest-id enabled contact is used as a
-    stable, reproducible fallback -- never "whichever row the database
-    happens to return first".
+    Resolves every active (is_enabled == True) emergency/guardian contact to
+    notify for this device. Does NOT create fake default or unconfirmed
+    contacts, and never reads another device's contacts (see
+    app/core/identity.py for why device isolation matters here).
+    Deterministic ordering: is_primary first, then lowest id.
     """
-    contacts = db.query(models.EmergencyContact).filter(
+    return db.query(models.EmergencyContact).filter(
         models.EmergencyContact.user_id == user_id,
         models.EmergencyContact.is_enabled == True
     ).order_by(models.EmergencyContact.is_primary.desc(), models.EmergencyContact.id.asc()).all()
-
-    if contacts:
-        return contacts[0]
-
-    return None
 
 
 def trigger_sos(db: Session, request: schemas.SOSRequest, user_id: str = "default_user") -> schemas.SOSResponse:
@@ -263,19 +254,20 @@ def send_trusted_contact_sms(
     user_id: str = "default_user"
 ) -> schemas.EmergencySMSResponse:
     """
-    Sends an emergency SMS exclusively to the stored trusted contact.
-    Logs the event to the database.
+    Sends an emergency SMS to every configured, enabled guardian contact.
+    Logs one audit event per contact.
     """
-    primary = _resolve_primary_contact(db, request, user_id)
-    if not primary:
+    contacts = _resolve_notify_contacts(db, user_id)
+    if not contacts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No trusted emergency contact is configured. Please add a trusted contact in Settings or Emergency portal."
         )
 
-    masked_phone = comms_service.mask_phone_number(primary.phone)
+    names = ", ".join(c.name for c in contacts)
+    masked_phones = ", ".join(comms_service.mask_phone_number(c.phone) for c in contacts)
 
-    # Check debounce
+    # Check debounce (once per request, not per contact)
     acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
     if not acquired:
         return schemas.EmergencySMSResponse(
@@ -283,43 +275,65 @@ def send_trusted_contact_sms(
             status="failed",
             message=reason or "Emergency request throttled.",
             safe_message=reason or "Please wait before resending emergency alert.",
-            recipient_name=primary.name,
-            recipient_phone_masked=masked_phone,
+            recipient_name=names,
+            recipient_phone_masked=masked_phones,
             error="Debounced"
         )
 
-    res = comms_service.send_emergency_sms(
-        to_phone=primary.phone,
-        user_name=primary.name,
-        latitude=request.latitude,
-        longitude=request.longitude,
-        location_name=request.location_name,
-        custom_message=request.custom_message
-    )
+    results = []
+    for contact in contacts:
+        res = comms_service.send_emergency_sms(
+            to_phone=contact.phone,
+            # "Traveler", never the guardian's own name (a prior bug here
+            # passed the recipient's own contact.name back into the message
+            # body, so a guardian would read e.g. "yaswanth needs help" when
+            # the SMS was sent TO yaswanth). There's no traveler-profile name
+            # field in this app to use honestly instead.
+            user_name="Traveler",
+            latitude=request.latitude,
+            longitude=request.longitude,
+            location_name=request.location_name,
+            custom_message=request.custom_message
+        )
+        masked_phone = comms_service.mask_phone_number(contact.phone)
+        log_emergency_event(
+            db=db,
+            user_id=user_id,
+            event_type="sms_alert",
+            recipient_name=contact.name,
+            recipient_phone_masked=masked_phone,
+            status=res.get("status", "failed"),
+            sid=res.get("sid"),
+            error_message=res.get("error"),
+            latitude=request.latitude,
+            longitude=request.longitude
+        )
+        results.append((contact, masked_phone, res))
 
-    # Persist audit log
-    log_emergency_event(
-        db=db,
-        user_id=user_id,
-        event_type="sms_alert",
-        recipient_name=primary.name,
-        recipient_phone_masked=masked_phone,
-        status=res.get("status", "failed"),
-        sid=res.get("sid"),
-        error_message=res.get("error"),
-        latitude=request.latitude,
-        longitude=request.longitude
-    )
+    any_success = any(r.get("success") for _, _, r in results)
+    first_sid = next((r.get("sid") for _, _, r in results if r.get("sid")), None)
+    sent_to = [c.name for c, _, r in results if r.get("success")]
+    failed_for = [c.name for c, _, r in results if not r.get("success")]
+
+    if any_success and not failed_for:
+        overall_status = "sent"
+        message = f"Emergency SMS sent to {', '.join(sent_to)}."
+    elif any_success:
+        overall_status = "sent"
+        message = f"Emergency SMS sent to {', '.join(sent_to)}; failed for {', '.join(failed_for)}."
+    else:
+        overall_status = results[0][2].get("status", "failed")
+        message = f"Emergency SMS failed for all guardian contacts ({names})."
 
     return schemas.EmergencySMSResponse(
-        success=res.get("success", False),
-        status=res.get("status", "failed"),
-        message=res.get("message", "Emergency SMS processed."),
-        safe_message=res.get("safe_message"),
-        recipient_name=primary.name,
-        recipient_phone_masked=masked_phone,
-        sid=res.get("sid"),
-        error=res.get("error")
+        success=any_success,
+        status=overall_status,
+        message=message,
+        safe_message=message,
+        recipient_name=names,
+        recipient_phone_masked=masked_phones,
+        sid=first_sid,
+        error=None if any_success else (results[0][2].get("error"))
     )
 
 
@@ -329,17 +343,18 @@ def make_trusted_contact_call(
     user_id: str = "default_user"
 ) -> schemas.EmergencyCallResponse:
     """
-    Initiates an outbound voice call exclusively to the stored trusted contact.
-    Logs the event to the database.
+    Initiates an outbound voice call to every configured, enabled guardian
+    contact. Logs one audit event per contact.
     """
-    primary = _resolve_primary_contact(db, request, user_id)
-    if not primary:
+    contacts = _resolve_notify_contacts(db, user_id)
+    if not contacts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No trusted emergency contact is configured. Please add a trusted contact in Settings or Emergency portal."
         )
 
-    masked_phone = comms_service.mask_phone_number(primary.phone)
+    names = ", ".join(c.name for c in contacts)
+    masked_phones = ", ".join(comms_service.mask_phone_number(c.phone) for c in contacts)
 
     # Check debounce
     acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
@@ -349,39 +364,53 @@ def make_trusted_contact_call(
             status="failed",
             message=reason or "Emergency request throttled.",
             safe_message=reason or "Please wait before initiating another call.",
-            recipient_name=primary.name,
-            recipient_phone_masked=masked_phone,
+            recipient_name=names,
+            recipient_phone_masked=masked_phones,
             error="Debounced"
         )
 
-    res = comms_service.make_emergency_call(
-        to_phone=primary.phone,
-        user_name=primary.name
-    )
+    results = []
+    for contact in contacts:
+        res = comms_service.make_emergency_call(to_phone=contact.phone, user_name="Traveler")
+        masked_phone = comms_service.mask_phone_number(contact.phone)
+        log_emergency_event(
+            db=db,
+            user_id=user_id,
+            event_type="voice_call",
+            recipient_name=contact.name,
+            recipient_phone_masked=masked_phone,
+            status=res.get("status", "failed"),
+            sid=res.get("sid"),
+            error_message=res.get("error"),
+            latitude=request.latitude,
+            longitude=request.longitude
+        )
+        results.append((contact, res))
 
-    # Persist audit log
-    log_emergency_event(
-        db=db,
-        user_id=user_id,
-        event_type="voice_call",
-        recipient_name=primary.name,
-        recipient_phone_masked=masked_phone,
-        status=res.get("status", "failed"),
-        sid=res.get("sid"),
-        error_message=res.get("error"),
-        latitude=request.latitude,
-        longitude=request.longitude
-    )
+    any_success = any(r.get("success") for _, r in results)
+    first_sid = next((r.get("sid") for _, r in results if r.get("sid")), None)
+    called = [c.name for c, r in results if r.get("success")]
+    failed_for = [c.name for c, r in results if not r.get("success")]
+
+    if any_success and not failed_for:
+        overall_status = "initiated"
+        message = f"Emergency call initiated to {', '.join(called)}."
+    elif any_success:
+        overall_status = "initiated"
+        message = f"Emergency call initiated to {', '.join(called)}; failed for {', '.join(failed_for)}."
+    else:
+        overall_status = results[0][1].get("status", "failed")
+        message = f"Emergency call failed for all guardian contacts ({names})."
 
     return schemas.EmergencyCallResponse(
-        success=res.get("success", False),
-        status=res.get("status", "failed"),
-        message=res.get("message", "Emergency call processed."),
-        safe_message=res.get("safe_message"),
-        recipient_name=primary.name,
-        recipient_phone_masked=masked_phone,
-        sid=res.get("sid"),
-        error=res.get("error")
+        success=any_success,
+        status=overall_status,
+        message=message,
+        safe_message=message,
+        recipient_name=names,
+        recipient_phone_masked=masked_phones,
+        sid=first_sid,
+        error=None if any_success else (results[0][1].get("error"))
     )
 
 
@@ -394,14 +423,15 @@ def notify_trusted_contact(
     Unified endpoint: resolves stored trusted contact, dispatches both SMS and Call,
     logs the events, and returns granular status breakdown.
     """
-    primary = _resolve_primary_contact(db, request, user_id)
-    if not primary:
+    contacts = _resolve_notify_contacts(db, user_id)
+    if not contacts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No trusted emergency contact is configured. Please add a trusted contact in Settings or Emergency portal."
         )
 
-    masked_phone = comms_service.mask_phone_number(primary.phone)
+    names = ", ".join(c.name for c in contacts)
+    masked_phones = ", ".join(comms_service.mask_phone_number(c.phone) for c in contacts)
 
     # Check debounce
     acquired, reason = comms_service.check_and_acquire_emergency_lock(user_id)
@@ -413,75 +443,77 @@ def notify_trusted_contact(
             call_status="failed",
             message=reason or "Emergency request throttled.",
             safe_message=reason or "Please wait before resending emergency notification.",
-            recipient_name=primary.name,
-            recipient_phone_masked=masked_phone,
+            recipient_name=names,
+            recipient_phone_masked=masked_phones,
             timestamp=datetime.datetime.now(datetime.timezone.utc)
         )
 
-    sms_res = {"status": "skipped", "sid": None, "success": True}
-    if request.include_sms is not False:
-        sms_res = comms_service.send_emergency_sms(
-            to_phone=primary.phone,
-            user_name=primary.name,
+    sms_results = []
+    call_results = []
+    for contact in contacts:
+        masked_phone = comms_service.mask_phone_number(contact.phone)
+
+        sms_res = {"status": "skipped", "sid": None, "success": True}
+        if request.include_sms is not False:
+            sms_res = comms_service.send_emergency_sms(
+                to_phone=contact.phone,
+                user_name="Traveler",
+                latitude=request.latitude,
+                longitude=request.longitude,
+                location_name=request.location_name,
+                custom_message=request.custom_message
+            )
+        call_res = {"status": "skipped", "sid": None, "success": True}
+        if request.include_call is not False:
+            call_res = comms_service.make_emergency_call(to_phone=contact.phone, user_name="Traveler")
+
+        contact_sms_ok = sms_res.get("status") in ("sent", "skipped")
+        contact_call_ok = call_res.get("status") in ("initiated", "skipped")
+        if sms_res.get("status") == "sent" or call_res.get("status") == "initiated":
+            per_contact_status = "completed" if (contact_sms_ok and contact_call_ok) else "partially_completed"
+        elif sms_res.get("status") == "dry_run" or call_res.get("status") == "dry_run":
+            per_contact_status = "dry_run"
+        else:
+            per_contact_status = "failed"
+
+        log_emergency_event(
+            db=db,
+            user_id=user_id,
+            event_type="emergency_broadcast",
+            recipient_name=contact.name,
+            recipient_phone_masked=masked_phone,
+            status=per_contact_status,
+            sid=call_res.get("sid") or sms_res.get("sid"),
+            error_message=f"SMS: {sms_res.get('error') or 'ok'} | Call: {call_res.get('error') or 'ok'}",
             latitude=request.latitude,
-            longitude=request.longitude,
-            location_name=request.location_name,
-            custom_message=request.custom_message
+            longitude=request.longitude
         )
+        sms_results.append((contact, sms_res))
+        call_results.append((contact, call_res))
 
-    call_res = {"status": "skipped", "sid": None, "success": True}
-    if request.include_call is not False:
-        call_res = comms_service.make_emergency_call(
-            to_phone=primary.phone,
-            user_name=primary.name
-        )
+    all_sms_ok = all(r.get("status") in ("sent", "skipped") for _, r in sms_results)
+    all_call_ok = all(r.get("status") in ("initiated", "skipped") for _, r in call_results)
+    any_sms_ok = any(r.get("status") == "sent" for _, r in sms_results)
+    any_call_ok = any(r.get("status") == "initiated" for _, r in call_results)
+    any_dry_run = any(r.get("status") == "dry_run" for _, r in sms_results + call_results)
+    sms_status = "sent" if any_sms_ok else (sms_results[0][1].get("status", "failed") if sms_results else "skipped")
+    call_status = "initiated" if any_call_ok else (call_results[0][1].get("status", "failed") if call_results else "skipped")
 
-    sms_status = sms_res.get("status", "failed")
-    call_status = call_res.get("status", "failed")
-
-    if sms_status == "sent" and call_status == "initiated":
-        overall = "completed"
+    if any_sms_ok or any_call_ok:
+        overall = "completed" if (all_sms_ok and all_call_ok) else "partially_completed"
         is_success = True
-        msg = f"Emergency SMS and voice call dispatched successfully to {primary.name} ({masked_phone})."
-    elif sms_status == "sent" and call_status == "skipped":
-        overall = "completed"
-        is_success = True
-        msg = f"Emergency SMS dispatched successfully to {primary.name} ({masked_phone})."
-    elif call_status == "initiated" and sms_status == "skipped":
-        overall = "completed"
-        is_success = True
-        msg = f"Emergency voice call initiated successfully to {primary.name} ({masked_phone})."
-    elif sms_status == "sent" or call_status == "initiated":
-        overall = "partially_completed"
-        is_success = True
-        msg = f"Emergency alert partially dispatched to {primary.name} ({masked_phone}). One channel failed."
-    elif sms_status == "dry_run" or call_status == "dry_run":
+        msg = f"Emergency alert dispatched to {names} ({masked_phones})."
+    elif any_dry_run:
         overall = "dry_run"
         is_success = False
         msg = (
-            f"DRY RUN: Twilio dispatch to {primary.name} ({masked_phone}) was validated but NOT actually sent "
+            f"DRY RUN: Twilio dispatch to {names} ({masked_phones}) was validated but NOT actually sent "
             "because TWILIO_DRY_RUN is enabled on the server. No real SMS or call was made."
         )
     else:
         overall = "failed"
         is_success = False
-        sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS failed"
-        call_err = call_res.get("safe_message") or call_res.get("error") or "Call failed"
-        msg = f"Emergency communication failed. Dispatch to trusted contact failed via Twilio (SMS: {sms_err} | Call: {call_err}). Please dial 112 directly."
-
-    # Persist audit logs
-    log_emergency_event(
-        db=db,
-        user_id=user_id,
-        event_type="emergency_broadcast",
-        recipient_name=primary.name,
-        recipient_phone_masked=masked_phone,
-        status=overall,
-        sid=call_res.get("sid") or sms_res.get("sid"),
-        error_message=f"SMS: {sms_res.get('error') or 'ok'} | Call: {call_res.get('error') or 'ok'}",
-        latitude=request.latitude,
-        longitude=request.longitude
-    )
+        msg = f"Emergency communication failed for all guardian contacts ({names}). Please dial 112 directly."
 
     return schemas.EmergencyNotificationResponse(
         success=is_success,
@@ -490,10 +522,10 @@ def notify_trusted_contact(
         call_status=call_status,
         message=msg,
         safe_message=msg,
-        recipient_name=primary.name,
-        recipient_phone_masked=masked_phone,
-        sms_sid=sms_res.get("sid"),
-        call_sid=call_res.get("sid"),
+        recipient_name=names,
+        recipient_phone_masked=masked_phones,
+        sms_sid=next((r.get("sid") for _, r in sms_results if r.get("sid")), None),
+        call_sid=next((r.get("sid") for _, r in call_results if r.get("sid")), None),
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
 
@@ -546,11 +578,10 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
             db.commit()
             return checkin
 
-        # 3. Get active trusted contact
-        active_contact = db.query(models.EmergencyContact).filter(
-            models.EmergencyContact.user_id == checkin.user_id,
-            models.EmergencyContact.is_enabled == True
-        ).first()
+        # 3. Get every active guardian contact (falls back to any enabled
+        # contact if this specific user_id has none -- see
+        # _resolve_notify_contacts for why).
+        active_contacts = _resolve_notify_contacts(db, checkin.user_id)
 
         # 4. Get latest known GPS snapshot
         lat = checkin.last_known_latitude
@@ -566,7 +597,7 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
                 lat = last_event.latitude
                 lon = last_event.longitude
 
-        if not active_contact:
+        if not active_contacts:
             # No active trusted contact configured
             checkin.escalation_status = "no_trusted_contact"
             checkin.dispatched_at = now_utc
@@ -587,77 +618,73 @@ def escalate_checkin(db: Session, checkin: models.SafeCheckIn) -> models.SafeChe
             )
             return checkin
 
-        # 5. Trigger Twilio emergency communication
-        masked_phone = comms_service.mask_phone_number(active_contact.phone)
-        maps_link = f"https://www.google.com/maps?q={lat:.6f},{lon:.6f}" if (lat is not None and lon is not None) else None
-        loc_text = f" Last known location: {maps_link}." if maps_link else ""
-        user_note = f" Check-in note: '{checkin.checkin_text.strip()}'." if checkin.checkin_text else ""
+        # 5. Trigger Twilio emergency communication to every guardian contact.
+        # Short, direct message -- the traveler missed a safety check-in,
+        # not a long formatted report.
+        names = ", ".join(c.name for c in active_contacts)
+        masked_phones = ", ".join(comms_service.mask_phone_number(c.phone) for c in active_contacts)
+        note_suffix = f" Note: {checkin.checkin_text.strip()}" if checkin.checkin_text else ""
+        escalation_note = f"Missed safety check-in.{note_suffix}"
 
-        escalation_message = (
-            f"DEAD-MAN'S SWITCH EMERGENCY ALERT: Traveler '{checkin.user_id}' missed their scheduled safety check-in."
-            f"{user_note}{loc_text} Please attempt to reach them immediately or contact emergency services (112)."
-        )
+        results = []
+        for contact in active_contacts:
+            sms_res = comms_service.send_emergency_sms(
+                to_phone=contact.phone,
+                user_name="Traveler",
+                latitude=lat,
+                longitude=lon,
+                custom_message=escalation_note
+            )
+            call_res = comms_service.make_emergency_call(to_phone=contact.phone, user_name="Traveler")
+            results.append((contact, sms_res, call_res))
 
-        sms_res = comms_service.send_emergency_sms(
-            to_phone=active_contact.phone,
-            user_name=active_contact.name,
-            latitude=lat,
-            longitude=lon,
-            custom_message=escalation_message
-        )
-
-        call_res = comms_service.make_emergency_call(
-            to_phone=active_contact.phone,
-            user_name=active_contact.name
-        )
-
-        sms_status = sms_res.get("status", "failed")
-        call_status = call_res.get("status", "failed")
-        sms_sid = sms_res.get("sid")
-        call_sid = call_res.get("sid")
-
-        sms_ok = sms_status == "sent"
-        call_ok = call_status == "initiated"
+        any_sms_ok = any(s.get("status") == "sent" for _, s, _ in results)
+        any_call_ok = any(c.get("status") == "initiated" for _, _, c in results)
+        any_dry_run = any(s.get("status") == "dry_run" or c.get("status") == "dry_run" for _, s, c in results)
+        first_sms_sid = next((s.get("sid") for _, s, _ in results if s.get("sid")), None)
+        first_call_sid = next((c.get("sid") for _, _, c in results if c.get("sid")), None)
 
         # 6. Record dispatch result & Update escalation status
-        if sms_ok or call_ok:
+        if any_sms_ok or any_call_ok:
             checkin.escalation_status = "escalated"
-            overall_status = "completed" if (sms_ok and call_ok) else "partially_completed"
+            all_ok = all(s.get("status") == "sent" and c.get("status") == "initiated" for _, s, c in results)
+            overall_status = "completed" if all_ok else "partially_completed"
             err_msg = None
-        elif sms_status == "dry_run" or call_status == "dry_run":
+        elif any_dry_run:
             checkin.escalation_status = "dry_run"
             overall_status = "dry_run"
             err_msg = "DRY RUN: escalation request validated but not sent (TWILIO_DRY_RUN=true)."
         else:
             checkin.escalation_status = "twilio_failure"
             overall_status = "failed"
-            sms_err = sms_res.get("safe_message") or sms_res.get("error") or "SMS failed"
-            call_err = call_res.get("safe_message") or call_res.get("error") or "Call failed"
-            err_msg = f"SMS: {sms_err} | Call: {call_err}"
+            first_sms_err = results[0][1].get("safe_message") or results[0][1].get("error") or "SMS failed"
+            first_call_err = results[0][2].get("safe_message") or results[0][2].get("error") or "Call failed"
+            err_msg = f"SMS: {first_sms_err} | Call: {first_call_err}"
 
         checkin.dispatched_at = now_utc
-        checkin.dispatch_sms_sid = sms_sid
-        checkin.dispatch_call_sid = call_sid
-        checkin.dispatch_recipient_name = active_contact.name
-        checkin.dispatch_recipient_phone = masked_phone
+        checkin.dispatch_sms_sid = first_sms_sid
+        checkin.dispatch_call_sid = first_call_sid
+        checkin.dispatch_recipient_name = names
+        checkin.dispatch_recipient_phone = masked_phones
         checkin.dispatch_error = err_msg
 
         db.commit()
         db.refresh(checkin)
 
-        # Audit log in EmergencyEventLog
-        log_emergency_event(
-            db=db,
-            user_id=checkin.user_id,
-            event_type="dead_man_switch_escalation",
-            recipient_name=active_contact.name,
-            recipient_phone_masked=masked_phone,
-            status=overall_status,
-            sid=call_sid or sms_sid,
-            error_message=err_msg,
-            latitude=lat,
-            longitude=lon
-        )
+        # Audit log in EmergencyEventLog (one per contact)
+        for contact, sms_res, call_res in results:
+            log_emergency_event(
+                db=db,
+                user_id=checkin.user_id,
+                event_type="dead_man_switch_escalation",
+                recipient_name=contact.name,
+                recipient_phone_masked=comms_service.mask_phone_number(contact.phone),
+                status=overall_status,
+                sid=call_res.get("sid") or sms_res.get("sid"),
+                error_message=err_msg,
+                latitude=lat,
+                longitude=lon
+            )
         return checkin
 
     except Exception as exc:

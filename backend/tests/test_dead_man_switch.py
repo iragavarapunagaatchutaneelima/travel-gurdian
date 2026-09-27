@@ -210,13 +210,14 @@ class TestDeadMansSwitchEscalation(unittest.TestCase):
         mock_sms.assert_called_once()
         sms_kwargs = mock_sms.call_args[1]
         self.assertEqual(sms_kwargs["to_phone"], "+919876543212")
-        self.assertIn("DEAD-MAN'S SWITCH EMERGENCY ALERT", sms_kwargs["custom_message"])
+        self.assertIn("Missed safety check-in", sms_kwargs["custom_message"])
         self.assertIn("Walking through dark alleyway", sms_kwargs["custom_message"])
-        self.assertIn("12.971600,77.594600", sms_kwargs["custom_message"])
+        self.assertEqual(sms_kwargs["latitude"], 12.9716)
+        self.assertEqual(sms_kwargs["longitude"], 77.5946)
 
         mock_call.assert_called_once_with(
             to_phone="+919876543212",
-            user_name="Charlie Contact"
+            user_name="Traveler"
         )
 
     # =========================================================================

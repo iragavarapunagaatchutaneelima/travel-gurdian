@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { CloudRain, X, Loader2, Waves, Siren, Clock, ShieldPlus, Route as RouteIcon, RotateCcw, FlaskConical, AlertTriangle, ExternalLink } from "lucide-react";
+import { CloudRain, X, Loader2, Waves, Siren, Clock, ShieldPlus, Route as RouteIcon, RotateCcw, FlaskConical, AlertTriangle } from "lucide-react";
 import { RouteOption } from "../../data/routeData";
 import {
   fetchTwinState, simulateTwin, TwinResponse, TwinSimulationResponse, TwinImpacts, TwinSignal, TwinSegmentImpact, ProviderStatus,
@@ -131,7 +131,7 @@ export default function DigitalTwinPanel({ route, position, onOverlayChange, onC
   const liveRain = liveIm?.segments.map((s) => s.rain_mm_h).filter((v): v is number => v !== null) || [];
 
   return (
-    <div className="h-full flex flex-col bg-surface border-l border-border shadow-2xl text-foreground" role="dialog" aria-label="Digital Twin">
+    <div className="max-h-[75vh] flex flex-col bg-surface border border-border rounded-2xl text-foreground" role="dialog" aria-label="Digital Twin">
       <div className="px-4 py-3 border-b border-border flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 text-sm font-extrabold"><Waves className="h-4 w-4 text-(--primary)" /> Digital Twin</div>
@@ -200,7 +200,7 @@ export default function DigitalTwinPanel({ route, position, onOverlayChange, onC
 
             {shown && shown.emergency_readiness.share_of_route_with_reachable_hospital !== undefined && (
               <div className="text-[10px] text-(--muted-foreground)">
-                Readiness: {Math.round((shown.emergency_readiness.share_of_route_with_reachable_hospital || 0) * 100)}% of route segments have a hospital within 20 km and aren't flood-exposed. Based on {shown.emergency_readiness.basis}, not on every hospital near the road.
+                {Math.round((shown.emergency_readiness.share_of_route_with_reachable_hospital || 0) * 100)}% of your route has a hospital within 20 km.
               </div>
             )}
 
@@ -229,62 +229,37 @@ export default function DigitalTwinPanel({ route, position, onOverlayChange, onC
               </div>
             </div>
 
-            {shown && (
-              <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground) mb-2">How the weather propagates</div>
-                <ol className="relative ml-2 border-l-2 border-dotted border-(--primary)/40 space-y-3">
-                  {shown.effects.map((e, i) => (
-                    <li key={i} className="pl-4 relative">
-                      <span className="absolute -left-[7px] top-0.5 h-3 w-3 rounded-full bg-(--primary) ring-2 ring-surface" />
-                      <div className="font-bold">{e.rule}</div>
-                      <div className="text-(--muted-foreground)">in: {e.input}</div>
-                      <div>out: {typeof e.output === "string" ? e.output : JSON.stringify(e.output)}</div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
             {shown && shown.safe_locations_for_affected_segments.length > 0 && (
               <div>
-                <div className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground) mb-1">Nearest safe locations to affected stretches</div>
+                <div className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground) mb-1">Nearest emergency stops</div>
                 <ul className="space-y-1">
-                  {shown.safe_locations_for_affected_segments.map((l) => (
+                  {shown.safe_locations_for_affected_segments.slice(0, 2).map((l) => (
                     <li key={`${l.type}-${l.name}`} className="flex justify-between"><span>{l.name} <span className="text-(--muted-foreground)">({l.type})</span></span><span>{l.distance_km} km</span></li>
                   ))}
                 </ul>
               </div>
             )}
 
-            <div className="p-2.5 rounded-xl bg-elevated-surface border border-border space-y-1">
-              <div className="text-[10px] font-extrabold uppercase text-(--muted-foreground)">Uncertainty</div>
-              <div>Rain probability, next hours (max along route): {liveIm.uncertainty.precipitation_probability_next_hours_max_pct !== null ? `${liveIm.uncertainty.precipitation_probability_next_hours_max_pct}%` : "unavailable"} <span className="text-(--muted-foreground)">— PREDICTION, Open-Meteo</span></div>
-              <div>River discharge: GloFAS ensemble p25–p75 spread per segment</div>
-              <div className="font-bold">Impacts above: DETERMINISTIC ESTIMATE (rule-based; no model confidence claimed)</div>
-            </div>
-
             <div>
-              <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground) mb-1"><Siren className="h-3 w-3" /> Official alerts near route (GDACS)</div>
+              <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground) mb-1"><Siren className="h-3 w-3" /> Official alerts near route</div>
               {st.signals.status === "UNAVAILABLE" ? (
-                <div className="text-rose-600 font-semibold">PUBLIC SIGNALS UNAVAILABLE: {st.signals.reason}</div>
+                <div className="text-rose-600 font-semibold">Unavailable: {st.signals.reason}</div>
               ) : signals.length === 0 ? (
-                <div className="text-(--muted-foreground)">No GDACS alerts within range of this route in the last 14 days.</div>
+                <div className="text-(--muted-foreground)">No alerts near this route right now.</div>
               ) : (
                 <ul className="space-y-1.5">
-                  {signals.map((s) => (
+                  {signals.slice(0, 2).map((s) => (
                     <li key={s.id} className="p-2 rounded-lg bg-elevated-surface border border-border">
                       <div className="flex justify-between font-bold"><span>{s.name}</span><span className={s.alert_level === "Red" ? "text-rose-600" : s.alert_level === "Orange" ? "text-amber-600" : "text-emerald-600"}>{s.alert_level}</span></div>
-                      <div className="text-(--muted-foreground)">{s.type} · {s.distance_to_route_km} km from route{s.severity ? ` · ${s.severity}` : ""}</div>
-                      {s.report_url && <a href={s.report_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-(--primary) font-semibold">GDACS report <ExternalLink className="h-3 w-3" /></a>}
+                      <div className="text-(--muted-foreground)">{s.distance_to_route_km} km from route</div>
                     </li>
                   ))}
                 </ul>
               )}
-              <div className="mt-1 text-[10px] text-(--muted-foreground)">Social media feeds are not integrated (they require paid, authenticated API access); none are shown or invented.</div>
             </div>
 
             <div className="text-[10px] text-(--muted-foreground) border-t border-border pt-2">
-              {st.weather.attribution} · River data: Copernicus GloFAS via Open-Meteo · Alerts: GDACS. Route and POIs: Google, unchanged by the twin. Modelled {timeOf(st.generated_at)}.
+              Weather: {st.weather.attribution}. Updated {timeOf(st.generated_at)}.
             </div>
           </>
         )}

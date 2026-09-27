@@ -1016,9 +1016,10 @@ function LivingMapContent() {
           </div>
         )}
 
-        {/* Digital Twin slide-over (map stays visible beside it on desktop) */}
+        {/* Digital Twin: a compact floating card, not a full-screen sheet --
+            the map stays visible around it on every screen size. */}
         {showTwin && selectedRoute && (
-          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-[380px] z-30 animate-fadeIn">
+          <div className="absolute top-3 right-3 left-3 sm:left-auto w-auto sm:w-[340px] max-w-[340px] max-h-[75vh] mx-auto sm:mx-0 z-30 animate-fadeIn rounded-2xl overflow-hidden shadow-2xl">
             <DigitalTwinPanel
               route={selectedRoute}
               position={navPosition ? { latitude: navPosition.latitude, longitude: navPosition.longitude, accuracy: navPosition.accuracy } : null}
