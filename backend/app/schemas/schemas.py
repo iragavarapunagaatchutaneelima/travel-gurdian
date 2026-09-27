@@ -241,8 +241,10 @@ class TwilioDiagnosticResponse(BaseModel):
     host: str
     account_sid_configured: bool
     auth_token_configured: bool
+    auth_method: Optional[str] = None
     sender_configured: bool
     sender_masked: Optional[str] = None
+    messaging_service_configured: bool = False
     authenticated: bool
     status_code: Optional[int] = None
     account_status: Optional[str] = None
@@ -256,6 +258,8 @@ class TwilioConfigStatusResponse(BaseModel):
     host: str = "api.twilio.com"
     account_sid_configured: bool = False
     auth_token_configured: bool = False
+    auth_method: Optional[str] = None
     sender_configured: bool = False
+    messaging_service_configured: bool = False
     safe_message: Optional[str] = None
 

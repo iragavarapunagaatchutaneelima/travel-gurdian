@@ -68,46 +68,72 @@ class TwilioProvider(EmergencyCommunicationProvider):
 
     name = "twilio"
 
-    def validate_configuration(self, require_sender: bool = False) -> tuple[bool, Optional[str]]:
-        sid = settings.TWILIO_ACCOUNT_SID
-        token = settings.TWILIO_AUTH_TOKEN
-        sender = settings.TWILIO_PHONE_NUMBER
+    def _auth_credential(self) -> tuple[Optional[str], Optional[str]]:
+        """
+        Returns (username, password) for Twilio's HTTP Basic Auth. Twilio
+        accepts either an Account SID + Auth Token pair, or an API Key SID +
+        Secret pair -- the API Key pair takes precedence when both are set,
+        since that's the credential type actually issued to this project.
+        """
+        if settings.TWILIO_API_KEY and settings.TWILIO_API_SECRET:
+            return settings.TWILIO_API_KEY, settings.TWILIO_API_SECRET
+        return settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN
 
-        if not sid or not token:
+    def validate_configuration(self, require_sender: bool = False, require_sms_sender: bool = False) -> tuple[bool, Optional[str]]:
+        sid = settings.TWILIO_ACCOUNT_SID
+        auth_user, auth_pass = self._auth_credential()
+        sender = settings.TWILIO_PHONE_NUMBER
+        messaging_service = settings.TWILIO_MESSAGING_SERVICE_SID
+
+        if not sid or not auth_pass:
             missing = []
             if not sid:
                 missing.append("TWILIO_ACCOUNT_SID")
-            if not token:
-                missing.append("TWILIO_AUTH_TOKEN")
+            if not auth_pass:
+                missing.append("TWILIO_AUTH_TOKEN (or TWILIO_API_KEY + TWILIO_API_SECRET)")
             return False, f"Twilio credentials are not fully configured in backend environment ({', '.join(missing)} required)."
 
-        for label, val in [("TWILIO_ACCOUNT_SID", sid), ("TWILIO_AUTH_TOKEN", token)]:
+        for label, val in [("TWILIO_ACCOUNT_SID", sid), ("auth credential", auth_pass)]:
             if _is_placeholder(val):
                 return False, f"Twilio configuration for {label} contains a placeholder value. Real credentials required."
 
         if sid and not sid.startswith("AC"):
             return False, "TWILIO_ACCOUNT_SID does not look like a valid Twilio Account SID (must start with 'AC')."
 
+        # Voice calls have no Messaging Service equivalent -- they always
+        # need a real caller-ID phone number.
         if require_sender:
             if not sender or _is_placeholder(sender):
                 return False, (
                     "TWILIO_PHONE_NUMBER (your Twilio sending number) is not configured. "
-                    "It is required as the caller ID for outbound calls and as the sender "
-                    "number for SMS. Buy or port a number in the Twilio Console under "
-                    "Phone Numbers, then set TWILIO_PHONE_NUMBER before enabling live dispatch."
+                    "It is required as the caller ID for outbound calls. Buy or port a "
+                    "number in the Twilio Console under Phone Numbers, then set "
+                    "TWILIO_PHONE_NUMBER before enabling live dispatch."
+                )
+
+        # SMS can send via either a direct phone number OR a Messaging
+        # Service SID (Twilio picks the sender itself).
+        if require_sms_sender:
+            has_number = sender and not _is_placeholder(sender)
+            has_messaging_service = messaging_service and not _is_placeholder(messaging_service)
+            if not has_number and not has_messaging_service:
+                return False, (
+                    "Neither TWILIO_PHONE_NUMBER nor TWILIO_MESSAGING_SERVICE_SID is "
+                    "configured. SMS needs one of the two as the sender."
                 )
 
         return True, None
 
-    def _request(self, path: str, payload: Dict[str, Any]) -> tuple[int, Dict[str, Any], Optional[str]]:
-        is_valid, cfg_err = self.validate_configuration()
+    def _request(self, path: str, payload: Dict[str, Any], require_sms_sender: bool = False) -> tuple[int, Dict[str, Any], Optional[str]]:
+        is_valid, cfg_err = self.validate_configuration(require_sms_sender=require_sms_sender)
         if not is_valid:
             return 0, {}, cfg_err or "Twilio credentials missing."
 
         sid = settings.TWILIO_ACCOUNT_SID
         url = f"{TWILIO_API_BASE}/Accounts/{sid}/{path}"
 
-        auth_str = f"{sid}:{settings.TWILIO_AUTH_TOKEN}"
+        auth_user, auth_pass = self._auth_credential()
+        auth_str = f"{auth_user}:{auth_pass}"
         b64_auth = base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
         headers = {
             "Authorization": f"Basic {b64_auth}",
@@ -197,14 +223,22 @@ class TwilioProvider(EmergencyCommunicationProvider):
 
         masked_target = mask_phone_number(normalized_to)
 
+        # A Messaging Service SID lets Twilio pick the sender itself; fall
+        # back to a direct phone number if that's what's configured instead.
+        sms_sender_field = (
+            {"MessagingServiceSid": settings.TWILIO_MESSAGING_SERVICE_SID}
+            if settings.TWILIO_MESSAGING_SERVICE_SID
+            else {"From": settings.TWILIO_PHONE_NUMBER or "(no sender configured)"}
+        )
+
         # Dry-run never requires real credentials: the whole point is to let
         # the flow be built and exercised locally before a Twilio account
         # exists. Credentials are only required once TWILIO_DRY_RUN=false.
         if settings.TWILIO_DRY_RUN:
-            payload = {"From": settings.TWILIO_PHONE_NUMBER or "(TWILIO_PHONE_NUMBER not yet configured)", "To": normalized_to, "Body": sms_body}
+            payload = {**sms_sender_field, "To": normalized_to, "Body": sms_body}
             return _build_dry_run_result("SMS", masked_target, payload)
 
-        is_valid, cfg_err = self.validate_configuration(require_sender=True)
+        is_valid, cfg_err = self.validate_configuration(require_sms_sender=True)
         if not is_valid:
             logger.warning("Twilio SMS requested but configuration is invalid or missing.")
             return {
@@ -214,8 +248,8 @@ class TwilioProvider(EmergencyCommunicationProvider):
                 "error": cfg_err, "provider": "twilio",
             }
 
-        payload = {"From": settings.TWILIO_PHONE_NUMBER, "To": normalized_to, "Body": sms_body}
-        status_code, res_dict, err_msg = self._request("Messages.json", payload)
+        payload = {**sms_sender_field, "To": normalized_to, "Body": sms_body}
+        status_code, res_dict, err_msg = self._request("Messages.json", payload, require_sms_sender=True)
 
         if status_code in (200, 201):
             sid = res_dict.get("sid")
@@ -297,6 +331,7 @@ class TwilioProvider(EmergencyCommunicationProvider):
     def test_authentication(self) -> Dict[str, Any]:
         is_valid, cfg_err = self.validate_configuration()
         sid = settings.TWILIO_ACCOUNT_SID or "unconfigured"
+        auth_user, auth_pass = self._auth_credential()
 
         result: Dict[str, Any] = {
             "provider": "twilio",
@@ -305,9 +340,11 @@ class TwilioProvider(EmergencyCommunicationProvider):
             "account_sid": sid,
             "host": "api.twilio.com",
             "account_sid_configured": bool(settings.TWILIO_ACCOUNT_SID and not _is_placeholder(settings.TWILIO_ACCOUNT_SID)),
-            "auth_token_configured": bool(settings.TWILIO_AUTH_TOKEN and not _is_placeholder(settings.TWILIO_AUTH_TOKEN)),
-            "sender_configured": bool(settings.TWILIO_PHONE_NUMBER),
+            "auth_token_configured": bool(auth_pass and not _is_placeholder(auth_pass)),
+            "auth_method": "api_key" if (settings.TWILIO_API_KEY and settings.TWILIO_API_SECRET) else "auth_token",
+            "sender_configured": bool(settings.TWILIO_PHONE_NUMBER or settings.TWILIO_MESSAGING_SERVICE_SID),
             "sender_masked": mask_phone_number(settings.TWILIO_PHONE_NUMBER) if settings.TWILIO_PHONE_NUMBER else None,
+            "messaging_service_configured": bool(settings.TWILIO_MESSAGING_SERVICE_SID),
             "authenticated": False,
             "status_code": None,
             "safe_message": cfg_err or "Checking Twilio credentials...",
@@ -318,7 +355,7 @@ class TwilioProvider(EmergencyCommunicationProvider):
 
         # Fetch the account resource itself as a safe, side-effect-free auth check.
         url = f"{TWILIO_API_BASE}/Accounts/{sid}.json"
-        auth_str = f"{sid}:{settings.TWILIO_AUTH_TOKEN}"
+        auth_str = f"{auth_user}:{auth_pass}"
         b64_auth = base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
         req = urllib.request.Request(url, headers={"Authorization": f"Basic {b64_auth}", "Accept": "application/json"}, method="GET")
 

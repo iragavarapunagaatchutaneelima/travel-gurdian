@@ -60,6 +60,17 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_PHONE_NUMBER: Optional[str] = None
+    # Modern Twilio auth alternative to TWILIO_AUTH_TOKEN: an API Key SID +
+    # Secret pair (Twilio Console -> Account -> API keys & tokens), used as
+    # HTTP Basic Auth credentials in place of Account SID:Auth Token. Either
+    # pair works; API Key takes precedence when both are present.
+    TWILIO_API_KEY: Optional[str] = None
+    TWILIO_API_SECRET: Optional[str] = None
+    # Alternative to TWILIO_PHONE_NUMBER for SMS only: a Messaging Service
+    # SID lets Twilio pick a sender number itself. Voice calls still require
+    # TWILIO_PHONE_NUMBER (Twilio has no Messaging Service equivalent for
+    # voice caller ID).
+    TWILIO_MESSAGING_SERVICE_SID: Optional[str] = None
 
     # When true (the default), Twilio dispatch is fully simulated: the real
     # request is built and validated but never sent over the network, and the

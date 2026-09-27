@@ -60,13 +60,17 @@ def get_config_status():
     """
     from app.core.config import settings
     is_valid, cfg_err = comms_service.validate_configuration()
+    has_api_key_auth = bool(settings.TWILIO_API_KEY and settings.TWILIO_API_SECRET)
+    auth_configured = has_api_key_auth or bool(settings.TWILIO_AUTH_TOKEN and not settings.TWILIO_AUTH_TOKEN.startswith("your_"))
     return schemas.TwilioConfigStatusResponse(
         is_configured=is_valid,
         dry_run=settings.TWILIO_DRY_RUN,
         host="api.twilio.com",
         account_sid_configured=bool(settings.TWILIO_ACCOUNT_SID and not settings.TWILIO_ACCOUNT_SID.startswith("your_")),
-        auth_token_configured=bool(settings.TWILIO_AUTH_TOKEN and not settings.TWILIO_AUTH_TOKEN.startswith("your_")),
-        sender_configured=bool(settings.TWILIO_PHONE_NUMBER),
+        auth_token_configured=auth_configured,
+        auth_method="api_key" if has_api_key_auth else "auth_token",
+        sender_configured=bool(settings.TWILIO_PHONE_NUMBER or settings.TWILIO_MESSAGING_SERVICE_SID),
+        messaging_service_configured=bool(settings.TWILIO_MESSAGING_SERVICE_SID),
         safe_message=cfg_err or "Twilio configuration is active."
     )
 
