@@ -25,6 +25,12 @@ import {
 } from "lucide-react";
 import DigitalTwinPanel, { TwinOverlay } from "../components/DigitalTwinPanel";
 import { saveActiveJourney } from "@/services/activeJourney";
+import nextDynamic from "next/dynamic";
+import Link from "next/link";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
+// MapLibre is only needed when the connection drops; keep it out of the
+// online bundle. (Aliased: this module also exports `dynamic` route config.)
+const OfflineMapView = nextDynamic(() => import("../components/OfflineMapView"), { ssr: false });
 import jsPDF from "jspdf";
 
 export const dynamic = "force-dynamic";
@@ -218,6 +224,8 @@ function LivingMapContent() {
 
   // Offline Pack State
   const [isOffline, setIsOffline] = useState(false);
+  // Downloaded pack shown automatically when the connection drops.
+  const { activePack: offlineActivePack } = useOfflineStatus();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [offlinePackInfo, setOfflinePackInfo] = useState<any>(null);
@@ -953,18 +961,60 @@ function LivingMapContent() {
       <Header />
 
       {/* Main Viewport Map Container (Section 10: Map occupies most of viewport) */}
-      <main className="flex-1 min-h-0 relative w-full overflow-hidden flex flex-col">
+      {/* isolate: map overlays stack inside <main>, so none of them can cover
+          the fixed bottom nav (and its SOS button). */}
+      <main className="flex-1 min-h-0 relative isolate w-full overflow-hidden flex flex-col">
         
         {/* Offline Banner */}
         {isOffline && (
           <div className="bg-amber-600 text-white text-[11px] py-1 px-4 text-center font-bold tracking-wide flex items-center justify-center gap-2 shrink-0 z-30 shadow-sm">
             <WifiOff className="h-3.5 w-3.5" />
-            <span>OFFLINE MODE — USING LOCALLY SAVED TRAVEL PACK DATA</span>
+            <span>
+              {offlineActivePack?.mapPack?.tileCount
+                ? "OFFLINE — SHOWING YOUR DOWNLOADED PACK'S OFFLINE MAP"
+                : "OFFLINE — LIVE MAP NEEDS A CONNECTION"}
+            </span>
           </div>
         )}
 
         {/* The Google Maps Canvas */}
         <div ref={mapContainer} className="w-full h-full relative" />
+
+        {/* Automatic offline switch: Google Maps can't load without a
+            connection (and its tiles are never cached), so show the
+            downloaded pack on the MapLibre offline map instead. */}
+        {isOffline && (
+          // z-[45]: above the online map controls and the Google "map failed
+          // to load" overlay (z-40), which is exactly what shows offline.
+          // Info bar goes on top: the global offline banner pushes this
+          // full-height page below the viewport, so a bottom bar would sit
+          // under the fixed nav.
+          <div className="absolute inset-0 z-[45] bg-background flex flex-col">
+            {offlineActivePack?.mapPack?.tileCount ? (
+              <>
+                <div className="px-4 py-2.5 bg-surface border-b border-border text-[11px] text-(--muted-foreground) space-y-1">
+                  <div className="font-bold text-foreground">{offlineActivePack.packName}</div>
+                  <div>
+                    Offline map of your downloaded route. Live routing, traffic, place search and the Digital Twin need a
+                    connection; route recalculation is unavailable offline.
+                  </div>
+                  <Link href="/offline-mode" className="inline-block font-bold text-(--primary)">Open Survival Card, turn list and offline AI →</Link>
+                </div>
+                <OfflineMapView pack={offlineActivePack} className="flex-1 min-h-0 w-full" />
+              </>
+            ) : (
+              <div className="m-auto max-w-sm text-center p-6 space-y-2">
+                <WifiOff className="h-10 w-10 mx-auto text-(--muted-foreground)" />
+                <div className="text-sm font-extrabold">You're offline</div>
+                <p className="text-xs text-(--muted-foreground)">
+                  The live map needs a connection, and no offline pack with map tiles is downloaded on this device.
+                  Emergency calls still work wherever there is voice signal.
+                </p>
+                <Link href="/offline-mode" className="inline-block text-xs font-bold text-(--primary)">Open offline tools →</Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Digital Twin slide-over (map stays visible beside it on desktop) */}
         {showTwin && selectedRoute && (

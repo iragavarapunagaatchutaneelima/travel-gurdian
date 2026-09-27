@@ -65,6 +65,7 @@ explicit "unavailable". A bare number with no provenance fails the test.
 | 35 | AI trusted contact | **PASS** | From backend store; phone never shown unmasked; contact location never claimed |
 | 36 | Twin API guards | **PASS** | Bad lat → 422; 500 mm/h → 400; chained simulation → 400; 70 mm/h → HIGH with delay `null` (not quantified); social media `NOT_INTEGRATED` |
 | 37 | Digital Twin panel + what-if | **PASS** | Opens on Live Map for a real Google route, shows sourced state and propagation chain, runs 70 mm/h simulation (violent-rain advisory shown), returns to Live. Asserts **zero** `/emergency/`, `/assist/sos` or check-in confirm requests during simulation |
+| 39 | Automatic online/offline switch on Live Map | **PASS** | `e2e/05-pwa-and-network.spec.ts`: real `context.setOffline(true)` on /map shows an honest "live map needs a connection" state (no pack in a fresh context) instead of a blank Google canvas under a banner claiming pack data; SOS in the bottom nav stays topmost and clickable (test verified to fail if the overlay covers it); reconnecting restores the live map. With a downloaded pack (verified manually), the MapLibre offline map of that pack replaces Google Maps automatically |
 | 38 | Journey shared with AI / My Journeys | **PASS** | Live Map publishes the real selected route (destination, waypoints, score); My Journeys shows it instead of invented trips |
 
 ## Flakiness: root causes found and fixed (2026-09-27)

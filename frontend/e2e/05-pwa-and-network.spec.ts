@@ -39,6 +39,37 @@ test("App recovers cleanly when network returns, without destroying offline pack
   await expect(page.getByText("Journey & Safety Overview")).toBeVisible({ timeout: 10_000 });
 });
 
+// Scenario 39: Live Map switches automatically when the connection drops.
+// A fresh browser context has no downloaded pack, so the honest state is
+// "live map needs a connection" (not a blank Google canvas under a banner
+// claiming pack data is in use). SOS must stay reachable.
+test("Live Map switches to an honest offline state and back, with SOS reachable", async ({ page, context }) => {
+  await page.goto("/map?fromName=Hyderabad&destName=Mumbai&fromLat=17.385&fromLng=78.4867&destLat=19.076&destLng=72.8777");
+  await page.waitForLoadState("domcontentloaded");
+  await context.setOffline(true);
+  await expect(page.getByText("You're offline", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("OFFLINE — LIVE MAP NEEDS A CONNECTION")).toBeVisible();
+  await expect(page.getByText("USING LOCALLY SAVED TRAVEL PACK DATA")).toHaveCount(0);
+
+  // Mobile width shows the bottom nav; its SOS item must be the topmost
+  // element at its own position (not covered by the offline overlay).
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByText("SOS", { exact: true }).last()).toBeVisible();
+  const sosOnTop = await page.evaluate(() => {
+    const sos = [...document.querySelectorAll("a, button")].find(
+      (e) => (e as HTMLElement).innerText.trim() === "SOS" && e.getBoundingClientRect().height > 0
+    );
+    if (!sos) return false;
+    const b = sos.getBoundingClientRect();
+    const top = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+    return !!top && (top === sos || sos.contains(top));
+  });
+  expect(sosOnTop).toBe(true);
+
+  await context.setOffline(false);
+  await expect(page.getByText("You're offline", { exact: true })).toHaveCount(0, { timeout: 10_000 });
+});
+
 // Scenario 31: PWA reload
 test("Hard reload does not freeze the browser or lose the service worker", async ({ page }) => {
   await page.goto("/dashboard");
