@@ -27,7 +27,7 @@ node scripts/check-env.mjs     # shows what's set and where; never prints values
 | `GOOGLE_ROUTES_API_KEY` | next-server | no | falls back to the Maps key | Routes API (two-wheeler routing) and server-side Places lookups. IP-restricted. |
 | `GEMINI_API_KEY` | next-server | no | — | AI Guardian conversational layer. Without it, answers come from the deterministic grounded tools, and the UI says so. |
 | `GEMINI_MODEL` | next-server | no | `gemini-2.5-flash` | Model id; the UI shows the actual configured model. |
-| `BACKEND_API_URL` | next-server | no | `http://127.0.0.1:8000/api` | FastAPI origin behind the same-origin `/backend-api/*` proxy. |
+| `BACKEND_API_URL` | next-server | **yes, on Vercel/any real deployment** | `http://127.0.0.1:8000/api` (dev only) | FastAPI origin behind the same-origin `/backend-api/*` proxy, baked into the rewrite at **build** time. Set as a Vercel Production (and Preview) env var to `https://<backend-host>/api`, then redeploy. On Vercel, `next.config.ts` fails the build if this is unset or points at localhost, instead of silently shipping a broken proxy ("Digital Twin: HTTP 404"). See `frontend/src/config/backendApiUrl.ts`. |
 | `NUGEN_API_KEY` | backend | for Task 2 | — | Nugen alignment, deployment, inference. |
 | `NUGEN_API_URL` | backend | no | `https://api.nugen.in/api/v3` | Nugen API base. |
 | `NUGEN_BASE_MODEL_ID` | backend | no | — | Alignment-ready base model picked from `GET /models/base`. Recorded from real output only. |

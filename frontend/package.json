@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "tsx src/scripts/testNavigation.ts && tsx src/scripts/testNavigationAudit.ts && tsx src/scripts/testGeminiTools.ts && tsx src/scripts/testOfflineGuardian.ts && tsx src/scripts/testOfflineVectorTiles.ts && tsx src/scripts/testSafetyCheckIn.ts && tsx src/scripts/testProductionHardening.ts && tsx src/scripts/testGroundedAnswers.ts",
+    "test": "tsx src/scripts/testNavigation.ts && tsx src/scripts/testNavigationAudit.ts && tsx src/scripts/testGeminiTools.ts && tsx src/scripts/testOfflineGuardian.ts && tsx src/scripts/testOfflineVectorTiles.ts && tsx src/scripts/testSafetyCheckIn.ts && tsx src/scripts/testProductionHardening.ts && tsx src/scripts/testGroundedAnswers.ts && tsx src/scripts/testBackendApiUrlConfig.ts && tsx src/scripts/testOfflineDownloadContract.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

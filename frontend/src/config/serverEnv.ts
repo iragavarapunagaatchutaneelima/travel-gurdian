@@ -5,8 +5,21 @@
  *
  * Canonical source: repository-root /.env.local (see ENVIRONMENT.md).
  */
+import { resolveBackendApiUrl } from "./backendApiUrl";
+
 if (typeof window !== "undefined") {
   throw new Error("serverEnv must never be imported into browser code.");
+}
+
+const _backend = resolveBackendApiUrl();
+if (_backend.fatalMisconfiguration) {
+  // Route handlers call the backend directly (server-to-server); on Vercel a
+  // silent localhost fallback here fails every AI Guardian / Nugen request
+  // with no clue why. Fail loudly at first import instead.
+  throw new Error(`[serverEnv] ${_backend.fatalMisconfiguration}`);
+}
+if (_backend.warning) {
+  console.warn(`[serverEnv] ${_backend.warning}`);
 }
 
 function readKey(name: string): string | undefined {
@@ -25,5 +38,5 @@ export const serverEnv = {
   googleRoutesApiKey: readKey("GOOGLE_ROUTES_API_KEY"),
   googleMapsPublicKey: readKey("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"),
   // FastAPI origin; route handlers call it directly (server-to-server).
-  backendApiUrl: (process.env.BACKEND_API_URL || "http://127.0.0.1:8000/api").replace(/\/$/, ""),
+  backendApiUrl: _backend.url,
 } as const;

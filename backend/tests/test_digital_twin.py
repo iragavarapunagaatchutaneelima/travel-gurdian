@@ -20,6 +20,7 @@ os.environ["TWILIO_DRY_RUN"] = "true"
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
+from app.core.config import settings  # noqa: E402
 from app.services.twin import flood, http_cache, model, signals, weather  # noqa: E402
 from app.services.twin.http_cache import FetchError  # noqa: E402
 
@@ -273,6 +274,59 @@ class TestTwinApi(unittest.TestCase):
         self.assertEqual((body["status"], body["point"]), ("UNAVAILABLE", None))
         self.assertEqual(self.client.get("/api/twin/weather", params={"lat": 95, "lng": 78.5}).status_code, 422)
         self.assertEqual(self.client.get("/api/twin/weather", params={"lat": 17.4}).status_code, 422)
+
+
+class TestTwinRouteRegistration(unittest.TestCase):
+    """
+    Route-registration contract, independent of business logic: guards
+    against the exact class of production bug this was written for --
+    app.include_router(twin.router, prefix=...) being removed, re-prefixed,
+    or never reaching /api/twin/* -- which surfaces in a browser as
+    "Digital Twin: HTTP 404" with no other symptom.
+
+    A 404 specifically means "no route matched this path/method" (FastAPI
+    dispatches to a route handler before any of that handler's own logic or
+    validation runs). Sending a deliberately invalid payload and asserting
+    the response is NOT 404 therefore proves the route exists at that exact
+    path, independent of whatever the handler does with the payload -- this
+    is robust across FastAPI's internal route-storage representation
+    (verified 0.141.1 wraps include_router() results as lazy _IncludedRouter
+    objects, not a flat list of APIRoute in app.routes, so introspecting
+    app.routes directly would be version-fragile).
+    """
+
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_twin_state_route_exists_under_api_v1_prefix(self):
+        res = self.client.post(f"{settings.API_V1_STR}/twin/state", json={})
+        self.assertNotEqual(res.status_code, 404, "POST /api/twin/state must be registered (got 404: route missing)")
+        self.assertEqual(res.status_code, 422)  # missing required "route" -> validation error, not "route not found"
+
+    def test_twin_simulate_route_exists_under_api_v1_prefix(self):
+        res = self.client.post(f"{settings.API_V1_STR}/twin/simulate", json={})
+        self.assertNotEqual(res.status_code, 404, "POST /api/twin/simulate must be registered (got 404: route missing)")
+        self.assertEqual(res.status_code, 422)
+
+    def test_twin_weather_route_exists_under_api_v1_prefix(self):
+        res = self.client.get(f"{settings.API_V1_STR}/twin/weather")  # missing required lat/lng
+        self.assertNotEqual(res.status_code, 404, "GET /api/twin/weather must be registered (got 404: route missing)")
+        self.assertEqual(res.status_code, 422)
+
+    def test_twin_prefix_is_api_v1_str(self):
+        # settings.API_V1_STR is "/api" today; this documents that the
+        # deployed contract is /api/twin/*, matching what next.config.ts's
+        # /backend-api/* rewrite must proxy to (BACKEND_API_URL already
+        # includes /api -- see next.config.ts and ENVIRONMENT.md).
+        self.assertEqual(settings.API_V1_STR, "/api")
+
+    def test_no_route_under_bare_backend_api_prefix(self):
+        # /backend-api/* is the FRONTEND's same-origin rewrite prefix, not a
+        # real backend path -- a request straight to it on the FastAPI app
+        # itself must 404, confirming the two layers' contracts are not
+        # confused with each other.
+        res = self.client.post("/backend-api/twin/state", json={})
+        self.assertEqual(res.status_code, 404)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import fs from "node:fs";
 import path from "node:path";
+import { resolveBackendApiUrl } from "./src/config/backendApiUrl";
 
 // Canonical configuration lives in the repository-root /.env.local (shared
 // with the FastAPI backend; see ENVIRONMENT.md). Next.js only auto-loads env
@@ -27,7 +28,23 @@ import path from "node:path";
 // Server-only backend target for the same-origin API proxy (see rewrites() below).
 // Never exposed to the browser bundle because it is read only inside next.config.ts
 // and the rewrite destination, both of which execute on the Next.js server.
-const BACKEND_API_URL = process.env.BACKEND_API_URL || "http://127.0.0.1:8000/api";
+//
+// Fails the BUILD (not just a runtime 404) when this is a production/Vercel
+// build and BACKEND_API_URL is missing or points at localhost -- the exact
+// misconfiguration that silently ships a /backend-api/* rewrite to an
+// address that doesn't exist in production ("Digital Twin: HTTP 404").
+const { url: BACKEND_API_URL, fatalMisconfiguration, warning } = resolveBackendApiUrl();
+if (fatalMisconfiguration) {
+  // Vercel specifically: fail the build loudly rather than silently ship a
+  // rewrite to an address that doesn't exist on Vercel's infra.
+  throw new Error(`[next.config.ts] ${fatalMisconfiguration}`);
+}
+if (warning) {
+  // A non-Vercel production-looking build (e.g. local `next build && next
+  // start`, or self-hosted): don't break a developer's local production-mode
+  // test, just make the misconfiguration visible.
+  console.warn(`[next.config.ts] ${warning}`);
+}
 
 const securityHeaders = [
   {
