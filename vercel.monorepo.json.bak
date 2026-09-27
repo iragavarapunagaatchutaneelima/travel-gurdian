@@ -9,6 +9,6 @@
     { "src": "/(.*)", "dest": "frontend/$1" }
   ],
   "crons": [
-    { "path": "/backend-api/assist/checkin/check-overdue", "schedule": "*/1 * * * *" }
+    { "path": "/backend-api/assist/checkin/check-overdue", "schedule": "0 0 * * *" }
   ]
 }

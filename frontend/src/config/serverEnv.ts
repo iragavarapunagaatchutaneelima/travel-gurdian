@@ -12,9 +12,8 @@ if (typeof window !== "undefined") {
 }
 
 // Route handlers (app/api/ai/route.ts) call the backend directly
-// (server-to-server). On Vercel this resolves to the SAME deployment's
-// backend Function via VERCEL_URL, with no env var required -- see
-// config/backendApiUrl.ts for the full explanation.
+// (server-to-server). Set BACKEND_API_URL explicitly on Vercel once the
+// monorepo backend is verified reachable -- see config/backendApiUrl.ts.
 const _backend = resolveBackendApiUrl();
 if (_backend.warning) {
   console.warn(`[serverEnv] ${_backend.warning}`);

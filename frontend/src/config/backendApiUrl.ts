@@ -1,29 +1,36 @@
 /**
  * Single source of truth for resolving the backend base URL, used by both
  * next.config.ts (the /backend-api/* rewrite destination, for local dev
- * only -- see below) and config/serverEnv.ts (direct server-to-server calls
- * from Next.js route handlers, e.g. app/api/ai/route.ts).
+ * only) and config/serverEnv.ts (direct server-to-server calls from Next.js
+ * route handlers, e.g. app/api/ai/route.ts).
  *
  * ARCHITECTURE (single Vercel project, no separate backend host):
- * The FastAPI backend is deployed as a Vercel Python Function in THIS SAME
- * project (see /vercel.json, backend/index.py, backend/app/main.py's
- * /backend-api/* router aliases). Vercel's own top-level `routes` in
- * vercel.json intercept /backend-api/* and forward it to that function
- * BEFORE Next.js's rewrites ever run -- so the browser's calls to
- * /backend-api/* need no configuration at all in production.
+ * The FastAPI backend deploys as a Vercel Python Function in THIS SAME
+ * project (/vercel.json, backend/index.py). Vercel's own top-level `routes`
+ * intercept /backend-api/* and forward it to that function BEFORE Next.js's
+ * rewrites ever run -- this only works once the project's Root Directory is
+ * the repo root (a Vercel dashboard setting), so vercel.json is actually
+ * read. While Root Directory is still `frontend` (or for any deployment
+ * where the Python function isn't actually live), /backend-api/* has no
+ * real backend behind it at all.
  *
- * The one case that DOES need resolving here is server-to-server: a Next.js
- * Route Handler (its own separate serverless function) calling the backend
- * directly needs an absolute URL. Vercel sets VERCEL_URL (the deployment's
- * own hostname) automatically at runtime, so `https://${VERCEL_URL}/backend-api`
- * reaches the same deployment's backend function with ZERO required env var.
+ * IMPORTANT, learned the hard way: this resolver used to default, on any
+ * Vercel build with no explicit BACKEND_API_URL, to
+ * `https://${VERCEL_URL}/backend-api` -- i.e. the deployment's OWN host.
+ * When the Python function isn't actually being served (Root Directory not
+ * yet fixed, or any other reason), that makes next.config.ts's own
+ * /backend-api/* rewrite point AT ITSELF: a real self-referencing infinite
+ * loop, observed live as Vercel's own "508 INFINITE_LOOP_DETECTED" on every
+ * page. Guessing a same-host URL automatically is therefore never safe.
  *
- * BACKEND_API_URL remains a supported explicit override (e.g. a separate
- * backend host, or local dev against `uvicorn app.main:app`), but is no
- * longer required on Vercel -- unlike an earlier version of this resolver,
- * which incorrectly treated an unset BACKEND_API_URL on Vercel as fatal.
- * That was correct advice under the OLD architecture (a same-origin rewrite
- * to an external host); it is not under this one.
+ * Instead: an unset BACKEND_API_URL on Vercel now resolves to plain
+ * localhost, exactly like local dev -- which back on Vercel's servers just
+ * fails to connect (a clean, honest "unavailable", never a loop). Once the
+ * monorepo backend is verified actually reachable, set BACKEND_API_URL as
+ * an EXPLICIT Vercel Production env var to this project's own STABLE
+ * production URL + /backend-api (e.g.
+ * https://travel-guardian-<org>.vercel.app/backend-api) -- an explicit,
+ * deliberately-set value, never an automatic same-host guess.
  */
 
 export const LOCALHOST_BACKEND_API_URL = "http://127.0.0.1:8000/api";
@@ -35,36 +42,16 @@ export function isVercelBuild(env: NodeJS.ProcessEnv = process.env): boolean {
 
 export interface ResolveResult {
   url: string;
-  /** Informational only now (no longer build-breaking) -- see module doc. */
   warning?: string;
 }
 
 /**
- * Resolves the backend base URL:
- *   1. Explicit BACKEND_API_URL always wins (a real override, or a plain
- *      local-dev value like http://127.0.0.1:8000/api).
- *   2. On Vercel with no override: the SAME deployment's own /backend-api
- *      path, via VERCEL_URL (always set by the platform).
- *   3. Otherwise (local dev, VERCEL_URL not yet known for some reason):
- *      the localhost default.
+ * Resolves the backend base URL. Explicit BACKEND_API_URL always wins;
+ * otherwise always the localhost default, deliberately, everywhere -- see
+ * module doc for why an automatic Vercel same-host guess is unsafe.
  */
 export function resolveBackendApiUrl(env: NodeJS.ProcessEnv = process.env): ResolveResult {
   const raw = (env.BACKEND_API_URL || "").trim();
   if (raw) return { url: raw.replace(/\/$/, "") };
-
-  if (isVercelBuild(env)) {
-    if (env.VERCEL_URL) {
-      return { url: `https://${env.VERCEL_URL}/backend-api` };
-    }
-    // Should not happen in practice -- Vercel always sets VERCEL_URL -- but
-    // never silently fall back to an unreachable localhost on Vercel.
-    return {
-      url: LOCALHOST_BACKEND_API_URL,
-      warning: "Running on Vercel but VERCEL_URL is unset and BACKEND_API_URL is not overridden; " +
-        "server-to-server backend calls (AI Guardian weather/Nugen) will fail. This should not happen on a normal " +
-        "Vercel deployment -- if it does, set BACKEND_API_URL explicitly as a fallback.",
-    };
-  }
-
   return { url: LOCALHOST_BACKEND_API_URL };
 }

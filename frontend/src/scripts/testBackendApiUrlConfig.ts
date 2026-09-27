@@ -1,12 +1,14 @@
-// TESTS: backend base URL resolution (single-Vercel-project architecture).
+// TESTS: backend base URL resolution.
 //
-// The FastAPI backend is deployed as a Vercel Python Function in the SAME
-// Vercel project (backend/index.py, /vercel.json). /backend-api/* is served
-// directly by that function via vercel.json's top-level `routes` -- the
-// browser needs no configuration in production at all. The one thing that
-// DOES need resolving is server-to-server calls from Next.js Route Handlers,
-// which use VERCEL_URL (the deployment's own hostname, set automatically by
-// Vercel) to reach that same backend Function with zero required env var.
+// Regression coverage for a REAL production incident: this resolver used to
+// default, on Vercel with no explicit BACKEND_API_URL, to
+// `https://${VERCEL_URL}/backend-api` -- the deployment's OWN host. When the
+// backend Python function wasn't actually being served there (e.g. the
+// project's Root Directory wasn't yet pointed at the repo root), that made
+// next.config.ts's /backend-api/* rewrite point AT ITSELF: a genuine
+// self-referencing infinite loop, observed live as Vercel's own
+// "508 INFINITE_LOOP_DETECTED" on every single page. An automatic same-host
+// guess is therefore never safe; these tests lock down that it stays gone.
 import { resolveBackendApiUrl, isVercelBuild, LOCALHOST_BACKEND_API_URL } from "../config/backendApiUrl.js";
 
 let testsPassed = 0;
@@ -30,31 +32,28 @@ function env(overrides: Partial<NodeJS.ProcessEnv>): NodeJS.ProcessEnv {
 
 console.log("=== BACKEND BASE URL RESOLUTION TESTS ===");
 
-// --- Local dev: unchanged, no env var required ---
 let r = resolveBackendApiUrl(env({}));
 assert(r.url === LOCALHOST_BACKEND_API_URL && !r.warning, "Local dev, nothing set: defaults to localhost, no warning");
 
 r = resolveBackendApiUrl(env({ BACKEND_API_URL: "http://127.0.0.1:9000/api" }));
 assert(r.url === "http://127.0.0.1:9000/api" && !r.warning, "Local dev, explicit override: used verbatim");
 
-// --- Vercel: resolves to the SAME deployment via VERCEL_URL, no env var needed ---
+// --- The actual regression: Vercel + no override must NEVER self-reference ---
 r = resolveBackendApiUrl(env({ VERCEL: "1", VERCEL_URL: "travel-guardian-abc123.vercel.app" }));
-assert(r.url === "https://travel-guardian-abc123.vercel.app/backend-api" && !r.warning,
-  "Vercel + VERCEL_URL, no BACKEND_API_URL override: resolves to the same deployment's own /backend-api, no warning");
+assert(r.url === LOCALHOST_BACKEND_API_URL,
+  "Vercel + VERCEL_URL set, no explicit BACKEND_API_URL: NEVER resolves to the same host (the exact 508 loop this fixes)");
+assert(!r.url.includes("vercel.app"), "Resolved URL never contains the deployment's own vercel.app hostname when unset");
 
-r = resolveBackendApiUrl(env({ VERCEL: "1", VERCEL_URL: "travel-guardian-preview-xyz.vercel.app" }));
-assert(r.url.includes("travel-guardian-preview-xyz.vercel.app"), "Works for a Preview deployment's own VERCEL_URL too");
+r = resolveBackendApiUrl(env({ VERCEL: "1" })); // no VERCEL_URL either
+assert(r.url === LOCALHOST_BACKEND_API_URL, "Vercel with nothing set at all: still just the plain localhost default");
 
-// --- Explicit BACKEND_API_URL always wins, even on Vercel (e.g. a separate host) ---
+// --- Explicit BACKEND_API_URL always wins, including a deliberately-set same-host value ---
 r = resolveBackendApiUrl(env({ VERCEL: "1", VERCEL_URL: "travel-guardian-abc123.vercel.app", BACKEND_API_URL: "https://api.example.com/api" }));
-assert(r.url === "https://api.example.com/api" && !r.warning, "Explicit BACKEND_API_URL overrides VERCEL_URL-based resolution");
+assert(r.url === "https://api.example.com/api" && !r.warning, "Explicit BACKEND_API_URL always wins over any automatic guess");
 
-r = resolveBackendApiUrl(env({ VERCEL: "1", VERCEL_URL: "x.vercel.app", BACKEND_API_URL: "https://api.example.com/api/" }));
-assert(r.url === "https://api.example.com/api", "Trailing slash is stripped from an explicit override too");
-
-// --- Defensive edge case: Vercel but VERCEL_URL somehow missing (shouldn't happen) ---
-r = resolveBackendApiUrl(env({ VERCEL: "1" }));
-assert(!!r.warning, "Vercel with no VERCEL_URL and no override -> warns (defensive; VERCEL_URL is always set in practice)");
+r = resolveBackendApiUrl(env({ VERCEL: "1", BACKEND_API_URL: "https://travel-guardian-stable.vercel.app/backend-api/" }));
+assert(r.url === "https://travel-guardian-stable.vercel.app/backend-api",
+  "A deliberately-configured stable-domain override is honored verbatim (trailing slash stripped)");
 
 // --- isVercelBuild ---
 assert(isVercelBuild(env({ VERCEL: "1" })) === true, "isVercelBuild true when VERCEL is set");
