@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine
 from app.models import models
-from app.api import alerts, assess, guide, assist, emergency
+from app.api import alerts, assess, guide, assist, emergency, twin
 
 from contextlib import asynccontextmanager
 from app.services import checkin_scheduler
@@ -126,6 +126,9 @@ app.include_router(assist.router, prefix="/assist", tags=["Assistance / ASSIST (
 # Twilio Emergency Routes (both /api/emergency and root /emergency)
 app.include_router(emergency.router, prefix=f"{settings.API_V1_STR}/emergency", tags=["Emergency / TWILIO"])
 app.include_router(emergency.router, prefix="/emergency", tags=["Emergency / TWILIO (Root)"])
+
+# Weather-driven Digital Twin (HackCelestial Midnight Task 1)
+app.include_router(twin.router, prefix=f"{settings.API_V1_STR}/twin", tags=["Digital Twin"])
 
 
 @app.get("/")
