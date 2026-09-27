@@ -68,6 +68,15 @@ export default function OfflineMapView({ pack, className = "", style }: OfflineM
         style,
         center: [centerLng, centerLat],
         zoom: pack.mapPack.zoomRange[0],
+        // Never let the camera zoom out below the vector source's minzoom:
+        // MapLibre renders nothing from a vector source once the current
+        // zoom is below its `minzoom` (only the flat "background" style
+        // layer shows), which is exactly what fitBounds() below would do
+        // when it zooms out to fit a long, multi-hundred-km corridor into a
+        // small viewport. Clamping here keeps real roads/water/buildings
+        // visible at all times, at the cost of not fitting the whole route
+        // in one screen (the user pans/zooms instead).
+        minZoom: pack.mapPack.zoomRange[0],
         maxZoom: pack.mapPack.zoomRange[1] + 1,
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
