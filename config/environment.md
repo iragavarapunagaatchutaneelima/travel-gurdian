@@ -31,12 +31,11 @@ Empty values in `/.env.local` do not override a legacy value on the
 frontend; on the backend, pydantic treats an empty value as set-but-empty,
 and every consumer treats empty as "not configured".
 
-## Why the backend owns the Nugen key
+## Why the backend owns the Twilio credentials
 
-Nugen alignment, deployment, and inference run only in FastAPI. The Next.js
-AI route asks the backend for a Nugen explanation over the same-origin
-proxy, so `NUGEN_API_KEY` exists in exactly one process and is never
-reachable from the browser. The Twilio credentials follow the same rule.
+Emergency SMS/voice dispatch runs only in FastAPI. The Twilio Account SID,
+auth credentials and sender configuration exist in exactly one process and
+are never reachable from the browser.
 
 ## Why `NEXT_PUBLIC_*` values are spelled out literally
 

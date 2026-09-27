@@ -90,14 +90,6 @@ class Settings(BaseSettings):
     # full API surface (including emergency/contacts endpoints) to anyone.
     DISABLE_API_DOCS: bool = False
 
-    # Nugen Intelligence (server-side only; never exposed to the browser).
-    # Model IDs are recorded here only once the real Nugen workflow has
-    # produced them (see docs/NUGEN_INTEGRATION.md) -- never invented.
-    NUGEN_API_URL: str = "https://api.nugen.in/api/v3"
-    NUGEN_API_KEY: Optional[str] = None
-    NUGEN_BASE_MODEL_ID: Optional[str] = None
-    NUGEN_ALIGNED_MODEL_ID: Optional[str] = None
-
     class Config:
         case_sensitive = True
         env_file = (_legacy_env_path, _root_env_path)

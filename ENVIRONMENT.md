@@ -27,14 +27,12 @@ node scripts/check-env.mjs     # shows what's set and where; never prints values
 | `GOOGLE_ROUTES_API_KEY` | next-server | no | falls back to the Maps key | Routes API (two-wheeler routing) and server-side Places lookups. IP-restricted. |
 | `GEMINI_API_KEY` | next-server | no | — | AI Guardian conversational layer. Without it, answers come from the deterministic grounded tools, and the UI says so. |
 | `GEMINI_MODEL` | next-server | no | `gemini-2.5-flash` | Model id; the UI shows the actual configured model. |
-| `BACKEND_API_URL` | next-server | no | `http://127.0.0.1:8000/api` locally; auto-resolved on Vercel | **Local dev only** by default: the FastAPI origin behind the `/backend-api/*` rewrite when running `next dev` against `uvicorn app.main:app`. **On Vercel, not needed at all**: the backend is deployed as a Python Function in the *same* Vercel project (`/vercel.json`, `backend/index.py`), and Vercel's own routing serves `/backend-api/*` directly from it; server-to-server calls (AI Guardian, Nugen) auto-resolve to that same deployment via Vercel's own `VERCEL_URL`. Set this only to point at a genuinely separate backend host. See `frontend/src/config/backendApiUrl.ts` and `vercel.json`. |
-| `NUGEN_API_KEY` | backend | for Task 2 | — | Nugen alignment, deployment, inference. |
-| `NUGEN_API_URL` | backend | no | `https://api.nugen.in/api/v3` | Nugen API base. |
-| `NUGEN_BASE_MODEL_ID` | backend | no | — | Alignment-ready base model picked from `GET /models/base`. Recorded from real output only. |
-| `NUGEN_ALIGNED_MODEL_ID` | backend | no | — | The deployed aligned model used for inference. Recorded from real output only. |
+| `BACKEND_API_URL` | next-server | **yes on Vercel** | `http://127.0.0.1:8000/api` locally | The FastAPI origin behind the `/backend-api/*` rewrite. Locally this is `uvicorn app.main:app`. On Vercel, the backend is deployed as its own separate Vercel project (`backend/vercel.json`) -- set this explicitly to `https://<your-backend-project>.vercel.app/api`. See `frontend/src/config/backendApiUrl.ts`. |
 | `TWILIO_ACCOUNT_SID` | backend | only if dry run off | — | Twilio emergency SMS/voice. |
-| `TWILIO_AUTH_TOKEN` | backend | only if dry run off | — | Twilio auth. |
-| `TWILIO_PHONE_NUMBER` | backend | only if dry run off | — | Twilio sender / caller ID. |
+| `TWILIO_AUTH_TOKEN` | backend | only if dry run off (or use API Key pair below) | — | Twilio auth (classic Account SID + Auth Token). |
+| `TWILIO_API_KEY` / `TWILIO_API_SECRET` | backend | alternative to `TWILIO_AUTH_TOKEN` | — | Modern Twilio API Key + Secret auth pair; takes precedence over `TWILIO_AUTH_TOKEN` when both are set. |
+| `TWILIO_PHONE_NUMBER` | backend | only if dry run off (or use Messaging Service below) | — | Twilio sender / caller ID. Required for voice calls regardless. |
+| `TWILIO_MESSAGING_SERVICE_SID` | backend | alternative to `TWILIO_PHONE_NUMBER` for SMS only | — | Lets Twilio pick the SMS sender itself. |
 | `TWILIO_DRY_RUN` | backend | no | `true` | `true` builds and validates messages but never sends them. |
 | `DATABASE_URL` | backend | **recommended on Vercel** | `sqlite:///./travel_guardian.db` locally; `sqlite:////tmp/travel_guardian.db` on Vercel if unset | Database. On Vercel's read-only filesystem, an unset value falls back to `/tmp` so the app boots, but that storage is **ephemeral** (not shared or persistent across invocations) -- contacts/check-ins/logs will not reliably survive a cold start. Set to a real hosted Postgres for actual persistence. |
 | `CRON_SECRET` | backend | no | — | If set, required as `Authorization: Bearer <value>` on the `GET /assist/checkin/check-overdue` cron endpoint (Vercel sends this automatically when the var is set on the project). Optional hardening; the endpoint is idempotent either way. |

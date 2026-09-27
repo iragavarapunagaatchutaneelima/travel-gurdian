@@ -3,7 +3,7 @@
 // inventing anything when that data is missing.
 import * as fs from "fs";
 import * as path from "path";
-import { isWeatherQuestion, isTrustedContactQuestion, answerWeather, answerTrustedContact, explainWithNugen } from "../services/groundedAnswers.js";
+import { isWeatherQuestion, isTrustedContactQuestion, answerWeather, answerTrustedContact } from "../services/groundedAnswers.js";
 
 let testsPassed = 0;
 let testsFailed = 0;
@@ -128,24 +128,6 @@ function twinResponse(overrides: { weather?: any; flood?: any; signals?: any; se
   mockFetch(() => new Error("ECONNREFUSED"));
   a = await answerTrustedContact(null, BACKEND);
   assert(a.reply.includes("couldn't reach the contact service"), "contact service down -> honest message");
-
-  // Nugen explainer: sends the verified answer + data, reports honest states
-  const verifiedAnswer = { reply: "Route weather risk: LOW.", tool: "readWeatherImpact" as const, data: { route_weather_risk: "LOW" } };
-  mockFetch((url, init) => {
-    if (!url.endsWith("/nugen/explain")) return new Error("unexpected " + url);
-    const body = JSON.parse(String(init?.body));
-    return body.verified_answer === "Route weather risk: LOW." && body.data.route_weather_risk === "LOW"
-      ? { status: 200, body: { status: "OK", text: "Weather risk on your route is low.", model_id: "model_x", confidence_score: 91.2 } }
-      : { status: 200, body: { status: "UNAVAILABLE", reason: "bad request shape" } };
-  });
-  let n = await explainWithNugen("weather?", verifiedAnswer, BACKEND);
-  assert(n.status === "OK" && n.model_id === "model_x", "Nugen explainer receives verified answer + data");
-  mockFetch(() => ({ status: 502, body: {} }));
-  n = await explainWithNugen("weather?", verifiedAnswer, BACKEND);
-  assert(n.status === "UNAVAILABLE" && /502/.test(n.reason || ""), "Nugen backend error -> UNAVAILABLE with reason");
-  mockFetch(() => new Error("ECONNREFUSED"));
-  n = await explainWithNugen("weather?", verifiedAnswer, BACKEND);
-  assert(n.status === "UNAVAILABLE", "Nugen unreachable -> UNAVAILABLE (verified answer still used)");
 
   // Regression: fabricated journey values removed from pages that feed AI Guardian / escalation text
   const read = (p: string) => fs.readFileSync(path.resolve(process.cwd(), p), "utf-8");

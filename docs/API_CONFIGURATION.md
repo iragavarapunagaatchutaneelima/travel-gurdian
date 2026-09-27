@@ -24,19 +24,13 @@ your setup any time with `node scripts/check-env.mjs`.
    grounded tools and labels each reply "Gemini quota exceeded". Use a
    billed project for demos.
 
-## Nugen Intelligence (Midnight Task 2)
+## Twilio (emergency SMS/voice)
 
-1. Get an API key from your Nugen dashboard. Set `NUGEN_API_KEY`.
-2. Run the alignment workflow (base-model discovery, corpus upload,
-   benchmark, alignment, deployment); see
-   [NUGEN_INTEGRATION.md](NUGEN_INTEGRATION.md). It records the real model
-   IDs it obtains in `NUGEN_BASE_MODEL_ID` / `NUGEN_ALIGNED_MODEL_ID`.
-3. The key is read only by the backend. Never add a `NEXT_PUBLIC_` copy.
-
-## Twilio (optional; emergency SMS/voice)
-
-1. From https://console.twilio.com copy the Account SID and Auth Token, and
-   buy (or use the trial) phone number.
+1. From https://console.twilio.com copy the Account SID and either the Auth
+   Token, or an API Key SID + Secret pair (Account -> API keys & tokens).
+2. For SMS, use either a purchased phone number (`TWILIO_PHONE_NUMBER`) or a
+   Messaging Service SID (`TWILIO_MESSAGING_SERVICE_SID`). Voice calls always
+   need a real phone number.
 2. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`.
 3. Keep `TWILIO_DRY_RUN=true` until you've confirmed everything; then set it
    to `false`. Trial accounts can only send to verified numbers. See

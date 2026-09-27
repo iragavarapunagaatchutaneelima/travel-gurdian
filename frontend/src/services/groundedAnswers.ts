@@ -7,8 +7,7 @@
  *                                  point weather at the GPS position
  *  - trusted contact            -> backend contact store (device-scoped)
  *
- * Replies are deterministic and cite sources + timestamps. An LLM (Nugen)
- * may later rephrase them, but only from the `data` returned here.
+ * Replies are deterministic and cite sources + timestamps.
  */
 import { LiveTravelContext } from "../types/gemini";
 
@@ -131,35 +130,6 @@ export async function answerWeather(prompt: string, context: LiveTravelContext, 
     tool: "readWeatherImpact",
     data: { available: false, reason: "no route and no GPS" },
   };
-}
-
-export interface NugenExplanation {
-  status: "OK" | "REJECTED" | "UNAVAILABLE";
-  text?: string;
-  reason?: string;
-  model_id?: string | null;
-  confidence_score?: number | null;
-}
-
-/**
- * Asks the backend's Nugen aligned model to rephrase an already-verified
- * answer. The backend enforces the grounding check; here we only bound the
- * wait so a slow model never delays the verified answer (8 s cap).
- */
-export async function explainWithNugen(question: string, answer: GroundedAnswer, backendUrl: string): Promise<NugenExplanation> {
-  try {
-    const res = await fetch(`${backendUrl}/nugen/explain`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, verified_answer: answer.reply, data: answer.data }),
-      signal: AbortSignal.timeout(8000),
-      cache: "no-store",
-    });
-    if (!res.ok) return { status: "UNAVAILABLE", reason: `backend HTTP ${res.status}` };
-    return await res.json();
-  } catch (e: any) {
-    return { status: "UNAVAILABLE", reason: e?.name === "TimeoutError" ? "Nugen took longer than 8 s" : e?.message || "unreachable" };
-  }
 }
 
 function mask(phone: string): string {

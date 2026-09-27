@@ -13,7 +13,7 @@ import {
   LiveTravelContext
 } from "../../../types/gemini";
 import { serverEnv } from "../../../config/serverEnv";
-import { isWeatherQuestion, isTrustedContactQuestion, answerWeather, answerTrustedContact, explainWithNugen } from "../../../services/groundedAnswers";
+import { isWeatherQuestion, isTrustedContactQuestion, answerWeather, answerTrustedContact } from "../../../services/groundedAnswers";
 
 // This endpoint spends real Gemini/Places quota on every call, so it needs
 // the same baseline hardening as /api/routes/compute: reject requests that
@@ -57,39 +57,6 @@ export async function POST(req: Request) {
         ? await answerWeather(sanitizedPrompt, context, serverEnv.backendApiUrl)
         : await answerTrustedContact(req.headers.get("cookie"), serverEnv.backendApiUrl);
       const callId = `call_${Date.now()}`;
-
-      // Weather answers may be rephrased by the deployed Nugen aligned model
-      // (Midnight Task 2). It only restates the verified answer; the backend
-      // rejects anything that adds facts. Otherwise the verified text stands.
-      const hasData = grounded.data && (grounded.data as any).available !== false;
-      if (grounded.tool === "readWeatherImpact" && hasData) {
-        const nugen = await explainWithNugen(sanitizedPrompt, grounded, serverEnv.backendApiUrl);
-        const quietlyUnavailable = nugen.status === "UNAVAILABLE" && /not configured|unset/i.test(nugen.reason || "");
-        if (nugen.status === "OK" && nugen.text) {
-          return NextResponse.json({
-            reply: nugen.text,
-            toolCalls: [{ id: callId, name: grounded.tool, arguments: {} }],
-            toolResults: [{ toolCallId: callId, toolName: grounded.tool, category: "READ_ONLY", success: true, data: { ...grounded.data, verified_answer: grounded.reply } }],
-            proposals: [],
-            mode: "CONNECTED",
-            model: `nugen-aligned:${nugen.model_id}${nugen.confidence_score != null ? ` (confidence ${Math.round(nugen.confidence_score)})` : ""}`,
-            llmUnavailableReason: null,
-          });
-        }
-        if (!quietlyUnavailable) {
-          return NextResponse.json({
-            reply: grounded.reply,
-            toolCalls: [{ id: callId, name: grounded.tool, arguments: {} }],
-            toolResults: [{ toolCallId: callId, toolName: grounded.tool, category: "READ_ONLY", success: true, data: grounded.data }],
-            proposals: [],
-            mode: "DEMO",
-            model: "guardian-grounded-tools",
-            llmUnavailableReason: nugen.status === "REJECTED"
-              ? `Nugen aligned model reply discarded (${nugen.reason}); showing the verified answer.`
-              : `Nugen aligned model unavailable (${nugen.reason}); showing the verified answer.`,
-          });
-        }
-      }
 
       return NextResponse.json({
         reply: grounded.reply,

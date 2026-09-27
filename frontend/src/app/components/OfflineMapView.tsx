@@ -31,8 +31,18 @@ export default function OfflineMapView({ pack, className = "", style }: OfflineM
     registerOfflineMapProtocol();
 
     const bounds = pack.mapPack.bounds;
-    const centerLng = (bounds.minLng + bounds.maxLng) / 2;
-    const centerLat = (bounds.minLat + bounds.maxLat) / 2;
+    const routeCoords = pack.route?.waypoints || [];
+    // Start centered on the route's own starting point at the most detailed
+    // downloaded zoom level, not the whole corridor's bounding-box center at
+    // the least detailed zoom. A ±8km-wide corridor is narrow enough that
+    // "zoomed out to fit the whole 500km route" (the previous behavior)
+    // showed almost no street/building detail -- exactly the "just gray,
+    // not a real map" complaint. Real streets, buildings and place names are
+    // only visible zoomed in close, which is also the useful view for an
+    // actual traveler following the route turn-by-turn.
+    const [startLng, startLat] = routeCoords.length > 0
+      ? routeCoords[0]
+      : [(bounds.minLng + bounds.maxLng) / 2, (bounds.minLat + bounds.maxLat) / 2];
 
     let layers: any[] = [];
     try {
@@ -66,25 +76,32 @@ export default function OfflineMapView({ pack, className = "", style }: OfflineM
       const map = new maplibregl.Map({
         container: containerRef.current,
         style,
-        center: [centerLng, centerLat],
-        zoom: pack.mapPack.zoomRange[0],
+        center: [startLng, startLat],
+        // Most detailed downloaded zoom, not least detailed: at the corridor
+        // scale (a ±8km-wide strip) this is the zoom level where real
+        // streets, buildings and place labels actually render.
+        zoom: pack.mapPack.zoomRange[1],
         // Never let the camera zoom out below the vector source's minzoom:
         // MapLibre renders nothing from a vector source once the current
         // zoom is below its `minzoom` (only the flat "background" style
-        // layer shows), which is exactly what fitBounds() below would do
-        // when it zooms out to fit a long, multi-hundred-km corridor into a
-        // small viewport. Clamping here keeps real roads/water/buildings
-        // visible at all times, at the cost of not fitting the whole route
-        // in one screen (the user pans/zooms instead).
+        // layer shows).
         minZoom: pack.mapPack.zoomRange[0],
         maxZoom: pack.mapPack.zoomRange[1] + 1,
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-
-      const routeCoords = pack.route?.waypoints || [];
-      if (routeCoords.length > 1) {
-        map.fitBounds([[bounds.minLng, bounds.minLat], [bounds.maxLng, bounds.maxLat]], { padding: 24, duration: 0 });
-      }
+      // "Locate Me": centers on the device's real GPS position (offline GPS
+      // fixes still work -- only the network tile/geocoding lookups don't).
+      // Never fabricates a location; if permission is denied or GPS is
+      // unavailable, MapLibre's own control surfaces that honestly.
+      map.addControl(
+        new maplibregl.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserLocation: true,
+          showAccuracyCircle: true,
+        }),
+        "top-right"
+      );
 
       // Route corridor line, from the real downloaded route's waypoints.
       map.on("load", () => {

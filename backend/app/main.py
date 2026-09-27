@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine
 from app.models import models
-from app.api import alerts, assess, guide, assist, emergency, twin, nugen
+from app.api import alerts, assess, guide, assist, emergency, twin
 
 from contextlib import asynccontextmanager
 from app.services import checkin_scheduler
@@ -140,7 +140,6 @@ app.include_router(emergency.router, prefix="/emergency", tags=["Emergency / TWI
 
 # Weather-driven Digital Twin (HackCelestial Midnight Task 1)
 app.include_router(twin.router, prefix=f"{settings.API_V1_STR}/twin", tags=["Digital Twin"])
-app.include_router(nugen.router, prefix=f"{settings.API_V1_STR}/nugen", tags=["Nugen (aligned model)"])
 
 # /backend-api/* aliases -- same routers, same pattern as the existing
 # /assist and /emergency root aliases above. This backend is deployed on
@@ -151,7 +150,7 @@ app.include_router(nugen.router, prefix=f"{settings.API_V1_STR}/nugen", tags=["N
 # `uvicorn app.main:app` directly) keeps working exactly as before.
 for _router, _name in ((alerts.router, "alerts"), (assess.router, "assess"), (guide.router, "guide"),
                        (assist.router, "assist"), (emergency.router, "emergency"),
-                       (twin.router, "twin"), (nugen.router, "nugen")):
+                       (twin.router, "twin")):
     app.include_router(_router, prefix=f"/backend-api/{_name}", tags=[f"{_name} (Vercel /backend-api alias)"], include_in_schema=False)
 
 
