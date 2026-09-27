@@ -6,7 +6,7 @@ import {
   Shield, LogOut, Menu, X,
   MapPin, Compass, Navigation, AlertTriangle,
   Bot, History, BookOpen, User, Settings, ChevronRight,
-  Sun, Moon, Download, Smartphone, CheckCircle2, ShieldCheck
+  Sun, Moon, Download, Smartphone, CheckCircle2, ShieldCheck, WifiOff
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePwaManager } from "../../hooks/usePwaManager";
@@ -38,6 +38,7 @@ export default function Header() {
     { name: "Home / Dashboard", href: "/dashboard", icon: Compass },
     { name: "Plan Journey", href: "/plan", icon: Navigation },
     { name: "Live Maps", href: "/map", icon: MapPin },
+    { name: "Offline Maps", href: "/offline", icon: WifiOff },
     { name: "AI Guardian", href: "/assist", icon: Bot },
     { name: "Safety Check", href: "/safety-check", icon: ShieldCheck },
     { name: "Emergency SOS", href: "/emergency", icon: AlertTriangle, highlight: true },
@@ -47,10 +48,11 @@ export default function Header() {
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
-  // Primary navigation: Plan Journey, Live Maps, AI Guardian, Safety Check, Emergency.
+  // Primary navigation: Plan Journey, Live Maps, Offline Maps, AI Guardian, Safety Check, Emergency.
   const topNavLinks = [
     { name: "Plan Journey", href: "/plan", icon: Navigation },
     { name: "Live Map", href: "/map", icon: MapPin },
+    { name: "Offline Maps", href: "/offline", icon: WifiOff },
     { name: "AI Guardian", href: "/assist", icon: Bot },
     { name: "Safety Check", href: "/safety-check", icon: ShieldCheck },
     { name: "Emergency", href: "/emergency", icon: AlertTriangle, isEmergency: true },
@@ -177,23 +179,23 @@ export default function Header() {
                     fontSize: "12px",
                     ...(item.isEmergency
                       ? isActive
-                        ? { backgroundColor: "#EF4444", color: "#FFFFFF", boxShadow: "0 2px 8px rgba(239,68,68,0.25)" }
-                        : { color: "#EF4444", backgroundColor: "transparent" }
+                        ? { backgroundColor: "var(--danger)", color: "#FFFFFF", boxShadow: "0 2px 8px var(--tg-danger-light)" }
+                        : { color: "var(--danger)", backgroundColor: "transparent" }
                       : isActive
-                        ? { backgroundColor: "#2563FF", color: "#FFFFFF", boxShadow: "0 2px 8px rgba(37,99,255,0.25)" }
+                        ? { backgroundColor: "var(--primary)", color: "#FFFFFF", boxShadow: "0 2px 8px var(--tg-surface-soft)" }
                         : { color: "var(--muted)", backgroundColor: "transparent" }
                     ),
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      (e.currentTarget as HTMLElement).style.backgroundColor = item.isEmergency ? "rgba(239,68,68,0.12)" : "var(--soft-blue)";
-                      (e.currentTarget as HTMLElement).style.color = item.isEmergency ? "#EF4444" : "var(--primary-accent)";
+                      (e.currentTarget as HTMLElement).style.backgroundColor = item.isEmergency ? "var(--tg-danger-light)" : "var(--soft-blue)";
+                      (e.currentTarget as HTMLElement).style.color = item.isEmergency ? "var(--danger)" : "var(--primary-accent)";
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive) {
                       (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                      (e.currentTarget as HTMLElement).style.color = item.isEmergency ? "#EF4444" : "var(--muted)";
+                      (e.currentTarget as HTMLElement).style.color = item.isEmergency ? "var(--danger)" : "var(--muted)";
                     }
                   }}
                 >

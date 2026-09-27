@@ -240,7 +240,7 @@ function OfflinePacksManagerContent() {
   };
 
   return (
-    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
+    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "var(--tg-background)", fontFamily: "'Poppins',sans-serif" }}>
       
       {/* Header */}
       <Header />
@@ -249,15 +249,15 @@ function OfflinePacksManagerContent() {
       <div className="w-full max-w-6xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
         
         {/* Title & Connectivity Banner */}
-        <div className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+        <div className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid var(--tg-border)" }}>
           <div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--tg-primary)", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
               OFFLINE GUARDIAN &amp; VECTOR CORRIDOR SUITE
             </span>
-            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "#0F172A", marginTop: "4px" }}>
+            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "var(--foreground)", marginTop: "4px" }}>
               Offline Vector Corridors &amp; Map Storage
             </h1>
-            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "2px" }}>
+            <p style={{ fontSize: "13px", color: "var(--tg-muted)", fontWeight: 400, marginTop: "2px" }}>
               Download bounded vector map corridors, route geometry, and safe haven emergency intelligence.
             </p>
           </div>
@@ -271,9 +271,9 @@ function OfflinePacksManagerContent() {
                 fontWeight: 700,
                 textTransform: "uppercase",
                 padding: "6px 14px",
-                backgroundColor: isOnline ? "#DCFCE7" : "#FEF3C7",
-                border: isOnline ? "1px solid #86EFAC" : "1px solid #FDE68A",
-                color: isOnline ? "#16A34A" : "#D97706",
+                backgroundColor: isOnline ? "var(--tg-success-light)" : "var(--tg-warning-light)",
+                border: isOnline ? "1px solid var(--tg-success)" : "1px solid var(--tg-warning)",
+                color: isOnline ? "var(--tg-success)" : "var(--tg-warning)",
               }}
             >
               {isOnline ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
@@ -284,7 +284,7 @@ function OfflinePacksManagerContent() {
 
         {/* Global Feedback Alert */}
         {errorMessage && (
-          <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "#FEE2E2", border: "1px solid #FCA5A5", color: "#DC2626", fontSize: "13px", fontWeight: 600 }}>
+          <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "var(--tg-danger-light)", border: "1px solid var(--tg-danger)", color: "var(--tg-danger)", fontSize: "13px", fontWeight: 600 }}>
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>{errorMessage}</span>
@@ -294,7 +294,7 @@ function OfflinePacksManagerContent() {
         )}
 
         {successMessage && (
-          <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "#DCFCE7", border: "1px solid #86EFAC", color: "#16A34A", fontSize: "13px", fontWeight: 600 }}>
+          <div className="p-4 rounded-2xl flex items-center justify-between shadow-sm animate-fadeIn" style={{ backgroundColor: "var(--tg-success-light)", border: "1px solid var(--tg-success)", color: "var(--tg-success)", fontSize: "13px", fontWeight: 600 }}>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMessage}</span>
@@ -305,21 +305,21 @@ function OfflinePacksManagerContent() {
 
         {/* Download Progress Card (Real Phases) */}
         {downloading && downloadProgress && (
-          <div className="p-5 rounded-3xl shadow-md space-y-3 animate-fadeIn" style={{ backgroundColor: "#FFFFFF", border: "2px solid #2563FF" }}>
+          <div className="p-5 rounded-3xl shadow-md space-y-3 animate-fadeIn" style={{ backgroundColor: "var(--tg-surface)", border: "2px solid var(--tg-primary)" }}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Loader className="w-4 h-4 animate-spin" style={{ color: "#2563FF" }} />
-                <span style={{ fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "#2563FF" }}>
+                <Loader className="w-4 h-4 animate-spin" style={{ color: "var(--tg-primary)" }} />
+                <span style={{ fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--tg-primary)" }}>
                   {downloadProgress.phase}
                 </span>
               </div>
               <div className="flex items-center gap-3">
-                <span style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{downloadProgress.percent}%</span>
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--foreground)" }}>{downloadProgress.percent}%</span>
                 {downloadProgress.phase !== "WRITING" && (
                   <button
                     onClick={() => abortRef.current?.abort()}
                     className="px-3 py-1 rounded-lg text-xs font-bold"
-                    style={{ border: "1px solid #FCA5A5", color: "#DC2626", backgroundColor: "#FEF2F2" }}
+                    style={{ border: "1px solid var(--tg-danger)", color: "var(--tg-danger)", backgroundColor: "var(--tg-danger-light)" }}
                   >
                     Cancel
                   </button>
@@ -327,12 +327,12 @@ function OfflinePacksManagerContent() {
               </div>
             </div>
 
-            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 500 }}>{downloadProgress.message}</p>
+            <p style={{ fontSize: "13px", color: "var(--tg-muted)", fontWeight: 500 }}>{downloadProgress.message}</p>
 
-            <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ backgroundColor: "#EFF6FF" }}>
+            <div className="w-full rounded-full h-2.5 overflow-hidden" style={{ backgroundColor: "var(--tg-surface-soft)" }}>
               <div
                 className="h-2.5 transition-all duration-300 rounded-full"
-                style={{ width: `${downloadProgress.percent}%`, backgroundColor: "#2563FF" }}
+                style={{ width: `${downloadProgress.percent}%`, backgroundColor: "var(--tg-primary)" }}
               ></div>
             </div>
           </div>
@@ -343,8 +343,8 @@ function OfflinePacksManagerContent() {
           {/* Left Column: Offline Packs List */}
           <div className="lg:col-span-8 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A" }}>Downloaded Vector Corridors</h3>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748B" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: 800, color: "var(--foreground)" }}>Downloaded Vector Corridors</h3>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--tg-muted)" }}>
                 {allPacks.length} Pack(s) in Storage
               </span>
             </div>
@@ -364,25 +364,25 @@ function OfflinePacksManagerContent() {
                     key={pack.packId}
                     className="p-5 rounded-3xl transition-all space-y-3"
                     style={{
-                      backgroundColor: "#FFFFFF",
-                      border: isActive ? "2px solid #2563FF" : "1px solid rgba(15,23,42,0.08)",
-                      boxShadow: isActive ? "0 4px 12px rgba(37,99,255,0.12)" : "0 2px 8px rgba(37,99,255,0.04)",
+                      backgroundColor: "var(--tg-surface)",
+                      border: isActive ? "2px solid var(--tg-primary)" : "1px solid var(--tg-border)",
+                      boxShadow: isActive ? "0 4px 12px var(--tg-surface-soft)" : "0 2px 8px var(--tg-surface-soft)",
                     }}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#0F172A" }}>{pack.packName}</h4>
+                          <h4 style={{ fontSize: "15px", fontWeight: 800, color: "var(--foreground)" }}>{pack.packName}</h4>
                           {isActive && (
-                            <span style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#2563FF", color: "#FFFFFF" }}>
+                            <span style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", padding: "2px 8px", borderRadius: "8px", backgroundColor: "var(--tg-primary)", color: "#FFFFFF" }}>
                               ACTIVE CORRIDOR
                             </span>
                           )}
-                          <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", padding: "2px 8px", borderRadius: "8px", backgroundColor: "#EFF6FF", color: "#2563FF", border: "1px solid rgba(37,99,255,0.2)" }}>
+                          <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", padding: "2px 8px", borderRadius: "8px", backgroundColor: "var(--tg-surface-soft)", color: "var(--tg-primary)", border: "1px solid var(--tg-surface-soft)" }}>
                             VECTOR MAP: {mapStatus}
                           </span>
                         </div>
-                        <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 500, marginTop: "2px" }}>
+                        <p style={{ fontSize: "12px", color: "var(--tg-muted)", fontWeight: 500, marginTop: "2px" }}>
                           {pack.route.distance} • est. {pack.route.time} • Safety Fit: {pack.route.safetyScore}/100
                         </p>
                       </div>
@@ -391,15 +391,15 @@ function OfflinePacksManagerContent() {
                         <button
                           onClick={() => generateSurvivalKitPDF(pack)}
                           className="p-2.5 rounded-xl transition-all"
-                          style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.08)", color: "#64748B" }}
+                          style={{ backgroundColor: "var(--elevated-surface)", border: "1px solid var(--tg-border)", color: "var(--tg-muted)" }}
                           title="Download Survival PDF"
                         >
-                          <FileText className="h-4 w-4" style={{ color: "#2563FF" }} />
+                          <FileText className="h-4 w-4" style={{ color: "var(--tg-primary)" }} />
                         </button>
                         <button
                           onClick={() => handleDelete(pack.packId, pack.packName)}
                           className="p-2.5 rounded-xl transition-all"
-                          style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA", color: "#EF4444" }}
+                          style={{ backgroundColor: "var(--tg-danger-light)", border: "1px solid var(--tg-danger)", color: "var(--tg-danger)" }}
                           title="Delete Pack & Tiles"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -407,11 +407,11 @@ function OfflinePacksManagerContent() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)", fontSize: "11px", color: "#64748B", fontWeight: 500 }}>
-                      <div>Turns: <strong style={{ color: "#0F172A" }}>{pack.turnInstructions.length}</strong></div>
-                      <div>Safe Havens: <strong style={{ color: "#0F172A" }}>{pack.safeHavens.length}</strong></div>
-                      <div>Vector Tiles: <strong style={{ color: "#0F172A" }}>{tileCount}{zoom ? ` (Z${zoom[0]}-${zoom[1]})` : ""}{sizeMb ? `, ${sizeMb} MB` : ""}</strong></div>
-                      <div>Updated: <strong style={{ color: "#0F172A" }}>{cachedDate}</strong></div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2" style={{ borderTop: "1px solid var(--tg-border)", fontSize: "11px", color: "var(--tg-muted)", fontWeight: 500 }}>
+                      <div>Turns: <strong style={{ color: "var(--foreground)" }}>{pack.turnInstructions.length}</strong></div>
+                      <div>Safe Havens: <strong style={{ color: "var(--foreground)" }}>{pack.safeHavens.length}</strong></div>
+                      <div>Vector Tiles: <strong style={{ color: "var(--foreground)" }}>{tileCount}{zoom ? ` (Z${zoom[0]}-${zoom[1]})` : ""}{sizeMb ? `, ${sizeMb} MB` : ""}</strong></div>
+                      <div>Updated: <strong style={{ color: "var(--foreground)" }}>{cachedDate}</strong></div>
                     </div>
 
                     <div className="flex gap-2 pt-2">
@@ -419,7 +419,7 @@ function OfflinePacksManagerContent() {
                         <button
                           onClick={() => switchActivePack(pack.packId)}
                           className="flex-1 py-2.5 rounded-xl transition-colors font-bold text-xs"
-                          style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.1)", color: "#0F172A", fontFamily: "'Poppins',sans-serif" }}
+                          style={{ backgroundColor: "var(--elevated-surface)", border: "1px solid var(--tg-border)", color: "var(--foreground)", fontFamily: "'Poppins',sans-serif" }}
                         >
                           Set as Active Corridor
                         </button>
@@ -427,14 +427,14 @@ function OfflinePacksManagerContent() {
                       <Link
                         href={`/offline-mode?from=${pack.origin.name.toLowerCase()}&dest=${pack.destination.name.toLowerCase()}`}
                         className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs transition-all shadow-sm text-center"
-                        style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
+                        style={{ backgroundColor: "var(--tg-primary)", fontFamily: "'Poppins',sans-serif" }}
                       >
                         View Offline Survival Card
                       </Link>
                       <Link
                         href={`/map?from=${pack.origin.name.toLowerCase()}&dest=${pack.destination.name.toLowerCase()}&offlineMode=true`}
                         className="py-2.5 px-4 rounded-xl font-bold text-xs transition-all text-center flex items-center gap-1.5"
-                        style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", color: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
+                        style={{ backgroundColor: "var(--tg-surface-soft)", border: "1px solid var(--tg-surface-soft)", color: "var(--tg-primary)", fontFamily: "'Poppins',sans-serif" }}
                       >
                         <Compass className="w-3.5 h-3.5" />
                         Map
@@ -450,14 +450,14 @@ function OfflinePacksManagerContent() {
           <div className="lg:col-span-4 space-y-5">
             
             {/* Download New Corridor Card */}
-            <div className="p-6 rounded-3xl shadow-sm text-left space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
+            <div className="p-6 rounded-3xl shadow-sm text-left space-y-4" style={{ backgroundColor: "var(--tg-surface)", border: "1px solid var(--tg-border)" }}>
               <div className="space-y-1">
-                <h3 style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A" }}>Cache Vector Corridor</h3>
-                <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>
+                <h3 style={{ fontSize: "14px", fontWeight: 800, color: "var(--foreground)" }}>Cache Vector Corridor</h3>
+                <p style={{ fontSize: "12px", color: "var(--tg-muted)", fontWeight: 400, lineHeight: 1.5 }}>
                   {sourceRoute ? (
-                    <>Prepare bounded vector map tiles &amp; safety intelligence for <strong style={{ color: "#0F172A" }}>{fromName || "your origin"} ➔ {destName || "your destination"}</strong> ({sourceRoute.name}, {sourceRoute.distance}).</>
+                    <>Prepare bounded vector map tiles &amp; safety intelligence for <strong style={{ color: "var(--foreground)" }}>{fromName || "your origin"} ➔ {destName || "your destination"}</strong> ({sourceRoute.name}, {sourceRoute.distance}).</>
                   ) : (
-                    <>No planned journey to download. Plan one first, then use <strong style={{ color: "#0F172A" }}>Download Offline Pack</strong> from its route card.</>
+                    <>No planned journey to download. Plan one first, then use <strong style={{ color: "var(--foreground)" }}>Download Offline Pack</strong> from its route card.</>
                   )}
                 </p>
               </div>
@@ -466,7 +466,7 @@ function OfflinePacksManagerContent() {
                 onClick={handleDownloadNewPack}
                 disabled={downloading || !sourceRoute}
                 className="w-full py-3.5 rounded-2xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
-                style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
+                style={{ backgroundColor: "var(--tg-primary)", fontFamily: "'Poppins',sans-serif" }}
               >
                 {downloading ? (
                   <>
@@ -481,47 +481,47 @@ function OfflinePacksManagerContent() {
                 )}
               </button>
 
-              <div className="p-3.5 rounded-2xl space-y-1.5" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)", fontSize: "11px", color: "#64748B" }}>
+              <div className="p-3.5 rounded-2xl space-y-1.5" style={{ backgroundColor: "var(--elevated-surface)", border: "1px solid var(--tg-border)", fontSize: "11px", color: "var(--tg-muted)" }}>
                 <div className="flex justify-between font-medium">
                   <span>Zoom Coverage:</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>Z10 - Z13 (Bounded)</span>
+                  <span style={{ color: "var(--foreground)", fontWeight: 700 }}>Z10 - Z13 (Bounded)</span>
                 </div>
                 <div className="flex justify-between font-medium">
                   <span>Corridor Buffer:</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>±8 km along route</span>
+                  <span style={{ color: "var(--foreground)", fontWeight: 700 }}>±8 km along route</span>
                 </div>
                 <div className="flex justify-between font-medium">
                   <span>Tile Budget:</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>Up to 1,200 tiles (route-following)</span>
+                  <span style={{ color: "var(--foreground)", fontWeight: 700 }}>Up to 1,200 tiles (route-following)</span>
                 </div>
               </div>
             </div>
 
             {/* Storage Quota Telemetry */}
-            <div className="p-6 rounded-3xl shadow-sm text-left space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
-              <h4 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
-                <Database className="h-4 w-4" style={{ color: "#2563FF" }} />
+            <div className="p-6 rounded-3xl shadow-sm text-left space-y-3" style={{ backgroundColor: "var(--tg-surface)", border: "1px solid var(--tg-border)" }}>
+              <h4 style={{ fontSize: "12px", fontWeight: 800, color: "var(--foreground)", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Database className="h-4 w-4" style={{ color: "var(--tg-primary)" }} />
                 <span>Device Storage Allocation</span>
               </h4>
 
               <div className="space-y-2" style={{ fontSize: "12px" }}>
-                <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
+                <div className="flex justify-between font-medium" style={{ color: "var(--tg-muted)" }}>
                   <span>Corridor Packs:</span>
-                  <strong style={{ color: "#0F172A" }}>{storageUsage.totalPacks}</strong>
+                  <strong style={{ color: "var(--foreground)" }}>{storageUsage.totalPacks}</strong>
                 </div>
-                <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
+                <div className="flex justify-between font-medium" style={{ color: "var(--tg-muted)" }}>
                   <span>Stored Vector Tiles:</span>
-                  <strong style={{ color: "#0F172A" }}>{storageUsage.totalTilesCount ?? 0}</strong>
+                  <strong style={{ color: "var(--foreground)" }}>{storageUsage.totalTilesCount ?? 0}</strong>
                 </div>
-                <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
+                <div className="flex justify-between font-medium" style={{ color: "var(--tg-muted)" }}>
                   <span>IndexedDB Footprint:</span>
-                  <strong style={{ color: "#0F172A" }}>{(storageUsage.estimatedSizeKb / 1024).toFixed(1)} MB</strong>
+                  <strong style={{ color: "var(--foreground)" }}>{(storageUsage.estimatedSizeKb / 1024).toFixed(1)} MB</strong>
                 </div>
               </div>
 
-              <div className="pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)" }}>
-                <span style={{ fontSize: "10px", color: "#94A3B8", fontWeight: 500, display: "block" }}>
-                  Storage engine: IndexedDB (Store: <code style={{ color: "#2563FF" }}>offline_map_tiles</code>)
+              <div className="pt-2" style={{ borderTop: "1px solid var(--tg-border)" }}>
+                <span style={{ fontSize: "10px", color: "var(--tg-muted)", fontWeight: 500, display: "block" }}>
+                  Storage engine: IndexedDB (Store: <code style={{ color: "var(--tg-primary)" }}>offline_map_tiles</code>)
                 </span>
               </div>
             </div>
@@ -539,7 +539,7 @@ function OfflinePacksManagerContent() {
 
 export default function OfflinePacksManagerPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xs" style={{ backgroundColor: "#F8FAFC", color: "#64748B" }}>Loading Offline Vector Hub...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xs" style={{ backgroundColor: "var(--elevated-surface)", color: "var(--tg-muted)" }}>Loading Offline Vector Hub...</div>}>
       <OfflinePacksManagerContent />
     </Suspense>
   );
