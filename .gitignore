@@ -57,3 +57,7 @@ yarn-error.log*
 # temporary configs
 .agents/
 .gemini/
+
+# Nugen workflow runtime state (real ids are copied into docs/NUGEN_INTEGRATION.md)
+backend/nugen_state.json
+backend/nugen/benchmark_generated.json

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import engine
 from app.models import models
-from app.api import alerts, assess, guide, assist, emergency, twin
+from app.api import alerts, assess, guide, assist, emergency, twin, nugen
 
 from contextlib import asynccontextmanager
 from app.services import checkin_scheduler
@@ -129,6 +129,7 @@ app.include_router(emergency.router, prefix="/emergency", tags=["Emergency / TWI
 
 # Weather-driven Digital Twin (HackCelestial Midnight Task 1)
 app.include_router(twin.router, prefix=f"{settings.API_V1_STR}/twin", tags=["Digital Twin"])
+app.include_router(nugen.router, prefix=f"{settings.API_V1_STR}/nugen", tags=["Nugen (aligned model)"])
 
 
 @app.get("/")

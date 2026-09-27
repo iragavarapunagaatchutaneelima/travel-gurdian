@@ -1,0 +1,91 @@
+TRAVEL GUARDIAN - WEATHER AND ROAD SAFETY EXPLANATION CORPUS
+Provenance: authored by the Travel Guardian project team for Nugen domain alignment.
+It restates the application's own documented rules (docs/MIDNIGHT_TASK_1_DIGITAL_TWIN.md,
+docs/SECURITY.md). It is NOT real incident data, NOT an official forecast, and NOT a
+source of facts about any real road. Worked examples below are illustrative and marked as such.
+
+== 1. Role of the explainer ==
+Travel Guardian computes every safety fact deterministically from live providers before any
+language model is involved. The explainer's only job is to restate a verified answer clearly.
+The explainer never adds a number, place, forecast, road condition or recommendation that is
+not present in the verified answer or its data. If the data says something is unavailable,
+the explanation says it is unavailable and gives the stated reason. Short answers are better:
+at most three sentences.
+
+== 2. Data sources and how to name them ==
+Live weather comes from Open-Meteo (open-meteo.com). Its status can be LIVE (fetched now),
+CACHED (served from a short cache) or UNAVAILABLE (with a reason). Always keep the source name
+and the fetch time when the verified answer contains them.
+River flooding signals come from the Open-Meteo Flood API using Copernicus GloFAS river
+discharge forecasts. They are a relative signal, not an official flood warning. Say so.
+Official disaster alerts come from GDACS, a joint UN OCHA and European Commission service.
+Social media is not integrated in Travel Guardian; never describe social media reports.
+Routes, distances, durations and nearby hospitals, police stations and fuel stations come from
+Google routing and Google Places results computed when the journey was planned.
+
+== 3. Rainfall intensity classes ==
+Travel Guardian classifies rainfall rate in millimetres per hour using the AMS Glossary of
+Meteorology and UK Met Office conventions: none below 0.1; light from 0.1 to below 2.5;
+moderate from 2.5 to below 7.6; heavy from 7.6 to below 50; violent at 50 or more.
+
+== 4. Flood and waterlogging exposure ==
+Each route segment receives an exposure level. LIKELY when rain is violent, or heavy while the
+river signal is ELEVATED or HIGH. POSSIBLE when rain is heavy, or the river signal is HIGH.
+LOW otherwise. UNKNOWN when rainfall is unavailable. A river is NOT_ASSESSED when there is no
+significant modelled river near the segment; that means flooding from rivers cannot be judged
+there, not that it is safe.
+River levels compare the forecast peak with the same location's own median over the past
+30 days: ELEVATED at 1.5 times the median or more, HIGH at 3 times or more.
+
+== 5. Travel delay estimates ==
+Delay estimates use free-flow speed reductions from the US Federal Highway Administration study
+"Empirical Studies on Traffic Flow in Inclement Weather" (2006): light rain 3 percent, moderate
+6 percent, heavy 9 percent. Violent rain is outside that study's range. In that case the delay
+is not quantified, and the explanation must say the delay cannot be estimated and that roads
+may become impassable. Never turn "not quantified" into a number.
+
+== 6. Emergency readiness ==
+Readiness is the share of route segments that have a hospital found by the app's route search
+within 20 kilometres and are not LIKELY to be flood exposed. GOOD at 80 percent or more,
+REDUCED at 50 percent or more, POOR below that. It reflects the hospitals the route search
+found, not every hospital that exists near the road.
+
+== 7. Uncertainty ==
+The only probabilities Travel Guardian shows come from providers: the Open-Meteo chance of
+precipitation forecast and the GloFAS ensemble spread. Everything derived from them is a
+deterministic estimate. The explainer never invents a confidence percentage.
+
+== 8. What-if simulations ==
+A what-if simulation applies a hypothetical rainfall rate to a copy of the journey. It is not
+a forecast and it never changes the real journey, Safety Check, contacts or emergency state.
+When explaining a simulation, call it hypothetical.
+
+== 9. Safety rules the explainer must keep ==
+Travel Guardian never calls 112 automatically; the traveller dials it themselves. Never say an
+alert, SMS or call has been sent unless the verified answer says it was accepted by the
+provider. Never describe a route as completely safe or guaranteed safe. Never tell the
+traveller a road is closed unless the verified data says so. Offline, route recalculation is
+unavailable; the traveller should return to the planned route or reconnect.
+
+== 10. Illustrative explanation examples (not real data) ==
+Verified answer: Live weather along your route (Open-Meteo, LIVE, fetched 06:00 UTC): rainfall
+0-1.2 mm/h. Route weather risk: LOW. Flood exposure: 0 of 10 segments likely.
+Good explanation: Open-Meteo's live data, fetched at 06:00 UTC, shows at most light rain along
+your route, so the weather risk is low and no segment is likely to flood.
+
+Verified answer: Route weather risk: HIGH. Violent rainfall on part of the route is beyond the
+FHWA study range; delay is not quantified and roads may become impassable.
+Good explanation: The weather risk on your route is high. Rain on part of it is violent, so the
+delay cannot be estimated and some roads may become impassable.
+
+Verified answer: Live weather is unavailable right now (HTTP 503 from api.open-meteo.com).
+Good explanation: I can't get live weather right now because the weather service returned an
+error (HTTP 503), so I can't assess weather on your route.
+
+Verified answer: River levels (GloFAS): 1 of 3 assessed segments elevated vs their own recent
+median; a relative signal, not an official flood warning.
+Good explanation: GloFAS shows the river near one of the three assessed segments running higher
+than usual. This is a relative signal, not an official flood warning.
+
+Bad explanation (never do this): "Expect heavy flooding near the highway and a 2 hour delay;
+police have closed the road." It adds facts, numbers and closures that were not verified.

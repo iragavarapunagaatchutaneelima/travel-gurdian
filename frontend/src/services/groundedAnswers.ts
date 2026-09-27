@@ -133,6 +133,35 @@ export async function answerWeather(prompt: string, context: LiveTravelContext, 
   };
 }
 
+export interface NugenExplanation {
+  status: "OK" | "REJECTED" | "UNAVAILABLE";
+  text?: string;
+  reason?: string;
+  model_id?: string | null;
+  confidence_score?: number | null;
+}
+
+/**
+ * Asks the backend's Nugen aligned model to rephrase an already-verified
+ * answer. The backend enforces the grounding check; here we only bound the
+ * wait so a slow model never delays the verified answer (8 s cap).
+ */
+export async function explainWithNugen(question: string, answer: GroundedAnswer, backendUrl: string): Promise<NugenExplanation> {
+  try {
+    const res = await fetch(`${backendUrl}/nugen/explain`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, verified_answer: answer.reply, data: answer.data }),
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    if (!res.ok) return { status: "UNAVAILABLE", reason: `backend HTTP ${res.status}` };
+    return await res.json();
+  } catch (e: any) {
+    return { status: "UNAVAILABLE", reason: e?.name === "TimeoutError" ? "Nugen took longer than 8 s" : e?.message || "unreachable" };
+  }
+}
+
 function mask(phone: string): string {
   const d = phone.replace(/[^\d+]/g, "");
   return d.length > 8 ? `${d.slice(0, 5)}${"*".repeat(d.length - 8)}${d.slice(-3)}` : "****";
