@@ -12,10 +12,13 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@protomaps/basemaps": "^5.7.2",
     "jspdf": "^4.2.1",
     "lucide-react": "*",
+    "maplibre-gl": "^6.11.2",
     "next": "16.3.3",
     "next-themes": "^0.2.1",
+    "pmtiles": "^4.5.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

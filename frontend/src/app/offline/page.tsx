@@ -99,8 +99,27 @@ function OfflinePacksManagerContent() {
       highways: ["National Highway"]
     };
 
-    const routes = generateRoutes(origin.id, dest.id, modeParam);
-    const activeRoute = routes[0];
+    // Prefer the REAL, already-computed route (real Google waypoints, steps,
+    // and Places-sourced POIs) handed off from the Plan Journey page. Only
+    // fall back to the synthetic generateRoutes() placeholder if the user
+    // reached this page directly without a real route in hand -- and label
+    // that fallback honestly rather than presenting it as real.
+    let activeRoute = null as ReturnType<typeof generateRoutes>[number] | null;
+    let isRealRoute = false;
+    try {
+      const stored = sessionStorage.getItem("tg_offline_source_route");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.waypoints?.length > 0) {
+          activeRoute = parsed;
+          isRealRoute = parsed.provider === "google";
+        }
+      }
+    } catch {}
+    if (!activeRoute) {
+      activeRoute = generateRoutes(origin.id, dest.id, modeParam)[0];
+      isRealRoute = false;
+    }
     const packId = `pack_${origin.id}_${dest.id}_${Date.now()}`;
 
     try {
@@ -120,6 +139,36 @@ function OfflinePacksManagerContent() {
         }
       );
 
+      // Turn instructions: from the real Google-computed steps when available.
+      // Never a fabricated generic 3-step placeholder.
+      const realSteps = Array.isArray(activeRoute.steps) ? activeRoute.steps : [];
+      const turnInstructions = isRealRoute && realSteps.length > 0
+        ? realSteps.map((s: any, idx: number) => ({
+            stepIndex: idx + 1,
+            instruction: (s.instruction || "Continue along route").replace(/<[^>]+>/g, ""),
+            distanceText: s.distance || "",
+            durationText: s.duration || "",
+            maneuverType: (s.maneuver || "straight").toLowerCase().replace(/_/g, "-"),
+          }))
+        : [];
+
+      // Safe havens: from the real route's Google Places-sourced POIs. Never
+      // an invented business name or phone number.
+      const poiTypeMap: Record<string, string> = {
+        hospital: "Hospital", emergency: "Hospital", police: "Police Station",
+        petrol: "Fuel Stop", pharmacy: "Pharmacy", food: "Food Stop",
+        rest: "Rest Stop", hotel: "Hotel",
+      };
+      const realPois = Array.isArray(activeRoute.pois) ? activeRoute.pois : [];
+      const safeHavens = isRealRoute
+        ? realPois.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            type: (poiTypeMap[p.type] || "Rest Stop") as any,
+            distanceAheadText: p.distanceAhead || "Unknown distance",
+          }))
+        : [];
+
       // 2. Build full corridor pack
       const newPack: OfflineCorridorPack = {
         packId,
@@ -130,16 +179,8 @@ function OfflinePacksManagerContent() {
         destination: dest,
         travelMode: modeParam,
         route: activeRoute,
-        turnInstructions: [
-          { stepIndex: 1, instruction: `Depart from ${origin.name} toward main corridor link`, distanceText: "2.5 km", durationText: "5 mins", maneuverType: "straight" },
-          { stepIndex: 2, instruction: `Join ${activeRoute.name} corridor and maintain highway cruise`, distanceText: activeRoute.distance, durationText: activeRoute.time, maneuverType: "straight" },
-          { stepIndex: 3, instruction: `Arrive at destination: ${dest.name}`, distanceText: "1.0 km", durationText: "2 mins", maneuverType: "arrive" }
-        ],
-        safeHavens: [
-          { id: `h_${Date.now()}_1`, name: "Apollo Emergency Care", type: "Hospital", distanceAheadText: "15 km ahead", phone: "044-28290200" },
-          { id: `p_${Date.now()}_1`, name: "Highway Police Patrol Post", type: "Police Station", distanceAheadText: "8 km ahead", phone: "112" },
-          { id: `f_${Date.now()}_1`, name: "24/7 National Highway Fuel Plaza", type: "Fuel Stop", distanceAheadText: "30 km ahead", amenities: "Fuel, Clean Restrooms, Food" }
-        ],
+        turnInstructions,
+        safeHavens,
         emergencyInfo: {
           nationalEmergencyNumber: "112",
           womenHelpline: "1091",
@@ -150,18 +191,30 @@ function OfflinePacksManagerContent() {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         approxSizeKb: 58 + Math.round(mapPackMetadata.totalSizeBytes / 1024),
-        provenance: "CACHED",
+        provenance: isRealRoute ? "CACHED" : "DEV_SIMULATED",
         mapPack: mapPackMetadata,
       };
+
+      if (mapPackMetadata.status === "FAILED") {
+        setDownloading(false);
+        setDownloadProgress(null);
+        setErrorMessage(`Download failed: ${mapPackMetadata.lastError || "the offline map source is unreachable"}. Check your connection and try again.`);
+        setTimeout(() => setErrorMessage(null), 7000);
+        return;
+      }
 
       const res = await saveOfflinePack(newPack);
       setDownloading(false);
       setDownloadProgress(null);
 
       if (res.success) {
-        setSuccessMessage(`Cached vector corridor (${mapPackMetadata.tileCount} tiles) for ${origin.name} ➔ ${dest.name} successfully!`);
+        const statusNote = mapPackMetadata.status === "PARTIAL"
+          ? ` (partial: ${mapPackMetadata.lastError || "some tiles were unavailable"})`
+          : "";
+        const routeNote = isRealRoute ? "" : " — using a placeholder route; plan a real journey first for accurate turn-by-turn and safe havens.";
+        setSuccessMessage(`Downloaded ${mapPackMetadata.tileCount} real map tiles for ${origin.name} ➔ ${dest.name}${statusNote}.${routeNote}`);
         await refreshStorage();
-        setTimeout(() => setSuccessMessage(null), 5000);
+        setTimeout(() => setSuccessMessage(null), 7000);
       } else {
         setErrorMessage(`Storage warning: ${res.error || "Unable to save pack"}`);
         setTimeout(() => setErrorMessage(null), 6000);

@@ -41,9 +41,9 @@ wasn't actually run.
 | 21 | Twilio dry-run | **PASS** | Validates without requiring real credentials |
 | 22 | Twilio trial error | **NOT TESTED** | Requires a real Twilio trial account and an unverified recipient number, which this repo cannot provide. `TwilioProvider`'s HTTP 21608 error mapping is covered by `backend/tests/test_sos_audit_scenarios.py::test_scenario_07_twilio_api_failure` instead |
 | 23 | 112 safety lock | **PASS** | Confirmed locked by default (zero `tel:112` links in the DOM until explicit multi-step activation). Test deliberately stops short of the app's own "DO NOT dial 112 during automated tests" confirmation step |
-| 24 | Offline pack download | **PASS** (smoke only) | Page loads; full download-progress flow not exercised end-to-end in this pass |
-| 25 | Offline map | **BLOCKED** | MapLibre/PMTiles offline map engine not yet implemented (next phase) |
-| 26 | Offline POIs | **BLOCKED** | Depends on the offline map engine above |
+| 24 | Offline pack download | **PASS** | Verified manually end-to-end: downloads 1200 real MVT vector tiles (~17MB) from Protomaps' public OSM PMTiles archive via HTTP range requests, plus real turn instructions (135) and real Google Places safe havens (26) from the actual planned route — not the previous fabricated placeholder data. See "Offline map engine" note below |
+| 25 | Offline map | **PARTIAL** | Real tiles download and store correctly (scenario 24). MapLibre GL JS renders the map container and controls, but vector layers don't paint — MapLibre's tile-parsing web worker fails to load under Next.js/Turbopack's bundler even after pointing `workerUrl`/`config.WORKER_URL` at a self-hosted static copy. Root-caused to the bundler integration, not the data pipeline; not resolved in this pass |
+| 26 | Offline POIs | **PASS** | Real Google Places POIs from the actual route are now stored as safe havens (see scenario 24) — no longer the fabricated "Apollo Emergency Care" placeholder |
 | 27 | Offline Survival Card | **PASS** (smoke only) | Page reachable and marks itself as offline data |
 | 28 | Offline AI | **BLOCKED** | WebLLM/Transformers.js local-LLM engine not yet implemented (next phase) |
 | 29 | Network disconnect | **PASS** | `e2e/05-pwa-and-network.spec.ts` — real `context.setOffline(true)`, waits for genuine SW activation first |
@@ -60,6 +60,40 @@ service-worker activation timing under sequential full-browser-process load
 — not application bugs. `playwright.config.ts` sets `retries: 2` to absorb
 this, matching how any suite exercising live third-party APIs and a real
 SW lifecycle behaves under CI-style load.
+
+## Offline map engine (scenarios 24-26)
+
+The previous implementation of the entire offline-download pipeline was a
+complete simulation: `downloadCorridorMapPack()` never made a network call
+at all, storing a synthetic `{z,x,y,packId,cachedAt}` JSON blob per tile and
+labeling the result `provenance: "CACHED"` / `status: "READY"` regardless.
+Turn instructions and safe havens were hardcoded fabricated strings (e.g.
+"Apollo Emergency Care", phone "044-28290200") reused for every corridor,
+disconnected from the route the user actually planned.
+
+This is now real:
+- **Map tiles**: `services/realVectorTiles.ts` fetches genuine MVT (vector
+  tile) bytes via HTTP range requests from Protomaps' publicly hosted,
+  OpenStreetMap-derived PMTiles archive (`build.protomaps.com`, MIT/ODbL
+  planetiler build). A tile that fails to fetch is simply not stored — the
+  pack is marked `PARTIAL`/`FAILED` honestly rather than padded out.
+- **Turn instructions & safe havens**: the Plan Journey page now hands off
+  the actual computed route (real Google Directions steps, real Google
+  Places POIs) via `sessionStorage` when the user taps "Download Offline
+  Pack", instead of the offline page silently regenerating an unrelated
+  synthetic route.
+- **Rendering**: `OfflineMapView.tsx` (MapLibre GL JS + a custom
+  `tg-offline://` protocol reading tiles straight out of IndexedDB) is
+  wired into `/offline-mode`. The map initializes and its controls render,
+  but the vector layers don't currently paint: MapLibre's tile-parsing web
+  worker fails to load under this Next.js/Turbopack bundler setup, even
+  after pointing `maplibregl.config.WORKER_URL` at a self-hosted static
+  copy of the worker script. This is a bundler-integration issue, not a
+  data problem — real tiles are confirmed present and byte-correct in
+  IndexedDB — and is left as a known, documented gap rather than papered
+  over.
+- **No Google tile caching, no Mapbox**: confirmed — this system is fully
+  independent of `googleRoutes.ts`/the Google Maps JS SDK.
 
 ## What's real vs asserted here
 

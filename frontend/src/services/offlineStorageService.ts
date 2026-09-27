@@ -36,7 +36,12 @@ export function getPackFreshness(pack: OfflineCorridorPack): CacheFreshness {
 }
 
 /**
- * Creates default sample corridor packs for out-of-the-box offline demonstration
+ * Test-fixture-only sample corridor pack with invented turn instructions and
+ * safe havens. NEVER call this to seed a real user's IndexedDB -- it is not
+ * wired into any app page and exists solely for the tile-math/PDF-generator
+ * unit tests in src/scripts/. A real pack must always come from
+ * downloadCorridorMapPack() (real PMTiles data) and a real planned route's
+ * actual Google-sourced POIs/steps (see app/offline/page.tsx).
  */
 export function createDefaultCorridorPacks(): OfflineCorridorPack[] {
   const origin = CITIES["chennai"];
@@ -91,7 +96,7 @@ export function createDefaultCorridorPacks(): OfflineCorridorPack[] {
     createdAt: now,
     updatedAt: now,
     approxSizeKb: 64,
-    provenance: "CACHED",
+    provenance: "DEV_SIMULATED",
     mapPack: {
       tileCount: 420,
       totalSizeBytes: 420 * 2500,

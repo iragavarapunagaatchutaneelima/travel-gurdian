@@ -30,7 +30,7 @@ function runPhase7Tests() {
   assert(defaultPacks.length > 0, "Default corridor packs generated successfully");
   const pack = defaultPacks[0];
   assert(pack.schemaVersion === "1.0.0", "Pack schemaVersion is 1.0.0");
-  assert(pack.provenance === "CACHED", "Pack provenance is truthfully CACHED");
+  assert(pack.provenance === "DEV_SIMULATED", "Pack provenance is truthfully DEV_SIMULATED (test fixture, not real data)");
   assert(pack.turnInstructions.length >= 5, "Turn instructions present in cached pack");
   assert(pack.safeHavens.length >= 5, "Safe havens (hospitals/police/fuel) present in cached pack");
 

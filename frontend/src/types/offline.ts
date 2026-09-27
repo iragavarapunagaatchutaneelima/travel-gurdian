@@ -31,7 +31,7 @@ export interface CachedTurnInstruction {
 export interface CachedSafeHaven {
   id: string;
   name: string;
-  type: "Hospital" | "Police Station" | "Fuel Stop" | "Rest Stop";
+  type: "Hospital" | "Police Station" | "Fuel Stop" | "Rest Stop" | "Pharmacy" | "Food Stop" | "Hotel";
   distanceAheadText: string;
   phone?: string;
   amenities?: string;
@@ -61,7 +61,7 @@ export interface OfflineMapTile {
   x: number;
   y: number;
   source: string;
-  data?: string; // Base64 or GeoJSON string
+  data?: ArrayBuffer | Uint8Array; // Real MVT (protobuf) tile bytes, stored natively in IndexedDB
   sizeBytes: number;
   downloadedAt: number;
   expiresAt: number;

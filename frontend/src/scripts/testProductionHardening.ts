@@ -89,7 +89,7 @@ assert(!foundExposedKey, "No API keys or server env references exposed in client
 const defaultPacks = createDefaultCorridorPacks();
 assert(defaultPacks.length > 0, "Default corridor packs generated");
 const pack = defaultPacks[0];
-assert(pack.provenance === "CACHED", "Offline corridor pack provenance is truthfully CACHED");
+assert(pack.provenance === "DEV_SIMULATED", "Offline corridor pack provenance is truthfully DEV_SIMULATED (test fixture, not real data)");
 assert(getPackFreshness(pack) === "FRESH", "Fresh pack evaluated as FRESH (<24h)");
 
 // 6. Navigation Math Performance & Accuracy

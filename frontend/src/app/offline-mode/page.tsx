@@ -6,6 +6,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import BottomNav from "../components/BottomNav";
 import OfflineSurvivalCard from "../components/OfflineSurvivalCard";
+import OfflineMapView from "../components/OfflineMapView";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { 
   CloudOff, 
@@ -101,9 +102,22 @@ function OfflineModeContent() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* Left Column: Interactive Offline Survival Card */}
-          <div className="lg:col-span-8">
+          <div className="lg:col-span-8 space-y-5">
             {activePack ? (
-              <OfflineSurvivalCard pack={activePack} onRefreshPack={refreshStorage} />
+              <>
+                {activePack.mapPack && activePack.mapPack.tileCount > 0 && (
+                  <div className="rounded-3xl overflow-hidden border border-border shadow-sm">
+                    <div className="px-4 py-2 bg-elevated-surface border-b border-border flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground)">
+                        Offline Vector Map — {activePack.mapPack.tileCount} real tiles cached
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-600">Independent of Google Maps</span>
+                    </div>
+                    <OfflineMapView pack={activePack} className="w-full h-80" />
+                  </div>
+                )}
+                <OfflineSurvivalCard pack={activePack} onRefreshPack={refreshStorage} />
+              </>
             ) : (
               <div className="p-8 rounded-3xl text-center space-y-4 shadow-sm" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
                 <CloudOff className="h-12 w-12 mx-auto" style={{ color: "#94A3B8" }} />

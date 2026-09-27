@@ -609,8 +609,8 @@ export default function PlanJourneyScreen() {
                       <button
                         onClick={() => {
                           const params = new URLSearchParams({
-                            from: origin?.name.toLowerCase() || "chennai",
-                            dest: destination?.name.toLowerCase() || "bangalore",
+                            from: origin?.name.toLowerCase() || "route",
+                            dest: destination?.name.toLowerCase() || "destination",
                             mode: travelMode,
                           });
                           if (origin) {
@@ -623,6 +623,14 @@ export default function PlanJourneyScreen() {
                             params.set("destLng", destination.longitude.toString());
                             params.set("destName", destination.name);
                           }
+                          // Hand off the REAL, already-computed route (real Google
+                          // waypoints/steps/POIs) so the offline pack is built from
+                          // it instead of a synthetic placeholder route -- an
+                          // offline pack must never contain fabricated turn
+                          // instructions or invented safe havens.
+                          try {
+                            sessionStorage.setItem("tg_offline_source_route", JSON.stringify(route));
+                          } catch {}
                           router.push(`/offline?${params.toString()}`);
                         }}
                         className="w-full rounded-2xl py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-elevated-surface text-foreground border border-border hover:bg-surface active:scale-95"

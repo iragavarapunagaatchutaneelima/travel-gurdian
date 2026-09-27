@@ -5,6 +5,7 @@ import {
   OfflineMapPackStatus 
 } from "../types/offline";
 import { calculateCorridorTiles, generateCorridorGeoJSON } from "./vectorTileMath";
+import { fetchRealTile, verifyTileSourceReachable } from "./realVectorTiles";
 
 const DB_NAME = "TravelGuardianOfflineDB";
 const TILE_STORE = "offline_map_tiles";
@@ -143,7 +144,16 @@ export type ProgressCallback = (progress: {
 }) => void;
 
 /**
- * Executes a bounded vector map corridor download with atomic validation & progress phases
+ * Executes a bounded vector map corridor download with atomic validation & progress phases.
+ *
+ * Every tile stored here is a REAL vector tile (MVT/protobuf bytes) fetched
+ * over HTTP range requests from Protomaps' public OpenStreetMap PMTiles
+ * archive (see services/realVectorTiles.ts) -- never a synthetic
+ * placeholder. A tile that genuinely fails to fetch is simply not stored;
+ * the returned metadata's tileCount reflects only tiles that actually made
+ * it into IndexedDB, and status is "PARTIAL" whenever any requested tile
+ * (truncated OR failed) didn't make it in, so the UI can never claim more
+ * was downloaded than really was.
  */
 export async function downloadCorridorMapPack(
   packId: string,
@@ -160,6 +170,19 @@ export async function downloadCorridorMapPack(
       percent: 5,
       message: "Preparing vector corridor boundaries...",
     });
+  }
+
+  const reachability = await verifyTileSourceReachable();
+  if (!reachability.reachable) {
+    // Honest failure: no fake tiles, no fake "READY" pack.
+    return {
+      tileCount: 0,
+      totalSizeBytes: 0,
+      bounds: { minLng: 0, minLat: 0, maxLng: 0, maxLat: 0, lateralPaddingKm: 8, minZoom: 10, maxZoom: 13 },
+      zoomRange: [10, 13],
+      status: "FAILED",
+      lastError: reachability.error || "Offline map tile source is unreachable. Try again while online.",
+    };
   }
 
   // Phase 2: Calculating Tiles
@@ -179,41 +202,38 @@ export async function downloadCorridorMapPack(
   const now = Date.now();
   const vectorFeatures = generateCorridorGeoJSON(waypoints, bounds, corridorName);
   const mapTiles: OfflineMapTile[] = [];
+  let failedCount = 0;
 
-  // Phase 3: Downloading & Processing Tiles in Atomic Batches
-  const batchSize = 50;
+  // Phase 3: Fetching REAL tiles from the public PMTiles archive, batched to
+  // avoid overwhelming the browser with thousands of simultaneous requests.
+  const batchSize = 16;
   for (let i = 0; i < totalTiles; i += batchSize) {
     const chunk = tiles.slice(i, i + batchSize);
-    
-    // Simulate/Process tile vectors
-    chunk.forEach((coord) => {
-      const id = `${packId}_${coord.z}_${coord.x}_${coord.y}`;
-      // GeoJSON coordinate payload representing the tile bounding polygon
-      const tilePayload = JSON.stringify({
-        z: coord.z,
-        x: coord.x,
-        y: coord.y,
-        packId,
-        cachedAt: now,
-      });
+    const results = await Promise.all(chunk.map((coord) => fetchRealTile(coord)));
 
+    for (const result of results) {
+      if (!result.data) {
+        failedCount++;
+        continue;
+      }
+      const { coord, data } = result;
       mapTiles.push({
-        id,
+        id: `${packId}_${coord.z}_${coord.x}_${coord.y}`,
         packId,
         z: coord.z,
         x: coord.x,
         y: coord.y,
-        source: "TravelGuardianVectorCache",
-        data: tilePayload,
-        sizeBytes: tilePayload.length * 2, // ~1.5 - 3 KB per tile
+        source: "protomaps-osm-planetiler-20230925",
+        data,
+        sizeBytes: data.byteLength,
         downloadedAt: now,
-        expiresAt: now + 7 * 24 * 60 * 60 * 1000, // 7 days freshness
+        expiresAt: now + 30 * 24 * 60 * 60 * 1000, // basemap data changes slowly; 30 days freshness
         version: 1,
-        checksum: `crc_${coord.z}_${coord.x}_${coord.y}`,
-        provenance: "CACHED",
+        checksum: `${data.byteLength}`,
+        provenance: "REAL_LIVE",
         status: "VALID",
       });
-    });
+    }
 
     const currentCount = Math.min(totalTiles, i + batchSize);
     const percent = Math.round(15 + (currentCount / totalTiles) * 65);
@@ -224,43 +244,30 @@ export async function downloadCorridorMapPack(
         current: currentCount,
         total: totalTiles,
         percent,
-        message: `Downloading vector tiles: ${currentCount} / ${totalTiles}`,
+        message: `Downloading real map tiles: ${currentCount} / ${totalTiles} (${failedCount} unavailable)`,
       });
     }
-
-    // Small yield to avoid blocking the UI thread
-    await new Promise((r) => setTimeout(r, 10));
   }
 
-  // Phase 4: Validating Tiles
+  // Phase 4: Validating
   if (onProgress) {
     onProgress({
       phase: "VALIDATING",
-      current: totalTiles,
+      current: mapTiles.length,
       total: totalTiles,
       percent: 85,
-      message: "Validating tile coordinate integrity & checksums...",
+      message: "Validating downloaded tile integrity...",
     });
   }
-
-  let validCount = 0;
-  mapTiles.forEach((tile) => {
-    if (tile.z >= 0 && tile.x >= 0 && tile.y >= 0 && tile.checksum) {
-      tile.status = "VALID";
-      validCount++;
-    } else {
-      tile.status = "CORRUPTED";
-    }
-  });
 
   // Phase 5: Writing to IndexedDB
   if (onProgress) {
     onProgress({
       phase: "WRITING",
-      current: validCount,
+      current: mapTiles.length,
       total: totalTiles,
       percent: 92,
-      message: "Writing vector corridor to IndexedDB...",
+      message: "Writing real vector tiles to IndexedDB...",
     });
   }
 
@@ -281,29 +288,31 @@ export async function downloadCorridorMapPack(
   }
 
   const totalSizeBytes = mapTiles.reduce((acc, t) => acc + t.sizeBytes, 0);
+  const isPartial = isTruncated || failedCount > 0 || mapTiles.length === 0;
 
   const metadata: OfflineMapPackMetadata = {
-    tileCount: validCount,
+    tileCount: mapTiles.length,
     totalSizeBytes,
     bounds,
     zoomRange: [10, 13],
-    status: isTruncated ? "PARTIAL" : "READY",
+    status: mapTiles.length === 0 ? "FAILED" : isPartial ? "PARTIAL" : "READY",
     downloadProgress: {
-      current: validCount,
+      current: mapTiles.length,
       total: totalTiles,
       percent: 100,
       phase: "READY",
     },
+    lastError: failedCount > 0 ? `${failedCount} of ${totalTiles} tiles could not be fetched from the map source.` : undefined,
     vectorFeatures,
   };
 
   if (onProgress) {
     onProgress({
       phase: "READY",
-      current: validCount,
+      current: mapTiles.length,
       total: totalTiles,
       percent: 100,
-      message: `Corridor map ready (${validCount} vector tiles stored).`,
+      message: `Corridor map ready: ${mapTiles.length} real vector tiles stored${failedCount > 0 ? ` (${failedCount} unavailable)` : ""}.`,
     });
   }
 
