@@ -76,7 +76,16 @@ export function generateSurvivalKitPDF(pack: OfflineCorridorPack): { success: bo
     doc.setTextColor(153, 27, 27);
     doc.text(`National Emergency Hotline (Police, Fire, Medical): Dial 112`, margin + 5, y + 6);
     doc.text(`Women Travel Helpline: Dial 1091   |   National Ambulance: Dial 108`, margin + 5, y + 12);
-    doc.text(`Consular Emergency Line: ${pack.emergencyInfo.consularHelpline || "+91 11 2419 8000"}`, margin + 5, y + 18);
+    // Only numbers we can stand behind: the pack's own consular line if it
+    // has one (the old hardcoded fallback number was unverified), else the
+    // official NHAI national highway helpline.
+    doc.text(
+      pack.emergencyInfo.consularHelpline
+        ? `Consular Emergency Line: ${pack.emergencyInfo.consularHelpline}   |   NHAI Highway Helpline: Dial 1033`
+        : `NHAI National Highway Emergency Helpline: Dial 1033`,
+      margin + 5,
+      y + 18
+    );
 
     y += 30;
 
