@@ -320,13 +320,20 @@ class TestTwinRouteRegistration(unittest.TestCase):
         # includes /api -- see next.config.ts and ENVIRONMENT.md).
         self.assertEqual(settings.API_V1_STR, "/api")
 
-    def test_no_route_under_bare_backend_api_prefix(self):
-        # /backend-api/* is the FRONTEND's same-origin rewrite prefix, not a
-        # real backend path -- a request straight to it on the FastAPI app
-        # itself must 404, confirming the two layers' contracts are not
-        # confused with each other.
+    def test_twin_state_also_registered_under_backend_api_alias(self):
+        # Single-Vercel-project deployment: the backend is a Vercel Python
+        # Function reached directly at /backend-api/* (vercel.json routes
+        # forward that prefix to it) -- there is no separate host for a
+        # same-origin rewrite to proxy to, so the FastAPI app itself must
+        # understand /backend-api/twin/* directly (see main.py's alias loop).
         res = self.client.post("/backend-api/twin/state", json={})
-        self.assertEqual(res.status_code, 404)
+        self.assertNotEqual(res.status_code, 404, "POST /backend-api/twin/state must be registered for the Vercel deployment")
+        self.assertEqual(res.status_code, 422)
+
+    def test_twin_weather_also_registered_under_backend_api_alias(self):
+        res = self.client.get("/backend-api/twin/weather")
+        self.assertNotEqual(res.status_code, 404)
+        self.assertEqual(res.status_code, 422)
 
 
 if __name__ == "__main__":

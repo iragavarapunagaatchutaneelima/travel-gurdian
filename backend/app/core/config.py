@@ -11,12 +11,39 @@ _repo_root = os.path.dirname(_backend_dir)
 _legacy_env_path = os.path.join(_backend_dir, ".env")
 _root_env_path = os.path.join(_repo_root, ".env.local")
 
+# Vercel's Python runtime ships a read-only filesystem outside /tmp, so the
+# usual "sqlite:///./travel_guardian.db" (relative to CWD) fails to even
+# open on cold start there. When DATABASE_URL isn't explicitly set AND we're
+# running on Vercel (its own VERCEL env var), default to /tmp instead, so the
+# app can at least boot and serve a request.
+#
+# IMPORTANT, disclosed rather than hidden: /tmp on Vercel is NOT persistent
+# across invocations/instances -- contacts, check-ins and emergency logs
+# will not reliably survive a cold start there. This keeps a hackathon demo
+# from hard-crashing; it is not a substitute for a real hosted database. Set
+# DATABASE_URL to a real Postgres (Vercel Postgres, Neon, Supabase, ...) for
+# actual persistence. See ENVIRONMENT.md.
+def default_database_url(env: Optional[dict] = None) -> str:
+    e = env if env is not None else os.environ
+    if e.get("VERCEL") and not e.get("DATABASE_URL"):
+        return "sqlite:////tmp/travel_guardian.db"
+    return "sqlite:///./travel_guardian.db"
+
+
+_default_database_url = default_database_url()
+
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Travel Guardian API"
     API_V1_STR: str = "/api"
-    
-    # Database setting: default to a local SQLite file in the backend directory.
-    DATABASE_URL: str = "sqlite:///./travel_guardian.db"
+    # Vercel sets this itself in every one of its runtimes; never something a
+    # developer sets locally. Used to disable the in-process Dead-Man's-Switch
+    # scheduler thread on serverless (see app/main.py's lifespan).
+    IS_VERCEL: bool = bool(os.environ.get("VERCEL"))
+
+    # Database setting: default to a local SQLite file in the backend
+    # directory (or /tmp on Vercel -- see _default_database_url above).
+    DATABASE_URL: str = _default_database_url
     
     # CORS settings
     CORS_ORIGINS: List[str] = [

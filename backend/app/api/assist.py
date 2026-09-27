@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
@@ -236,6 +237,21 @@ def update_checkin_gps(location: schemas.SafeCheckInLocationUpdate, user_id: str
     return assist.update_checkin_location(db=db, latitude=location.latitude, longitude=location.longitude, user_id=user_id)
 
 
+def _require_cron_secret(request: Request) -> None:
+    """
+    If CRON_SECRET is configured, only Vercel's own Cron Job invocation (which
+    sends it as `Authorization: Bearer <CRON_SECRET>`) may call this endpoint
+    unauthenticated-by-device-cookie. If it's not configured, the endpoint
+    stays open -- it is idempotent (only escalates ALREADY-overdue check-ins)
+    so this is a hardening recommendation, not a hard requirement for a demo.
+    """
+    secret = os.environ.get("CRON_SECRET")
+    if not secret:
+        return
+    if request.headers.get("authorization") != f"Bearer {secret}":
+        raise HTTPException(status_code=401, detail="Invalid or missing cron secret.")
+
+
 @router.post("/checkin/check-overdue", response_model=List[schemas.SafeCheckInResponse])
 def run_timer_check(db: Session = Depends(get_db)):
     """
@@ -244,6 +260,17 @@ def run_timer_check(db: Session = Depends(get_db)):
     """
     triggered_logs = assist.check_pending_checkins(db)
     return triggered_logs
+
+
+@router.get("/checkin/check-overdue", response_model=List[schemas.SafeCheckInResponse], include_in_schema=False)
+def run_timer_check_via_cron(request: Request, db: Session = Depends(get_db)):
+    """
+    GET alias of the same idempotent check, for Vercel Cron Jobs -- Vercel's
+    `crons` config always issues a GET request (see vercel.json). Identical
+    behavior to the POST route above; no separate logic to keep in sync.
+    """
+    _require_cron_secret(request)
+    return assist.check_pending_checkins(db)
 
 
 @router.get("/checkin/scheduler-status", response_model=schemas.SchedulerStatusResponse)

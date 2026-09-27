@@ -87,11 +87,22 @@ _ensure_schema_migrations()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: ensure migrations and launch the Dead-Man's Switch background scheduler
+    # Startup: ensure migrations, then launch the Dead-Man's Switch background
+    # scheduler thread -- EXCEPT on Vercel. A serverless function instance is
+    # not a persistently-running process: there is no guarantee a background
+    # thread survives between invocations, or that only one instance is ever
+    # running, so the 5-second in-process poll loop cannot be relied on there.
+    # On Vercel, a Cron Job hitting POST/GET /api/assist/checkin/check-overdue
+    # (see vercel.json) is the serverless-appropriate replacement -- same
+    # underlying check_pending_checkins() logic, just triggered externally.
+    # Disclosed limitation: Vercel's Hobby plan only runs cron jobs once a
+    # day; a sub-minute Dead-Man's-Switch poll cadence needs a Pro plan.
     _ensure_schema_migrations()
-    checkin_scheduler.start_scheduler(poll_interval_seconds=5)
+    if not settings.IS_VERCEL:
+        checkin_scheduler.start_scheduler(poll_interval_seconds=5)
     yield
-    # Shutdown: cleanly terminate background worker thread
+    # Shutdown: cleanly terminate background worker thread (no-op if it was
+    # never started above).
     checkin_scheduler.stop_scheduler()
 
 app = FastAPI(
@@ -130,6 +141,18 @@ app.include_router(emergency.router, prefix="/emergency", tags=["Emergency / TWI
 # Weather-driven Digital Twin (HackCelestial Midnight Task 1)
 app.include_router(twin.router, prefix=f"{settings.API_V1_STR}/twin", tags=["Digital Twin"])
 app.include_router(nugen.router, prefix=f"{settings.API_V1_STR}/nugen", tags=["Nugen (aligned model)"])
+
+# /backend-api/* aliases -- same routers, same pattern as the existing
+# /assist and /emergency root aliases above. This backend is deployed on
+# Vercel as a Python Function (see /vercel.json, backend/index.py) reached
+# directly at /backend-api/*, so it must understand that exact prefix itself
+# rather than only /api/* -- there is no separate host for a same-origin
+# rewrite to point at. Local dev is unaffected: /api/* (used by
+# `uvicorn app.main:app` directly) keeps working exactly as before.
+for _router, _name in ((alerts.router, "alerts"), (assess.router, "assess"), (guide.router, "guide"),
+                       (assist.router, "assist"), (emergency.router, "emergency"),
+                       (twin.router, "twin"), (nugen.router, "nugen")):
+    app.include_router(_router, prefix=f"/backend-api/{_name}", tags=[f"{_name} (Vercel /backend-api alias)"], include_in_schema=False)
 
 
 @app.get("/")

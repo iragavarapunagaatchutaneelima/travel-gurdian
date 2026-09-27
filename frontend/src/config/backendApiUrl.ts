@@ -1,80 +1,70 @@
 /**
- * Single source of truth for resolving BACKEND_API_URL, used by both
- * next.config.ts (the same-origin /backend-api/* rewrite destination, for
- * the browser) and config/serverEnv.ts (direct server-to-server calls from
- * Next.js route handlers). Keeping one resolver avoids the two drifting.
+ * Single source of truth for resolving the backend base URL, used by both
+ * next.config.ts (the /backend-api/* rewrite destination, for local dev
+ * only -- see below) and config/serverEnv.ts (direct server-to-server calls
+ * from Next.js route handlers, e.g. app/api/ai/route.ts).
  *
- * Root cause this exists to prevent: BACKEND_API_URL silently fell back to
- * http://127.0.0.1:8000/api whenever it wasn't set, including in a Vercel
- * production build -- which bakes that literal localhost destination into
- * the deployed rewrite manifest at build time. The browser then gets a
- * proxy to an address that doesn't exist in Vercel's infrastructure, and
- * every /backend-api/* call fails ("Digital Twin: HTTP 404", etc.) with no
- * indication of why. A local/dev fallback is still allowed -- only a
- * genuinely production build (Vercel, or NODE_ENV=production without an
- * explicit opt-out) with the variable missing or pointed at localhost fails
- * loudly at build time instead.
+ * ARCHITECTURE (single Vercel project, no separate backend host):
+ * The FastAPI backend is deployed as a Vercel Python Function in THIS SAME
+ * project (see /vercel.json, backend/index.py, backend/app/main.py's
+ * /backend-api/* router aliases). Vercel's own top-level `routes` in
+ * vercel.json intercept /backend-api/* and forward it to that function
+ * BEFORE Next.js's rewrites ever run -- so the browser's calls to
+ * /backend-api/* need no configuration at all in production.
+ *
+ * The one case that DOES need resolving here is server-to-server: a Next.js
+ * Route Handler (its own separate serverless function) calling the backend
+ * directly needs an absolute URL. Vercel sets VERCEL_URL (the deployment's
+ * own hostname) automatically at runtime, so `https://${VERCEL_URL}/backend-api`
+ * reaches the same deployment's backend function with ZERO required env var.
+ *
+ * BACKEND_API_URL remains a supported explicit override (e.g. a separate
+ * backend host, or local dev against `uvicorn app.main:app`), but is no
+ * longer required on Vercel -- unlike an earlier version of this resolver,
+ * which incorrectly treated an unset BACKEND_API_URL on Vercel as fatal.
+ * That was correct advice under the OLD architecture (a same-origin rewrite
+ * to an external host); it is not under this one.
  */
 
 export const LOCALHOST_BACKEND_API_URL = "http://127.0.0.1:8000/api";
 
-function isLocalhostUrl(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0";
-  } catch {
-    // Not a parseable absolute URL -- treat as invalid, not as "safe".
-    return true;
-  }
-}
-
-/**
- * True specifically for a Vercel build/runtime (any of its environments:
- * production, preview, or a "development" target still running on Vercel's
- * infra). VERCEL is a var Vercel sets itself, never something a developer
- * sets locally. Scoped to Vercel (not any NODE_ENV=production build) so a
- * developer's own `next build && next start` against a local backend, e.g.
- * to test a production build before deploying, keeps working exactly as
- * before -- only Vercel's infra can never actually reach 127.0.0.1:8000.
- */
+/** True specifically for a Vercel build/runtime (any of its environments). */
 export function isVercelBuild(env: NodeJS.ProcessEnv = process.env): boolean {
   return !!env.VERCEL;
 }
 
-/** Broader "this looks like a real deployment" check, used only for a non-fatal warning. */
-export function isProductionDeployment(env: NodeJS.ProcessEnv = process.env): boolean {
-  return isVercelBuild(env) || env.NODE_ENV === "production";
-}
-
 export interface ResolveResult {
   url: string;
-  /** Set when Vercel would deploy with a broken backend target; the caller (next.config.ts) throws to fail the build loudly. */
-  fatalMisconfiguration?: string;
-  /** Set for a non-Vercel production build with the same issue; worth a console warning, not a hard failure. */
+  /** Informational only now (no longer build-breaking) -- see module doc. */
   warning?: string;
 }
 
 /**
- * Resolves BACKEND_API_URL. Never throws itself -- next.config.ts decides
- * whether to turn a Vercel misconfiguration into a build-failing throw.
+ * Resolves the backend base URL:
+ *   1. Explicit BACKEND_API_URL always wins (a real override, or a plain
+ *      local-dev value like http://127.0.0.1:8000/api).
+ *   2. On Vercel with no override: the SAME deployment's own /backend-api
+ *      path, via VERCEL_URL (always set by the platform).
+ *   3. Otherwise (local dev, VERCEL_URL not yet known for some reason):
+ *      the localhost default.
  */
 export function resolveBackendApiUrl(env: NodeJS.ProcessEnv = process.env): ResolveResult {
   const raw = (env.BACKEND_API_URL || "").trim();
-  const url = (raw || LOCALHOST_BACKEND_API_URL).replace(/\/$/, "");
+  if (raw) return { url: raw.replace(/\/$/, "") };
 
-  // A missing/localhost BACKEND_API_URL is completely normal and expected in
-  // plain local dev (`next dev` against a locally-running FastAPI backend) --
-  // only flag it once this looks like a real deployment.
-  if (!isProductionDeployment(env)) return { url };
-  const broken = !raw || isLocalhostUrl(url);
-  if (!broken) return { url };
+  if (isVercelBuild(env)) {
+    if (env.VERCEL_URL) {
+      return { url: `https://${env.VERCEL_URL}/backend-api` };
+    }
+    // Should not happen in practice -- Vercel always sets VERCEL_URL -- but
+    // never silently fall back to an unreachable localhost on Vercel.
+    return {
+      url: LOCALHOST_BACKEND_API_URL,
+      warning: "Running on Vercel but VERCEL_URL is unset and BACKEND_API_URL is not overridden; " +
+        "server-to-server backend calls (AI Guardian weather/Nugen) will fail. This should not happen on a normal " +
+        "Vercel deployment -- if it does, set BACKEND_API_URL explicitly as a fallback.",
+    };
+  }
 
-  const message = !raw
-    ? "BACKEND_API_URL is not set. This silently proxies /backend-api/* to " +
-      `${LOCALHOST_BACKEND_API_URL}, which does not exist on a deployed host. Set BACKEND_API_URL to the ` +
-      "real FastAPI origin, e.g. https://<backend-host>/api, as a Production environment variable, then redeploy."
-    : `BACKEND_API_URL is set to a localhost address (${url}). Set it to the real FastAPI origin, e.g. ` +
-      "https://<backend-host>/api, then redeploy.";
-
-  return isVercelBuild(env) ? { url, fatalMisconfiguration: message } : { url, warning: message };
+  return { url: LOCALHOST_BACKEND_API_URL };
 }

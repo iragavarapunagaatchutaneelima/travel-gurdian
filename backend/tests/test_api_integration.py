@@ -106,6 +106,32 @@ class TestApiIntegration(unittest.TestCase):
             self.assertEqual(res.status_code, 200, path)
             self.assertIsNone(res.json(), path)
 
+    def test_checkin_check_overdue_has_a_get_alias_for_vercel_cron(self):
+        """
+        Vercel Cron Jobs always issue GET requests; the real Dead-Man's-Switch
+        check is POST-only. The GET alias (vercel.json's `crons` entry hits
+        it) must exist, run the identical check, and be blocked by
+        CRON_SECRET when one is configured.
+        """
+        import os
+        from unittest.mock import patch
+
+        client = TestClient(app)
+        res = client.get("/api/assist/checkin/check-overdue")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), [])  # fresh device/db: nothing overdue, but the route ran
+
+        with patch.dict(os.environ, {"CRON_SECRET": "test-secret-value"}):
+            unauthorized = client.get("/api/assist/checkin/check-overdue")
+            self.assertEqual(unauthorized.status_code, 401)
+            authorized = client.get("/api/assist/checkin/check-overdue", headers={"Authorization": "Bearer test-secret-value"})
+            self.assertEqual(authorized.status_code, 200)
+
+    def test_checkin_check_overdue_also_registered_under_backend_api_alias(self):
+        client = TestClient(app)
+        res = client.get("/backend-api/assist/checkin/check-overdue")
+        self.assertEqual(res.status_code, 200)
+
     def test_config_status_reports_dry_run_flag(self):
         client = TestClient(app)
         res = client.get("/api/emergency/config-status")

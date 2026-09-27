@@ -11,13 +11,11 @@ if (typeof window !== "undefined") {
   throw new Error("serverEnv must never be imported into browser code.");
 }
 
+// Route handlers (app/api/ai/route.ts) call the backend directly
+// (server-to-server). On Vercel this resolves to the SAME deployment's
+// backend Function via VERCEL_URL, with no env var required -- see
+// config/backendApiUrl.ts for the full explanation.
 const _backend = resolveBackendApiUrl();
-if (_backend.fatalMisconfiguration) {
-  // Route handlers call the backend directly (server-to-server); on Vercel a
-  // silent localhost fallback here fails every AI Guardian / Nugen request
-  // with no clue why. Fail loudly at first import instead.
-  throw new Error(`[serverEnv] ${_backend.fatalMisconfiguration}`);
-}
 if (_backend.warning) {
   console.warn(`[serverEnv] ${_backend.warning}`);
 }

@@ -27,7 +27,7 @@ node scripts/check-env.mjs     # shows what's set and where; never prints values
 | `GOOGLE_ROUTES_API_KEY` | next-server | no | falls back to the Maps key | Routes API (two-wheeler routing) and server-side Places lookups. IP-restricted. |
 | `GEMINI_API_KEY` | next-server | no | — | AI Guardian conversational layer. Without it, answers come from the deterministic grounded tools, and the UI says so. |
 | `GEMINI_MODEL` | next-server | no | `gemini-2.5-flash` | Model id; the UI shows the actual configured model. |
-| `BACKEND_API_URL` | next-server | **yes, on Vercel/any real deployment** | `http://127.0.0.1:8000/api` (dev only) | FastAPI origin behind the same-origin `/backend-api/*` proxy, baked into the rewrite at **build** time. Set as a Vercel Production (and Preview) env var to `https://<backend-host>/api`, then redeploy. On Vercel, `next.config.ts` fails the build if this is unset or points at localhost, instead of silently shipping a broken proxy ("Digital Twin: HTTP 404"). See `frontend/src/config/backendApiUrl.ts`. |
+| `BACKEND_API_URL` | next-server | no | `http://127.0.0.1:8000/api` locally; auto-resolved on Vercel | **Local dev only** by default: the FastAPI origin behind the `/backend-api/*` rewrite when running `next dev` against `uvicorn app.main:app`. **On Vercel, not needed at all**: the backend is deployed as a Python Function in the *same* Vercel project (`/vercel.json`, `backend/index.py`), and Vercel's own routing serves `/backend-api/*` directly from it; server-to-server calls (AI Guardian, Nugen) auto-resolve to that same deployment via Vercel's own `VERCEL_URL`. Set this only to point at a genuinely separate backend host. See `frontend/src/config/backendApiUrl.ts` and `vercel.json`. |
 | `NUGEN_API_KEY` | backend | for Task 2 | — | Nugen alignment, deployment, inference. |
 | `NUGEN_API_URL` | backend | no | `https://api.nugen.in/api/v3` | Nugen API base. |
 | `NUGEN_BASE_MODEL_ID` | backend | no | — | Alignment-ready base model picked from `GET /models/base`. Recorded from real output only. |
@@ -36,7 +36,8 @@ node scripts/check-env.mjs     # shows what's set and where; never prints values
 | `TWILIO_AUTH_TOKEN` | backend | only if dry run off | — | Twilio auth. |
 | `TWILIO_PHONE_NUMBER` | backend | only if dry run off | — | Twilio sender / caller ID. |
 | `TWILIO_DRY_RUN` | backend | no | `true` | `true` builds and validates messages but never sends them. |
-| `DATABASE_URL` | backend | no | `sqlite:///./travel_guardian.db` | Database. |
+| `DATABASE_URL` | backend | **recommended on Vercel** | `sqlite:///./travel_guardian.db` locally; `sqlite:////tmp/travel_guardian.db` on Vercel if unset | Database. On Vercel's read-only filesystem, an unset value falls back to `/tmp` so the app boots, but that storage is **ephemeral** (not shared or persistent across invocations) -- contacts/check-ins/logs will not reliably survive a cold start. Set to a real hosted Postgres for actual persistence. |
+| `CRON_SECRET` | backend | no | — | If set, required as `Authorization: Bearer <value>` on the `GET /assist/checkin/check-overdue` cron endpoint (Vercel sends this automatically when the var is set on the project). Optional hardening; the endpoint is idempotent either way. |
 | `CORS_ORIGINS` | backend | no | localhost:3000/3001 | JSON array of allowed origins. |
 | `SEED_RESET` | backend | no | `false` | `true` lets `seed.py` wipe demo reference tables (never contacts or check-ins). |
 | `DISABLE_API_DOCS` | backend | no | `false` | `true` in production hides `/docs`, `/redoc`, `/openapi.json`. |

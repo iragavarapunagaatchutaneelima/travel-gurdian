@@ -25,24 +25,13 @@ import { resolveBackendApiUrl } from "./src/config/backendApiUrl";
   }
 })();
 
-// Server-only backend target for the same-origin API proxy (see rewrites() below).
-// Never exposed to the browser bundle because it is read only inside next.config.ts
-// and the rewrite destination, both of which execute on the Next.js server.
-//
-// Fails the BUILD (not just a runtime 404) when this is a production/Vercel
-// build and BACKEND_API_URL is missing or points at localhost -- the exact
-// misconfiguration that silently ships a /backend-api/* rewrite to an
-// address that doesn't exist in production ("Digital Twin: HTTP 404").
-const { url: BACKEND_API_URL, fatalMisconfiguration, warning } = resolveBackendApiUrl();
-if (fatalMisconfiguration) {
-  // Vercel specifically: fail the build loudly rather than silently ship a
-  // rewrite to an address that doesn't exist on Vercel's infra.
-  throw new Error(`[next.config.ts] ${fatalMisconfiguration}`);
-}
+// Server-only backend target for the LOCAL-DEV /backend-api/* rewrite below.
+// On Vercel, /backend-api/* is instead served directly by the backend Python
+// Function in this same project (see /vercel.json's top-level `routes`,
+// which intercept it before this rewrite ever runs) -- so this only matters
+// for `next dev` / a non-Vercel deployment. See src/config/backendApiUrl.ts.
+const { url: BACKEND_API_URL, warning } = resolveBackendApiUrl();
 if (warning) {
-  // A non-Vercel production-looking build (e.g. local `next build && next
-  // start`, or self-hosted): don't break a developer's local production-mode
-  // test, just make the misconfiguration visible.
   console.warn(`[next.config.ts] ${warning}`);
 }
 
@@ -103,11 +92,12 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // Same-origin proxy to the FastAPI backend. The browser only ever talks to
-  // /backend-api/* on its own origin, so the strict CSP connect-src ('self')
-  // does not need to name the backend host at all, in dev OR production.
-  // The real backend location (BACKEND_API_URL) is a server-only env var and
-  // is never sent to the browser.
+  // LOCAL DEV ONLY same-origin proxy to a locally-running FastAPI backend
+  // (`uvicorn app.main:app`). On Vercel, /vercel.json's top-level `routes`
+  // serve /backend-api/* directly from the backend Python Function in this
+  // same project, before this rewrite is ever consulted -- there is no
+  // external backend host to name, so the strict CSP connect-src ('self')
+  // never needs one either, in dev or on Vercel.
   async rewrites() {
     return [
       {
