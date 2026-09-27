@@ -70,7 +70,9 @@ export default function DigitalTwinPanel({ route, position, onOverlayChange, onC
   const [simLoading, setSimLoading] = useState(false);
   const [view, setView] = useState<"LIVE" | "SIMULATED">("LIVE");
   const positionRef = useRef(position);
-  positionRef.current = position;
+  useEffect(() => {
+    positionRef.current = position;
+  }, [position]);
 
   // Re-model when the route changes. GPS is read once per load: the twin is
   // about the route corridor, so we don't refetch on every GPS tick.

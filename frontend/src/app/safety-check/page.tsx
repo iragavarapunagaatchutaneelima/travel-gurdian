@@ -28,8 +28,13 @@ export default function SafetyCheckPage() {
   // causes an effect-driven re-render loop downstream (useSafetyCheckIn).
   const currentPosition = useMemo(
     () =>
-      hasLocation && latitude && longitude
-        ? { latitude, longitude, accuracy: accuracy ?? 0, altitude: null, heading: null, speed: null, timestamp: timestamp ?? Date.now() }
+      // Require a real timestamp too, not just lat/lng: fabricating "now"
+      // here for the rare case it's missing would be exactly the kind of
+      // fake-freshness this hook's staleness check exists to prevent, and
+      // calling Date.now() inside a memo (an impure call during render) is
+      // itself an anti-pattern React now flags.
+      hasLocation && latitude && longitude && timestamp
+        ? { latitude, longitude, accuracy: accuracy ?? 0, altitude: null, heading: null, speed: null, timestamp }
         : null,
     [hasLocation, latitude, longitude, accuracy, timestamp]
   );
