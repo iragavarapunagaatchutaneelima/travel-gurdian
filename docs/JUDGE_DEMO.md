@@ -136,12 +136,17 @@ b. **Offline hub** (`/offline-mode`):
 c. Go back online. The live map returns.
 
 ### 11. Nugen aligned model (2 min)
-**Status: pending the Nugen API key.** The integration (base-model discovery
-→ corpus upload → benchmark → alignment → deployment → inference, with the
-aligned model only *explaining* grounded Digital Twin data) is specified in
-the Nugen plan. It will be demonstrated with **real IDs only** once
-`NUGEN_API_KEY` is set in `/.env.local`. Until then, the honest state to show
-is `node scripts/check-env.mjs` reporting `NUGEN_API_KEY … MISSING`.
+**Status: implemented, pending a live run (needs `NUGEN_API_KEY`).** See
+`docs/NUGEN_INTEGRATION.md`.
+
+- **Once the workflow has run:** ask demo 5's weather question. The header
+  shows `nugen-aligned:<model_id> (confidence N)`, and the reply restates the
+  verified answer. Point out the grounding check: an embellished reply is
+  discarded, with a visible reason.
+- **Before that:** show `GET http://127.0.0.1:8000/api/nugen/status`
+  (`api_key_configured: false`), and
+  `venv/Scripts/python scripts/nugen_workflow.py discover` refusing honestly.
+  No IDs are faked.
 
 ---
 
