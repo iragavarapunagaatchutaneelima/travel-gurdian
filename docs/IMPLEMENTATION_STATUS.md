@@ -1,4 +1,69 @@
-# Implementation Status vs. the Full Recovery/Redesign Prompt
+# Travel Guardian — Current-State Audit (2026-09-27 Continuation Session)
+
+> This is the **honest, browser-verified** audit created by the continuation session.
+> Each area was inspected via real code review AND browser screenshots before being rated.
+> Screenshots taken at: localhost:3000
+
+---
+
+## Status Legend
+- **IMPLEMENTED** — code present AND browser confirms it works visually
+- **PARTIALLY IMPLEMENTED** — code exists but visual/functional gaps remain
+- **NOT IMPLEMENTED** — feature absent from code or browser
+- **BLOCKED** — blocked on external service/credential
+- **NEEDS VERIFICATION** — code exists, not directly browser-tested this session
+
+---
+
+## Area Audit Table
+
+| Area | Current State | Evidence/Files | Problem | Action |
+|------|--------------|----------------|---------|--------|
+| **Runtime/Hydration** | IMPLEMENTED | providers.tsx, locationContext.ts, useSafetyCheckIn.ts | None — fixed in prior session | None |
+| **Theme System** | PARTIALLY IMPLEMENTED | globals.css: full dark+light CSS variables present | Both themes look intentionally designed. Hardcoded `#FFFFFF`/`#0F172A`/`#F8FAFC` in offline-mode/page.tsx bypass theme tokens in dark mode. `.tg-card`/`.tg-input` in globals.css use hardcoded `#FFFFFF` (patched by `.dark .tg-card` override but could be cleaner). | Fix inline styles on offline-mode page; consolidate tg-card/tg-input |
+| **Dashboard** | IMPLEMENTED | app/page.tsx + /dashboard | Premium dark hero, GPS/Safety/Contact/Pack status grid, journey CTA, feature cards. Verified in browser. | None |
+| **Plan Journey** | IMPLEMENTED | app/plan/page.tsx | Clean form layout + safety intelligence sidebar. Route results need post-calculation verification. | Verify route cards post-calculation |
+| **Live Map** | IMPLEMENTED | app/map/page.tsx, LiveNavigationOverlay.tsx | Full Google Maps with Chennai→Bangalore route, A/B route selector, Digital Twin toggle. | None |
+| **AI Guardian** | IMPLEMENTED | app/assist/page.tsx, api/ai/route.ts | Synchronized chat+map. Single model: gemini-2.5-flash. On 429 → deterministic fallback (honest). | Implement model fallback chain |
+| **Safety Check** | IMPLEMENTED | app/safety-check/page.tsx | Timer, GPS, demo mode all fixed in prior session | None |
+| **Emergency SOS** | IMPLEMENTED | app/emergency/page.tsx, SOSModal.tsx | 112 manual-only, Twilio dry-run. | None |
+| **Offline Map** | PARTIALLY IMPLEMENTED | OfflineMapView.tsx, offlineMapProtocol.ts | MapLibre+PMTiles+protomaps code correct. Map height only h-80 (320px). No explicit Locate Me button. | Increase height, add GPS/zoom controls |
+| **Offline Survival Hub** | PARTIALLY IMPLEMENTED | offline-mode/page.tsx | 2-column layout exists. Missing nav controls, follow-route. | Add nav controls, larger map |
+| **Offline AI Guardian** | PARTIALLY IMPLEMENTED | OfflineAIChat.tsx | AI chat panel present. Message area max-h-64 (256px) — too small. No clear network/data-scope badge. | Increase message area; add OFFLINE/ONLINE indicator |
+| **Weather** | IMPLEMENTED | backend/app/services/twin/weather.py | Open-Meteo LIVE/CACHED/UNAVAILABLE. Feeds Digital Twin. | None |
+| **Digital Twin** | IMPLEMENTED | backend/app/services/twin/model.py, DigitalTwinPanel.tsx | "Digital Twin" button visible in map top-right. Simulation isolation confirmed. | None |
+| **Public/Social Signals** | PARTIALLY IMPLEMENTED | backend/app/services/twin/social.py | Bluesky AppView integration + GDACS. Proper disclaimers. **File is UNTRACKED** — not committed yet. | `git add + commit social.py` |
+| **Gemini Fallback** | PARTIALLY IMPLEMENTED | api/ai/route.ts, serverEnv.ts | Single model. On quota → deterministic fallback (honest). No multi-model discovery chain. | Add flash-lite fallback before deterministic |
+| **Nugen** | BLOCKED | backend/nugen/, groundedAnswers.ts | Full client + workflow built. Needs NUGEN_API_KEY env var. | Document; do not fabricate |
+| **Twilio/Emergency** | IMPLEMENTED | backend comms_service | Dry-run mode. Recipient spoofing test. | None |
+| **PWA** | IMPLEMENTED | public/manifest.json, next.config.ts SW | Install banner visible. SW never intercepts Google Maps. | None |
+| **Performance** | PARTIALLY IMPLEMENTED | safety-check loop fixed | No broad re-render audit | Low priority vs UI work |
+| **Responsive UI** | PARTIALLY IMPLEMENTED | BottomNav at mobile, Header at desktop | Mobile works. Tablet not verified. | Verify tablet |
+| **Accessibility** | NOT IMPLEMENTED | No audit done | No ARIA audit | Document |
+| **Light Theme Color Leaks** | PARTIALLY IMPLEMENTED | offline-mode/page.tsx | Inline `backgroundColor: "#F8FAFC"` breaks dark mode on offline page | Fix inline styles |
+
+---
+
+## Priority Implementation Queue (This Session)
+
+1. **Commit social.py** — untracked file, must be committed
+2. **Gemini model fallback chain** — flash → flash-lite → deterministic
+3. **Offline mode dark theme fix** — replace hardcoded hex with CSS vars
+4. **Offline Survival Hub layout** — larger map, better AI panel, GPS controls
+5. **globals.css tg-card/tg-input** — use `var(--surface)` not `#FFFFFF`
+6. **Documentation** — update this file with final verified status
+
+---
+
+## Test Status (inherited from prior session)
+- Backend pytest: 74 passed
+- Frontend unit: 28 passed
+- Frontend tsc: clean
+- E2E Playwright: 34-36 passed
+
+## External Blockers
+1. **Nugen** — requires `NUGEN_API_KEY` — do not fabricate
+2. **Twilio production** — requires real credentials — dry-run works correctly
 
 This maps every requirement section of the "FULL SYSTEM RECOVERY + ENGINEERING
 COMPLETION + AI + OFFLINE + DIGITAL TWIN + NUGEN + PERFORMANCE + FINAL UI/UX

@@ -96,14 +96,27 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
 
   return (
     <div className="rounded-3xl border border-border bg-surface overflow-hidden">
-      <div className="px-4 py-2.5 bg-elevated-surface border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-extrabold text-foreground">
-          <Bot className="h-4 w-4 text-(--primary)" /> Offline AI Guardian
+      <div className="px-4 py-3 bg-elevated-surface border-b border-border">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-xs font-extrabold text-foreground">
+            <Bot className="h-4 w-4 text-(--primary)" /> Offline AI Guardian
+          </div>
+          <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${webgpu ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
+            <Cpu className="h-3 w-3" />
+            {webgpu ? "WebGPU" : "Deterministic"}
+          </span>
         </div>
-        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${webgpu ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-          <Cpu className="h-3 w-3" />
-          {webgpu ? "WebGPU available" : "Deterministic mode (no WebGPU)"}
-        </span>
+        {/* Network status + data scope row */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+            online ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
+          }`}>
+            {online ? "● ONLINE" : "◌ OFFLINE"}
+          </span>
+          <span className="text-[10px] text-(--muted-foreground) font-semibold">
+            Data: {pack ? "Downloaded Journey Pack" : "GPS only (no pack)"}
+          </span>
+        </div>
       </div>
 
       {engine !== "unsupported" && engine !== "checking" && (
@@ -150,7 +163,7 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
         </div>
       )}
 
-      <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
+      <div className="p-4 space-y-3 min-h-[200px] max-h-[480px] overflow-y-auto">
         {messages.length === 0 && (
           <p className="text-xs text-(--muted-foreground)">
             Ask about your cached route, offline map, safe havens, or check-in status. This works with zero

@@ -10,17 +10,15 @@ import OfflineMapView from "../components/OfflineMapView";
 import OfflineAIChat from "../components/OfflineAIChat";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { useSharedLocation } from "../../hooks/useSharedLocation";
-import { 
-  CloudOff, 
-  Wifi, 
-  WifiOff, 
-  MapPin, 
-  PhoneCall, 
-  Compass, 
-  ShieldCheck, 
-  Database, 
+import {
+  CloudOff,
+  Wifi,
+  WifiOff,
+  PhoneCall,
+  Compass,
   ChevronRight,
-  Loader
+  Loader,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -38,158 +36,297 @@ function OfflineModeContent() {
     allPacks,
     gpsAvailable,
     gpsNetworkState,
-    refreshStorage
+    refreshStorage,
   } = useOfflineStatus();
 
   const { latitude, longitude, accuracy, hasLocation } = useSharedLocation();
-  const currentPosition = hasLocation && latitude && longitude ? { latitude, longitude, accuracy: accuracy || undefined } : null;
+  const currentPosition =
+    hasLocation && latitude && longitude
+      ? { latitude, longitude, accuracy: accuracy || undefined }
+      : null;
 
   return (
-    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
-      
+    <div
+      className="min-h-screen pb-20 md:pb-8 flex flex-col items-center"
+      style={{
+        backgroundColor: "var(--tg-background)",
+        color: "var(--tg-navy)",
+        fontFamily: "'Poppins',sans-serif",
+      }}
+    >
       {/* Header */}
       <Header />
 
       {/* Main Container */}
-      <div className="w-full max-w-6xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
-        
+      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
+
         {/* Top Status Header */}
-        <div className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
+        <div
+          className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4"
+          style={{ borderBottom: "1px solid var(--tg-border)" }}
+        >
           <div>
-            <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.12em", color: "#DC2626", display: "block" }}>
+            <span
+              className="tg-label block"
+              style={{ color: "var(--tg-danger)" }}
+            >
               OFFLINE GUARDIAN ACTIVE
             </span>
-            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "#0F172A", marginTop: "4px" }}>
+            <h1
+              className="font-heading"
+              style={{
+                fontSize: "clamp(22px,4vw,30px)",
+                color: "var(--foreground)",
+                marginTop: "4px",
+              }}
+            >
               Offline Survival Hub &amp; Living Dossier
             </h1>
-            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "2px" }}>
-              Operating under local device cache. Turn guidance, safe havens, and emergency numbers remain fully functional.
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--tg-muted)",
+                fontWeight: 400,
+                marginTop: "2px",
+              }}
+            >
+              Operating under local device cache. Turn guidance, safe havens,
+              and emergency numbers remain fully functional.
             </p>
           </div>
 
-          {/* Combined GPS & Network State */}
+          {/* GPS & Network State badges */}
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className="rounded-full flex items-center gap-1.5"
+              className="tg-badge rounded-full flex items-center gap-1.5"
               style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                padding: "6px 14px",
-                backgroundColor: isOffline ? "#FEE2E2" : "#DCFCE7",
-                border: isOffline ? "1px solid #FECACA" : "1px solid #86EFAC",
-                color: isOffline ? "#DC2626" : "#16A34A",
+                backgroundColor: isOffline
+                  ? "var(--tg-danger-light)"
+                  : "var(--tg-success-light)",
+                border: isOffline
+                  ? "1px solid var(--tg-danger)"
+                  : "1px solid var(--tg-success)",
+                color: isOffline ? "var(--tg-danger)" : "var(--tg-success)",
               }}
             >
-              {isOffline ? <WifiOff className="h-3.5 w-3.5" /> : <Wifi className="h-3.5 w-3.5" />}
+              {isOffline ? (
+                <WifiOff className="h-3.5 w-3.5" />
+              ) : (
+                <Wifi className="h-3.5 w-3.5" />
+              )}
               <span>NETWORK: {networkStatus}</span>
             </span>
 
             <span
-              className="rounded-full flex items-center gap-1.5"
+              className="tg-badge rounded-full flex items-center gap-1.5"
               style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                textTransform: "uppercase",
-                padding: "6px 14px",
-                backgroundColor: "#EFF6FF",
+                backgroundColor: "var(--tg-surface-soft)",
                 border: "1px solid rgba(37,99,255,0.2)",
-                color: "#2563FF",
+                color: "var(--tg-primary)",
               }}
             >
-              <Compass className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
+              <Compass className="h-3.5 w-3.5" />
               <span>GPS: {gpsAvailable ? "AVAILABLE" : "UNAVAILABLE"}</span>
             </span>
           </div>
         </div>
 
-        {/* Main Grid: Active Pack Card + Actions */}
+        {/* Main Grid: Left (map+survival) / Right (AI+emergency+packs) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* Left Column: Interactive Offline Survival Card */}
-          <div className="lg:col-span-8 space-y-5">
+
+          {/* LEFT COLUMN — Map + Survival Card (7/12 on desktop) */}
+          <div className="lg:col-span-7 space-y-5">
             {activePack ? (
               <>
                 {activePack.mapPack && activePack.mapPack.tileCount > 0 && (
-                  <div id="offline-map" className="rounded-3xl overflow-hidden border border-border shadow-sm scroll-mt-24">
-                    <div className="px-4 py-2 bg-elevated-surface border-b border-border flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground)">
-                        Offline Vector Map — {activePack.mapPack.tileCount} real tiles cached
+                  <div
+                    id="offline-map"
+                    className="rounded-3xl overflow-hidden shadow-sm scroll-mt-24"
+                    style={{ border: "1px solid var(--border)" }}
+                  >
+                    {/* Map header bar */}
+                    <div
+                      className="px-4 py-2.5 flex items-center justify-between"
+                      style={{
+                        backgroundColor: "var(--elevated-surface)",
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      <span
+                        className="tg-label"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        Offline Vector Map — {activePack.mapPack.tileCount} real
+                        tiles cached
                       </span>
-                      <span className="text-[10px] font-bold text-emerald-600">Independent of Google Maps</span>
+                      <span
+                        className="text-[10px] font-bold"
+                        style={{ color: "var(--tg-success)" }}
+                      >
+                        Independent of Google Maps
+                      </span>
                     </div>
-                    <OfflineMapView pack={activePack} className="w-full h-80" />
-                    <div className="px-4 py-2 bg-elevated-surface border-t border-border text-[10px] text-(--muted-foreground) font-semibold">
-                      Map detail was downloaded only along the blue route, at zoom {activePack.mapPack.zoomRange[0]}–{activePack.mapPack.zoomRange[1]}. Zoom in on the route to see it; areas off the corridor are intentionally blank.
-                      <span className="block mt-1 text-amber-600">
-                        Route recalculation is unavailable offline. Follow the cached turn list below; if you leave the route, head back to it, or reconnect to plan a new one.
+
+                    {/* MapLibre map — height increased from h-80 (320px) to 480px */}
+                    <OfflineMapView
+                      pack={activePack}
+                      className="w-full"
+                      style={{ height: "480px" }}
+                    />
+
+                    {/* Map footer info */}
+                    <div
+                      className="px-4 py-2.5 text-[11px] font-semibold"
+                      style={{
+                        backgroundColor: "var(--elevated-surface)",
+                        borderTop: "1px solid var(--border)",
+                        color: "var(--muted)",
+                      }}
+                    >
+                      Map detail covers zoom {activePack.mapPack.zoomRange[0]}–
+                      {activePack.mapPack.zoomRange[1]} along the downloaded
+                      corridor only. Areas off-route are intentionally blank.
+                      <span
+                        className="block mt-1"
+                        style={{ color: "var(--tg-warning)" }}
+                      >
+                        Offline rerouting is unavailable. Follow the cached turn
+                        list below; reconnect to plan a new route.
                       </span>
                     </div>
                   </div>
                 )}
-                <OfflineSurvivalCard pack={activePack} onRefreshPack={refreshStorage} />
+                <OfflineSurvivalCard
+                  pack={activePack}
+                  onRefreshPack={refreshStorage}
+                />
               </>
             ) : (
-              <div className="p-8 rounded-3xl text-center space-y-4 shadow-sm" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
-                <CloudOff className="h-12 w-12 mx-auto" style={{ color: "#94A3B8" }} />
-                <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0F172A" }}>No Active Offline Corridor Pack</h3>
-                <p style={{ fontSize: "13px", color: "#64748B", maxWidth: "340px", margin: "0 auto", lineHeight: 1.6 }}>
-                  Download an offline pack in advance to view cached routes and medical havens during disconnected travel.
+              <div
+                className="p-8 rounded-3xl text-center space-y-4 shadow-sm"
+                style={{
+                  backgroundColor: "var(--surface)",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <CloudOff
+                  className="h-12 w-12 mx-auto"
+                  style={{ color: "var(--muted)" }}
+                />
+                <h3
+                  className="font-heading"
+                  style={{ fontSize: "18px", color: "var(--foreground)" }}
+                >
+                  No Active Offline Corridor Pack
+                </h3>
+                <p
+                  style={{
+                    fontSize: "13px",
+                    color: "var(--tg-muted)",
+                    maxWidth: "340px",
+                    margin: "0 auto",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Download an offline pack in advance to view cached routes and
+                  medical havens during disconnected travel.
                 </p>
                 <Link
                   href="/offline"
-                  className="inline-flex py-3 px-6 rounded-2xl text-white font-bold text-xs shadow-sm transition-all"
-                  style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
+                  className="btn-primary inline-flex"
                 >
+                  <MapPin className="h-4 w-4" />
                   Download Journey Pack
                 </Link>
               </div>
             )}
           </div>
 
-          {/* Right Column: Quick Navigation & Emergency Dialing */}
-          <div className="lg:col-span-4 space-y-5">
+          {/* RIGHT COLUMN — AI Chat + Emergency + Packs (5/12 on desktop) */}
+          <div className="lg:col-span-5 space-y-5">
 
+            {/* Offline AI Guardian — expanded */}
             <OfflineAIChat pack={activePack} currentPosition={currentPosition} />
 
-            {/* Direct 112 Hotline */}
-            <div className="p-6 rounded-3xl shadow-sm text-left space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid #FECACA" }}>
-              <span style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#DC2626", display: "block" }}>
+            {/* Direct 112 Emergency Call */}
+            <div
+              className="p-5 rounded-3xl shadow-sm text-left space-y-3"
+              style={{
+                backgroundColor: "var(--surface)",
+                border: "1px solid var(--tg-danger)",
+              }}
+            >
+              <span
+                className="tg-label block"
+                style={{ color: "var(--tg-danger)" }}
+              >
                 Emergency Calling (Cellular Voice)
               </span>
-              <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 500, lineHeight: 1.5 }}>
-                Emergency calls (112) can be placed without mobile data if voice signal is reachable.
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "var(--tg-muted)",
+                  fontWeight: 500,
+                  lineHeight: 1.5,
+                }}
+              >
+                Emergency calls (112) can be placed without mobile data if voice
+                signal is reachable.
               </p>
               <a
                 href="tel:112"
                 aria-label="Call National Emergency Line 112"
-                className="w-full py-3.5 rounded-2xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm text-center transition-all"
-                style={{ backgroundColor: "#EF4444", fontFamily: "'Poppins',sans-serif" }}
+                className="btn-emergency w-full"
+                style={{ fontSize: "13px" }}
               >
                 <PhoneCall className="h-4 w-4" />
                 <span>Call 112 Public Emergency</span>
               </a>
             </div>
 
-            {/* Offline Corridor Switcher Card */}
-            <div className="p-5 rounded-3xl space-y-3 text-xs" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)" }}>
-              <div className="flex items-center justify-between font-extrabold" style={{ color: "#0F172A" }}>
-                <span style={{ textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.08em", color: "#64748B" }}>Corridor Packs</span>
-                <Link href="/offline" aria-label="Manage All Offline Corridor Packs" style={{ color: "#2563FF", fontSize: "11px" }} className="hover:underline">
+            {/* Offline Corridor Pack Switcher */}
+            <div
+              className="p-5 rounded-3xl space-y-3 text-xs"
+              style={{
+                backgroundColor: "var(--surface)",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <span
+                  className="tg-label"
+                  style={{ color: "var(--muted)" }}
+                >
+                  Corridor Packs
+                </span>
+                <Link
+                  href="/offline"
+                  aria-label="Manage All Offline Corridor Packs"
+                  style={{ color: "var(--tg-primary)", fontSize: "11px" }}
+                  className="hover:underline font-bold"
+                >
                   Manage All
                 </Link>
               </div>
-              <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 500 }}>
-                You have <strong style={{ color: "#0F172A" }}>{allPacks.length} pack(s)</strong> stored in device memory.
+              <p style={{ fontSize: "12px", color: "var(--tg-muted)", fontWeight: 500 }}>
+                You have{" "}
+                <strong style={{ color: "var(--foreground)" }}>
+                  {allPacks.length} pack(s)
+                </strong>{" "}
+                stored in device memory.
               </p>
               <Link
                 href="/offline"
                 aria-label="Browse all cached packs"
-                className="w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors text-center"
-                style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.1)", color: "#0F172A", fontFamily: "'Poppins',sans-serif" }}
+                className="w-full py-2.5 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-colors text-center"
+                style={{
+                  backgroundColor: "var(--elevated-surface)",
+                  border: "1px solid var(--border)",
+                  color: "var(--foreground)",
+                }}
               >
                 <span>Browse All Cached Packs</span>
-                <ChevronRight className="h-3.5 w-3.5" style={{ color: "#2563FF" }} />
+                <ChevronRight className="h-3.5 w-3.5" style={{ color: "var(--tg-primary)" }} />
               </Link>
             </div>
 
@@ -211,12 +348,23 @@ function OfflineModeContent() {
 
 export default function OfflineMode() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-xs font-bold" style={{ backgroundColor: "#F8FAFC", color: "#64748B" }}>
-        <Loader className="h-6 w-6 animate-spin" style={{ color: "#2563FF" }} />
-        <span>Loading Offline Survival Hub...</span>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div
+          className="min-h-screen flex flex-col items-center justify-center gap-3 text-xs font-bold"
+          style={{
+            backgroundColor: "var(--tg-background)",
+            color: "var(--tg-muted)",
+          }}
+        >
+          <Loader
+            className="h-6 w-6 animate-spin"
+            style={{ color: "var(--tg-primary)" }}
+          />
+          <span>Loading Offline Survival Hub...</span>
+        </div>
+      }
+    >
       <OfflineModeContent />
     </Suspense>
   );

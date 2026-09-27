@@ -18,9 +18,10 @@ import { OfflineCorridorPack } from "../../types/offline";
 interface OfflineMapViewProps {
   pack: OfflineCorridorPack;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export default function OfflineMapView({ pack, className = "" }: OfflineMapViewProps) {
+export default function OfflineMapView({ pack, className = "", style }: OfflineMapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -117,7 +118,7 @@ export default function OfflineMapView({ pack, className = "" }: OfflineMapViewP
 
   if (!pack.mapPack || pack.mapPack.tileCount === 0) {
     return (
-      <div className={`flex items-center justify-center bg-elevated-surface text-xs text-(--muted-foreground) font-semibold ${className}`}>
+      <div className={`flex items-center justify-center bg-elevated-surface text-xs text-(--muted-foreground) font-semibold ${className}`} style={style}>
         No offline map tiles were downloaded for this pack.
       </div>
     );
@@ -125,11 +126,11 @@ export default function OfflineMapView({ pack, className = "" }: OfflineMapViewP
 
   if (renderError) {
     return (
-      <div className={`flex items-center justify-center bg-elevated-surface text-xs text-rose-600 font-semibold p-4 text-center ${className}`}>
+      <div className={`flex items-center justify-center bg-elevated-surface text-xs text-rose-600 font-semibold p-4 text-center ${className}`} style={style}>
         Offline map could not be rendered: {renderError}
       </div>
     );
   }
 
-  return <div ref={containerRef} className={className} />;
+  return <div ref={containerRef} className={className} style={style} />;
 }

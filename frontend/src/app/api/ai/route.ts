@@ -181,7 +181,42 @@ export async function POST(req: Request) {
     // a deterministic answer is never mistaken for a silent Gemini outage.
     let llmUnavailableReason: string | null = geminiKey ? null : "Gemini API key is not configured on the server.";
 
-    // 1. If real Gemini API key is available, call Gemini with tool declarations
+    // Model fallback chain: primary → lite → deterministic.
+    // Only quota (429) and server-overload (503) trigger model fallback;
+    // auth failures (401/403) are config problems not solved by switching models.
+    const GEMINI_FALLBACK_MODEL = "gemini-2.0-flash-lite";
+    const GEMINI_TRANSIENT_CODES = new Set([429, 503, 500]);
+
+    // Calls a specific Gemini model and returns { ok, status, data, usedModel }.
+    // Throws only on hard network failures (no HTTP response at all).
+    async function callGeminiModel(
+      modelId: string,
+      apiKey: string,
+      declarations: object[],
+      prompt: string
+    ): Promise<{ ok: boolean; status: number; data: any; usedModel: string }> {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            tools: [{ functionDeclarations: declarations }],
+            systemInstruction: {
+              parts: [{
+                text: "You are Travel Guardian AI, an expert travel safety assistant. You observe navigation, check-in, and safety state. You can explain information and suggest actions via tool calls, but you CANNOT autonomously execute safety-critical actions. Always explain clearly and truthfully using verified tool data. Whenever the user asks about nearby places, safe havens, cafes, hospitals, pharmacies, police stations, fuel stations/petrol bunks, 'what is the next petrol bunk', or 'what is near me', you MUST call the 'findNearbyPlace' tool with the appropriate placeType ('fuel', 'hospital', 'pharmacy', 'police', 'cafe', 'rest', 'all')."
+              }]
+            }
+          })
+        }
+      );
+      const data = res.ok ? await res.json().catch(() => null) : null;
+      return { ok: res.ok, status: res.status, data, usedModel: modelId };
+    }
+
+    // 1. If real Gemini API key is available, call Gemini with model fallback chain
+    // Chain: primary (geminiModel) → GEMINI_FALLBACK_MODEL → deterministic
     if (geminiKey) {
       try {
         const functionDeclarations = ALLOWLISTED_TOOLS.map(t => ({
@@ -197,37 +232,34 @@ export async function POST(req: Request) {
           }
         }));
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ text: sanitizedPrompt }]
-                }
-              ],
-              tools: [{ functionDeclarations }],
-              systemInstruction: {
-                parts: [
-                  {
-                    text: "You are Travel Guardian AI, an expert travel safety assistant. You observe navigation, check-in, and safety state. You can explain information and suggest actions via tool calls, but you CANNOT autonomously execute safety-critical actions. Always explain clearly and truthfully using verified tool data. Whenever the user asks about nearby places, safe havens, cafes, hospitals, pharmacies, police stations, fuel stations/petrol bunks, 'what is the next petrol bunk', or 'what is near me', you MUST call the 'findNearbyPlace' tool with the appropriate placeType ('fuel', 'hospital', 'pharmacy', 'police', 'cafe', 'rest', 'all')."
-                  }
-                ]
-              }
-            })
-          }
-        );
+        // Try primary model first
+        let geminiAttempt = await callGeminiModel(geminiModel, geminiKey, functionDeclarations, sanitizedPrompt);
 
-        if (!geminiRes.ok) {
-          llmUnavailableReason = geminiRes.status === 429
-            ? "Gemini quota exceeded (HTTP 429). Answering with the deterministic safety engine."
-            : `Gemini returned HTTP ${geminiRes.status}. Answering with the deterministic safety engine.`;
+        // If transient failure on primary, try the lite fallback model once
+        if (!geminiAttempt.ok && GEMINI_TRANSIENT_CODES.has(geminiAttempt.status) && geminiModel !== GEMINI_FALLBACK_MODEL) {
+          const primaryReason = geminiAttempt.status === 429
+            ? `${geminiModel} quota exceeded (HTTP 429)`
+            : `${geminiModel} returned HTTP ${geminiAttempt.status}`;
+          console.warn(`[AI] ${primaryReason}. Trying fallback model ${GEMINI_FALLBACK_MODEL}.`);
+          const fallbackAttempt = await callGeminiModel(GEMINI_FALLBACK_MODEL, geminiKey, functionDeclarations, sanitizedPrompt);
+          if (fallbackAttempt.ok) {
+            geminiAttempt = fallbackAttempt;
+            llmUnavailableReason = null; // fallback succeeded — no outage to report
+          } else {
+            llmUnavailableReason = `${primaryReason}; ${GEMINI_FALLBACK_MODEL} also unavailable (HTTP ${fallbackAttempt.status}). Answering with the deterministic safety engine.`;
+          }
+        } else if (!geminiAttempt.ok) {
+          // Non-transient failure (e.g. 401 auth error) — do not try fallback model
+          llmUnavailableReason = geminiAttempt.status === 429
+            ? `${geminiModel} quota exceeded (HTTP 429). Answering with the deterministic safety engine.`
+            : `${geminiModel} returned HTTP ${geminiAttempt.status}. Answering with the deterministic safety engine.`;
         }
-        if (geminiRes.ok) {
-          const data = await geminiRes.json();
+
+        const geminiRes = { ok: geminiAttempt.ok, status: geminiAttempt.status };
+        const resolvedGeminiModel = geminiAttempt.usedModel;
+
+        if (geminiAttempt.ok) {
+          const data = geminiAttempt.data;
           const candidate = data?.candidates?.[0]?.content?.parts?.[0];
 
           // Check if Gemini invoked a tool call
@@ -293,7 +325,7 @@ export async function POST(req: Request) {
               toolResults,
               proposals,
               mode: "CONNECTED",
-              model: geminiModel
+              model: resolvedGeminiModel
             });
           }
 
@@ -322,7 +354,7 @@ export async function POST(req: Request) {
                 toolResults,
                 proposals,
                 mode: "CONNECTED",
-                model: geminiModel
+                model: resolvedGeminiModel
               });
             }
 
@@ -358,7 +390,7 @@ export async function POST(req: Request) {
                   toolResults,
                   proposals,
                   mode: "CONNECTED",
-                  model: geminiModel
+                  model: resolvedGeminiModel
                 });
               } else if (res?.data?.places && res.data.places.length > 0) {
                 const listStr = res.data.places
@@ -371,7 +403,7 @@ export async function POST(req: Request) {
                   toolResults,
                   proposals,
                   mode: "CONNECTED",
-                  model: geminiModel
+                  model: resolvedGeminiModel
                 });
               } else {
                 return NextResponse.json({
@@ -380,7 +412,7 @@ export async function POST(req: Request) {
                   toolResults,
                   proposals,
                   mode: "CONNECTED",
-                  model: geminiModel
+                  model: resolvedGeminiModel
                 });
               }
             }
@@ -391,12 +423,13 @@ export async function POST(req: Request) {
               toolResults: [],
               proposals: [],
               mode: "CONNECTED",
+              model: resolvedGeminiModel,
             });
           }
         }
       } catch (err) {
         llmUnavailableReason = "Gemini request failed (network error). Answering with the deterministic safety engine.";
-        console.warn("Gemini cloud API error, switching to deterministic tool router:", err);
+        console.warn("[AI] Gemini cloud API error, switching to deterministic tool router:", err);
       }
     }
 
