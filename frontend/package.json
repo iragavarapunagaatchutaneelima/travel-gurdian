@@ -12,6 +12,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.85",
     "@protomaps/basemaps": "^5.7.2",
     "jspdf": "^4.2.1",
     "lucide-react": "*",

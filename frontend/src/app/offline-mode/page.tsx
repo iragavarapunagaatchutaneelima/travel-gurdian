@@ -7,7 +7,9 @@ import Footer from "../components/Footer";
 import BottomNav from "../components/BottomNav";
 import OfflineSurvivalCard from "../components/OfflineSurvivalCard";
 import OfflineMapView from "../components/OfflineMapView";
+import OfflineAIChat from "../components/OfflineAIChat";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
+import { useSharedLocation } from "../../hooks/useSharedLocation";
 import { 
   CloudOff, 
   Wifi, 
@@ -38,6 +40,9 @@ function OfflineModeContent() {
     gpsNetworkState,
     refreshStorage
   } = useOfflineStatus();
+
+  const { latitude, longitude, accuracy, hasLocation } = useSharedLocation();
+  const currentPosition = hasLocation && latitude && longitude ? { latitude, longitude, accuracy: accuracy || undefined } : null;
 
   return (
     <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
@@ -138,7 +143,9 @@ function OfflineModeContent() {
 
           {/* Right Column: Quick Navigation & Emergency Dialing */}
           <div className="lg:col-span-4 space-y-5">
-            
+
+            <OfflineAIChat pack={activePack} currentPosition={currentPosition} />
+
             {/* Direct 112 Hotline */}
             <div className="p-6 rounded-3xl shadow-sm text-left space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid #FECACA" }}>
               <span style={{ fontSize: "11px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "#DC2626", display: "block" }}>
