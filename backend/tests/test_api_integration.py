@@ -99,6 +99,13 @@ class TestApiIntegration(unittest.TestCase):
         self.assertEqual(body["status"], "dry_run")
         self.assertIsNone(body.get("sid"))
 
+    def test_no_active_checkin_is_200_null_not_404(self):
+        client = TestClient(app)  # fresh device, nothing running
+        for path in ("/api/assist/checkin/active", "/api/emergency/checkin/active"):
+            res = client.get(path)
+            self.assertEqual(res.status_code, 200, path)
+            self.assertIsNone(res.json(), path)
+
     def test_config_status_reports_dry_run_flag(self):
         client = TestClient(app)
         res = client.get("/api/emergency/config-status")

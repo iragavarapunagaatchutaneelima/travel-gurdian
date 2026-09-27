@@ -21,8 +21,9 @@ import {
   Navigation, Crosshair, Layers, ShieldCheck, Fuel, Coffee, 
   AlertCircle, Sparkles, Clock, Compass,
   Download, WifiOff, Check, Loader2, Hospital, ShieldAlert,
-  Plus, X, AlertTriangle, Menu, ArrowLeft, PlusSquare, ChevronDown, ChevronUp
+  Plus, X, AlertTriangle, Menu, ArrowLeft, PlusSquare, ChevronDown, ChevronUp, Waves
 } from "lucide-react";
+import DigitalTwinPanel, { TwinOverlay } from "../components/DigitalTwinPanel";
 import jsPDF from "jspdf";
 
 export const dynamic = "force-dynamic";
@@ -194,6 +195,11 @@ function LivingMapContent() {
   const destMarkerRef = useRef<any>(null);
   const poiMarkersRef = useRef<any[]>([]);
   const incidentMarkersRef = useRef<any[]>([]);
+
+  // Digital Twin (Midnight Task 1): panel + Google Maps overlay
+  const [showTwin, setShowTwin] = useState(false);
+  const [twinOverlay, setTwinOverlay] = useState<TwinOverlay | null>(null);
+  const twinShapesRef = useRef<any[]>([]);
   const userMarkerRef = useRef<any>(null);
   const userCircleRef = useRef<any>(null);
 
@@ -646,6 +652,53 @@ function LivingMapContent() {
   }, [selectedRoute, activeLayers, communityIncidents, mapLoaded]);
 
   // Live GPS User Position Marker update on Google Map
+  // Digital Twin overlay: segment exposure circles + official alert markers.
+  // Vector shapes only (Circle / SymbolPath), never image URLs.
+  useEffect(() => {
+    twinShapesRef.current.forEach((sh) => sh.setMap(null));
+    twinShapesRef.current = [];
+    if (!map.current || !mapLoaded || !twinOverlay || !window.google?.maps) return;
+    const g = window.google.maps;
+    const colors: Record<string, string> = { LOW: "#10b981", POSSIBLE: "#f59e0b", LIKELY: "#ef4444", UNKNOWN: "#94a3b8" };
+    const simulated = twinOverlay.mode === "SIMULATED";
+    twinOverlay.segments.forEach((seg) => {
+      const radiusM = Math.min(15, Math.max(2, (seg.end_km - seg.start_km) / 2)) * 1000;
+      twinShapesRef.current.push(new g.Circle({
+        map: map.current,
+        center: { lat: seg.mid[0], lng: seg.mid[1] },
+        radius: radiusM,
+        strokeColor: simulated ? "#7c3aed" : colors[seg.exposure] || colors.UNKNOWN,
+        strokeOpacity: 0.9,
+        strokeWeight: simulated ? 2 : 1,
+        fillColor: colors[seg.exposure] || colors.UNKNOWN,
+        fillOpacity: seg.exposure === "LOW" ? 0.08 : 0.22,
+        clickable: false,
+        zIndex: 5,
+      }));
+    });
+    twinOverlay.signals.forEach((sig) => {
+      twinShapesRef.current.push(new g.Marker({
+        map: map.current,
+        position: { lat: sig.lat, lng: sig.lng },
+        title: `${sig.name} (${sig.alert_level}) - GDACS`,
+        icon: {
+          path: g.SymbolPath.CIRCLE,
+          scale: 9,
+          fillColor: sig.alert_level === "Red" ? "#dc2626" : sig.alert_level === "Orange" ? "#f59e0b" : "#16a34a",
+          fillOpacity: 0.95,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+        },
+        zIndex: 6,
+      }));
+    });
+  }, [twinOverlay, mapLoaded]);
+
+  // Close the twin (and clear its overlay) if the route changes underneath it.
+  useEffect(() => {
+    if (!selectedRoute) setShowTwin(false);
+  }, [selectedRoute]);
+
   useEffect(() => {
     if (!map.current || !mapLoaded || !navPosition || !window.google?.maps) return;
 
@@ -907,6 +960,18 @@ function LivingMapContent() {
         {/* The Google Maps Canvas */}
         <div ref={mapContainer} className="w-full h-full relative" />
 
+        {/* Digital Twin slide-over (map stays visible beside it on desktop) */}
+        {showTwin && selectedRoute && (
+          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-[380px] z-30 animate-fadeIn">
+            <DigitalTwinPanel
+              route={selectedRoute}
+              position={navPosition ? { latitude: navPosition.latitude, longitude: navPosition.longitude, accuracy: navPosition.accuracy } : null}
+              onOverlayChange={setTwinOverlay}
+              onClose={() => setShowTwin(false)}
+            />
+          </div>
+        )}
+
         {/* Loading State Overlay */}
         {(routeLoading || (!mapLoaded && !mapError)) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-(--background)/85 backdrop-blur-md z-40 animate-fadeIn">
@@ -1073,6 +1138,22 @@ function LivingMapContent() {
           >
             {gpsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
           </button>
+
+          {/* Digital Twin toggle */}
+          {selectedRoute && (
+            <button
+              onClick={() => setShowTwin((v) => !v)}
+              className={`p-2.5 rounded-2xl backdrop-blur-md border shadow-md transition-all flex items-center gap-1.5 active:scale-95 ${
+                showTwin ? "bg-(--primary) text-white border-(--primary)" : "bg-(--surface)/95 border-border text-foreground hover:bg-elevated-surface"
+              }`}
+              title="Weather-driven Digital Twin"
+              aria-label="Open Digital Twin"
+              aria-pressed={showTwin}
+            >
+              <Waves className="h-4 w-4" />
+              <span className="text-xs font-bold hidden sm:inline">Digital Twin</span>
+            </button>
+          )}
 
           {/* Compact ☰ Layers Menu Button (Section 11) */}
           <div className="relative" ref={layersMenuRef}>

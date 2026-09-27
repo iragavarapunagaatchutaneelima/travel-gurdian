@@ -76,6 +76,10 @@ export default function TravelAssistant({
   // hardcoded label that could drift from GEMINI_MODEL.
   const [activeModel, setActiveModel] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Times are formatted only after mount: server and browser locales/timezones
+  // differ, which caused a hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -152,7 +156,7 @@ export default function TravelAssistant({
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className={`h-1.5 w-1.5 rounded-full ${intelligenceMode === "CONNECTED" ? "bg-emerald-500" : "bg-amber-500"}`} />
               <span className="text-[10px] font-bold text-(--muted-foreground) uppercase tracking-wider">
-                {intelligenceMode === "CONNECTED" ? (activeModel || "Gemini + Tools") : "Deterministic Safety Engine"}
+                {!activeModel ? "Awaiting first reply" : intelligenceMode === "CONNECTED" ? activeModel : "Deterministic Safety Engine"}
               </span>
             </div>
           </div>
@@ -295,7 +299,7 @@ export default function TravelAssistant({
             )}
 
             <span className="text-[10px] font-semibold text-(--muted-foreground) block px-1">
-              {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {mounted && msg.timestamp > 0 ? new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : " "}
             </span>
           </div>
         ))}

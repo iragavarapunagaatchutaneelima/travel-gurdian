@@ -233,12 +233,17 @@ def propagate(state: Dict[str, Any]) -> Dict[str, Any]:
     else:
         risk = "LOW"
 
-    readiness_share = (reachable / n) if (n and pois) else None
+    hospitals = [p for p in pois if p.get("type") in ("hospital", "emergency")]
+    readiness_share = (reachable / n) if (n and hospitals) else None
     if readiness_share is None:
-        readiness = {"level": "UNAVAILABLE", "reason": "No hospital POIs available for this route."}
+        readiness = {"level": "UNAVAILABLE", "reason": "No hospitals were found along this route when it was planned."}
     else:
         level = "GOOD" if readiness_share >= 0.8 else "REDUCED" if readiness_share >= 0.5 else "POOR"
         readiness = {"level": level, "share_of_route_with_reachable_hospital": round(readiness_share, 2),
+                     "hospitals_considered": len(hospitals),
+                     # Coverage reflects the hospitals the app's route search
+                     # found, not every hospital that exists near the road.
+                     "basis": f"{len(hospitals)} hospital(s) found along the route by the app's Google Places search",
                      "rule": f"hospital within {HOSPITAL_REACH_KM:g} km of segment and exposure not LIKELY"}
 
     travel = {

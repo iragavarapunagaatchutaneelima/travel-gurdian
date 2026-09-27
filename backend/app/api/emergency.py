@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.core.database import get_db
 from app.core.identity import get_device_id
 from app.schemas import schemas
@@ -135,8 +135,8 @@ def get_checkins_alias(user_id: str = Depends(get_device_id), db: Session = Depe
     return get_checkins(user_id=user_id, db=db)
 
 
-@router.get("/checkin/active", response_model=schemas.SafeCheckInResponse)
-@router.get("/emergency/checkin/active", response_model=schemas.SafeCheckInResponse, include_in_schema=False)
+@router.get("/checkin/active", response_model=Optional[schemas.SafeCheckInResponse])
+@router.get("/emergency/checkin/active", response_model=Optional[schemas.SafeCheckInResponse], include_in_schema=False)
 def get_active_checkin_alias(user_id: str = Depends(get_device_id), db: Session = Depends(get_db)):
     from app.api.assist import get_active_checkin
     return get_active_checkin(user_id=user_id, db=db)

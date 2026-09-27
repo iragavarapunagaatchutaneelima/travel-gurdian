@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.core.database import get_db
 from app.core.identity import get_device_id
 from app.models import models
@@ -190,18 +190,18 @@ def get_checkins(user_id: str = Depends(get_device_id), db: Session = Depends(ge
     ).order_by(models.SafeCheckIn.target_time.asc()).all()
 
 
-@router.get("/checkin/active", response_model=schemas.SafeCheckInResponse)
+@router.get("/checkin/active", response_model=Optional[schemas.SafeCheckInResponse])
 def get_active_checkin(user_id: str = Depends(get_device_id), db: Session = Depends(get_db)):
     """
-    Get the single latest active check-in timer for the traveler.
+    Get the single latest active check-in timer for the traveler, or null.
+    "No check-in running" is a normal state, not a missing resource, so it's
+    a 200 with null rather than a 404 (which browsers log as an error on
+    every page that shows the check-in widget).
     """
-    active = db.query(models.SafeCheckIn).filter(
+    return db.query(models.SafeCheckIn).filter(
         models.SafeCheckIn.user_id == user_id,
         models.SafeCheckIn.is_completed == False
     ).order_by(models.SafeCheckIn.target_time.desc()).first()
-    if not active:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active check-in timer found.")
-    return active
 
 
 @router.post("/checkin", response_model=schemas.SafeCheckInResponse, status_code=status.HTTP_201_CREATED)
