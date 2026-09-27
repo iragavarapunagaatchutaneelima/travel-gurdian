@@ -1,4 +1,28 @@
 import type { NextConfig } from "next";
+import fs from "node:fs";
+import path from "node:path";
+
+// Canonical configuration lives in the repository-root /.env.local (shared
+// with the FastAPI backend; see ENVIRONMENT.md). Next.js only auto-loads env
+// files from frontend/, so read the root file here and let it take
+// precedence over the legacy frontend/.env.local, which keeps working as a
+// fallback for any variable not yet moved. Values are never logged.
+(function loadRootEnv() {
+  const rootEnv = path.resolve(__dirname, "..", ".env.local");
+  if (!fs.existsSync(rootEnv)) return;
+  for (const rawLine of fs.readFileSync(rootEnv, "utf-8").split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (value !== "") process.env[key] = value;
+  }
+})();
 
 // Server-only backend target for the same-origin API proxy (see rewrites() below).
 // Never exposed to the browser bundle because it is read only inside next.config.ts

@@ -2,9 +2,14 @@ import os
 from pydantic_settings import BaseSettings
 from typing import List, Optional
 
-# Locate .env whether invoked from backend/ directory or repository root
+# Canonical config lives in the repository-root /.env.local (shared with the
+# frontend; see ENVIRONMENT.md). backend/.env is still read as a legacy
+# fallback so existing installs keep working while they migrate. pydantic-
+# settings gives LATER files in env_file precedence, so the root file wins.
 _backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_env_path = os.path.join(_backend_dir, ".env")
+_repo_root = os.path.dirname(_backend_dir)
+_legacy_env_path = os.path.join(_backend_dir, ".env")
+_root_env_path = os.path.join(_repo_root, ".env.local")
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Travel Guardian API"
@@ -47,9 +52,17 @@ class Settings(BaseSettings):
     # full API surface (including emergency/contacts endpoints) to anyone.
     DISABLE_API_DOCS: bool = False
 
+    # Nugen Intelligence (server-side only; never exposed to the browser).
+    # Model IDs are recorded here only once the real Nugen workflow has
+    # produced them (see docs/NUGEN_INTEGRATION.md) -- never invented.
+    NUGEN_API_URL: str = "https://api.nugen.in/api/v3"
+    NUGEN_API_KEY: Optional[str] = None
+    NUGEN_BASE_MODEL_ID: Optional[str] = None
+    NUGEN_ALIGNED_MODEL_ID: Optional[str] = None
+
     class Config:
         case_sensitive = True
-        env_file = (_env_path, ".env")
+        env_file = (_legacy_env_path, _root_env_path)
         extra = "ignore"
 
 settings = Settings()

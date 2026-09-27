@@ -66,6 +66,8 @@ export interface AssistantMessage {
   proposals?: ActionProposal[];
   mode?: "CONNECTED" | "DEMO" | "OFFLINE";
   model?: string;
+  /** Why the LLM layer was skipped for this reply (quota, missing key, network). */
+  llmUnavailableReason?: string | null;
 }
 
 export interface LiveTravelContext {

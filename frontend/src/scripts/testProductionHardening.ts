@@ -71,15 +71,20 @@ if (nextConfigExists) {
 // 4. Secret Protection Audit
 const routeAiPath = path.resolve(process.cwd(), "src/app/api/ai/route.ts");
 const routeAiContent = fs.readFileSync(routeAiPath, "utf-8");
-assert(routeAiContent.includes("process.env.GEMINI_API_KEY"), "GEMINI_API_KEY read strictly server-side");
+const serverEnvContent = fs.readFileSync(path.resolve(process.cwd(), "src/config/serverEnv.ts"), "utf-8");
+assert(
+  serverEnvContent.includes('readKey("GEMINI_API_KEY")') && routeAiContent.includes("serverEnv.geminiApiKey"),
+  "GEMINI_API_KEY read strictly server-side (config/serverEnv.ts, used by api/ai/route.ts)"
+);
 
-// Verify no keys hardcoded in public or client components
+// Verify no keys hardcoded in public or client components, and that no
+// client component pulls in the server-only config module.
 const clientComponentsDir = path.resolve(process.cwd(), "src/app/components");
 const clientFiles = fs.readdirSync(clientComponentsDir);
 let foundExposedKey = false;
 clientFiles.forEach((file) => {
   const content = fs.readFileSync(path.join(clientComponentsDir, file), "utf-8");
-  if (content.includes("AIzaSy") || content.includes("process.env.GEMINI_API_KEY")) {
+  if (content.includes("AIzaSy") || content.includes("GEMINI_API_KEY") || content.includes("config/serverEnv") || content.includes("NUGEN_API_KEY")) {
     foundExposedKey = true;
   }
 });

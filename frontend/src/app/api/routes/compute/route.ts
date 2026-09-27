@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isCrossOriginRequest, isRateLimited, getClientIp } from "../../../../services/apiRouteGuard";
+import { serverEnv } from "../../../../config/serverEnv";
 
 // ---------------------------------------------------------------------------
 // Server-side security hardening for the Google Routes API proxy.
@@ -68,8 +69,8 @@ export async function POST(req: Request) {
     // in Google Cloud Console, NOT by HTTP referrer, since this is a
     // server-to-server call). Falls back to the browser key only if a
     // separate one hasn't been configured.
-    const dedicatedServerKey = process.env.GOOGLE_ROUTES_API_KEY;
-    const apiKey = dedicatedServerKey || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+    const dedicatedServerKey = serverEnv.googleRoutesApiKey;
+    const apiKey = dedicatedServerKey || serverEnv.googleMapsPublicKey || "";
 
     if (!apiKey) {
       return NextResponse.json(

@@ -12,6 +12,7 @@ import {
   ActionProposal,
   LiveTravelContext
 } from "../../../types/gemini";
+import { serverEnv } from "../../../config/serverEnv";
 
 // This endpoint spends real Gemini/Places quota on every call, so it needs
 // the same baseline hardening as /api/routes/compute: reject requests that
@@ -39,10 +40,10 @@ export async function POST(req: Request) {
     }
 
     const sanitizedPrompt = sanitizeInput(rawPrompt);
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-    const dedicatedPlacesKey = process.env.GOOGLE_ROUTES_API_KEY;
-    const placesApiKey = dedicatedPlacesKey || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const geminiKey = serverEnv.geminiApiKey;
+    const geminiModel = serverEnv.geminiModel;
+    const dedicatedPlacesKey = serverEnv.googleRoutesApiKey;
+    const placesApiKey = dedicatedPlacesKey || serverEnv.googleMapsPublicKey;
     // Only needed when falling back to the shared, referrer-restricted
     // browser key -- see fetchLiveNearbyPlaces for why.
     const placesRefererOrigin = dedicatedPlacesKey ? undefined : new URL(req.url).origin;
@@ -122,8 +123,12 @@ export async function POST(req: Request) {
       return result;
     };
 
+    // Why the conversational LLM layer was skipped, surfaced to the client so
+    // a deterministic answer is never mistaken for a silent Gemini outage.
+    let llmUnavailableReason: string | null = geminiKey ? null : "Gemini API key is not configured on the server.";
+
     // 1. If real Gemini API key is available, call Gemini with tool declarations
-    if (geminiKey && geminiKey !== "your_gemini_api_key" && geminiKey.length > 5) {
+    if (geminiKey) {
       try {
         const functionDeclarations = ALLOWLISTED_TOOLS.map(t => ({
           name: t.name,
@@ -162,6 +167,11 @@ export async function POST(req: Request) {
           }
         );
 
+        if (!geminiRes.ok) {
+          llmUnavailableReason = geminiRes.status === 429
+            ? "Gemini quota exceeded (HTTP 429). Answering with the deterministic safety engine."
+            : `Gemini returned HTTP ${geminiRes.status}. Answering with the deterministic safety engine.`;
+        }
         if (geminiRes.ok) {
           const data = await geminiRes.json();
           const candidate = data?.candidates?.[0]?.content?.parts?.[0];
@@ -331,6 +341,7 @@ export async function POST(req: Request) {
           }
         }
       } catch (err) {
+        llmUnavailableReason = "Gemini request failed (network error). Answering with the deterministic safety engine.";
         console.warn("Gemini cloud API error, switching to deterministic tool router:", err);
       }
     }
@@ -358,7 +369,9 @@ export async function POST(req: Request) {
     // Intent: ETA / Arrival / Progress / Route status
     else if (lower.includes("eta") || lower.includes("how long") || lower.includes("arrival") || lower.includes("reach") || lower.includes("time left")) {
       const res = runTool("getArrivalEstimate");
-      reply = `Estimated arrival is at ${res.data.etaString} with ${res.data.distanceRemainingKm} km remaining (${res.data.progressPercent}% complete).`;
+      reply = res.data.available && res.data.etaString
+        ? `Estimated arrival: ${res.data.etaString}${res.data.distanceRemainingKm !== null ? `, ${res.data.distanceRemainingKm} km remaining` : ""}${res.data.progressPercent !== null ? ` (${res.data.progressPercent}% complete)` : ""}.`
+        : "No active route or live navigation progress, so there is no arrival estimate to report.";
     }
     // Intent: Next Check-in / Check-in status
     else if (lower.includes("check-in") || lower.includes("checkin") || lower.includes("countdown") || lower.includes("timer")) {
@@ -491,7 +504,8 @@ export async function POST(req: Request) {
       toolResults,
       proposals,
       mode: "DEMO",
-      model: "guardian-deterministic-tools"
+      model: "guardian-deterministic-tools",
+      llmUnavailableReason
     });
 
   } catch (error: any) {

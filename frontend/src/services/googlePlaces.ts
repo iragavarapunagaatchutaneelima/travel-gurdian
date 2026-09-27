@@ -1,4 +1,5 @@
 import { LocationDetails, PlaceSuggestion } from "../types/location";
+import { publicEnv } from "../config/publicEnv";
 
 declare global {
   interface Window {
@@ -9,7 +10,7 @@ declare global {
   }
 }
 
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+const GOOGLE_MAPS_API_KEY = publicEnv.googleMapsApiKey;
 
 /**
  * Normalized user-facing map and routing error formatter.

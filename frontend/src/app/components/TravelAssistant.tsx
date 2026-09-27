@@ -219,6 +219,11 @@ export default function TravelAssistant({
               }`}
             >
               <div className="whitespace-pre-line">{msg.content}</div>
+              {msg.role === "assistant" && msg.llmUnavailableReason && (
+                <div className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                  {msg.llmUnavailableReason}
+                </div>
+              )}
 
               {/* Render place cards if tool result has places */}
               {msg.toolResults?.some(tr => tr.toolName === "findNearbyPlace" && tr.data?.places?.length > 0) && (
