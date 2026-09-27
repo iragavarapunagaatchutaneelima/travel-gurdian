@@ -159,6 +159,7 @@ async function runPhase5Tests() {
   assert(sessionStatus === "RESOLVED", "Navigation ARRIVED transitions safety check-in to RESOLVED cleanly");
 
   console.log(`\n=== PHASE 5 TEST SUMMARY: ${passed}/${total} TESTS PASSED ===\n`);
+  if (passed !== total) process.exit(1);
 }
 
 runPhase5Tests();

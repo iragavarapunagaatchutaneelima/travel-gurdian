@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Bot, Send, Cpu, CircleAlert } from "lucide-react";
+import { Bot, Send, Cpu, CircleAlert, Download, Trash2, Loader2 } from "lucide-react";
 import { answerOffline, isWebGPUSupported, OfflineAnswer } from "../../services/offlineAI";
+import { loadOfflineEngine, isOfflineEngineReady, isModelCached, deleteCachedModel, OFFLINE_MODEL_LABEL } from "../../services/webllmEngine";
 import { OfflineCorridorPack } from "../../types/offline";
+
+type EngineState = "checking" | "unsupported" | "not_downloaded" | "cached" | "loading" | "ready" | "error";
 
 interface OfflineAIChatProps {
   pack: OfflineCorridorPack | null;
@@ -14,6 +17,7 @@ interface ChatEntry {
   role: "user" | "assistant";
   text: string;
   mode?: "LOCAL_LLM" | "DETERMINISTIC";
+  llmRejectedReason?: string;
 }
 
 /**
@@ -29,9 +33,50 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
   // Detected after mount: navigator.gpu doesn't exist during SSR, so reading
   // it at render time made server and client disagree (hydration mismatch).
   const [webgpu, setWebgpu] = useState(false);
+  const [engine, setEngine] = useState<EngineState>("checking");
+  const [progress, setProgress] = useState<{ text: string; progress: number } | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
+
   useEffect(() => {
-    setWebgpu(isWebGPUSupported());
+    const gpu = isWebGPUSupported();
+    setWebgpu(gpu);
+    setOnline(navigator.onLine);
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    if (!gpu) setEngine("unsupported");
+    else if (isOfflineEngineReady()) setEngine("ready");
+    else isModelCached().then((c) => setEngine(c ? "cached" : "not_downloaded"));
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
   }, []);
+
+  const loadModel = async () => {
+    setEngine("loading");
+    setEngineError(null);
+    try {
+      await loadOfflineEngine((p) => setProgress(p));
+      setEngine("ready");
+    } catch (err: any) {
+      setEngineError(err?.message || "The on-device model failed to load.");
+      setEngine("error");
+    } finally {
+      setProgress(null);
+    }
+  };
+
+  const removeModel = async () => {
+    try {
+      await deleteCachedModel();
+      setEngine("not_downloaded");
+    } catch (err: any) {
+      setEngineError(`Couldn't remove the model: ${err?.message || "unknown error"}`);
+    }
+  };
 
   const handleSend = async () => {
     const prompt = input.trim();
@@ -41,7 +86,7 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
     setLoading(true);
     try {
       const answer: OfflineAnswer = await answerOffline(prompt, pack, currentPosition);
-      setMessages((m) => [...m, { role: "assistant", text: answer.reply, mode: answer.mode }]);
+      setMessages((m) => [...m, { role: "assistant", text: answer.reply, mode: answer.mode, llmRejectedReason: answer.llmRejectedReason }]);
     } catch (err: any) {
       setMessages((m) => [...m, { role: "assistant", text: `Offline assistant error: ${err?.message || "unknown error"}` }]);
     } finally {
@@ -61,6 +106,50 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
         </span>
       </div>
 
+      {engine !== "unsupported" && engine !== "checking" && (
+        <div className="px-4 py-2.5 border-b border-border text-[11px] space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold text-foreground">
+              {engine === "ready" && `On-device LLM ready: ${OFFLINE_MODEL_LABEL}`}
+              {engine === "cached" && "On-device LLM is saved on this device (not loaded)"}
+              {engine === "not_downloaded" && "Optional on-device LLM for more natural replies"}
+              {engine === "loading" && <span className="inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Loading on-device LLM…</span>}
+              {engine === "error" && "On-device LLM unavailable"}
+            </span>
+            {(engine === "not_downloaded" || engine === "cached" || engine === "error") && (
+              <button
+                onClick={loadModel}
+                disabled={engine !== "cached" && !online}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-(--primary) text-white font-bold disabled:opacity-50"
+              >
+                <Download className="h-3 w-3" /> {engine === "cached" ? "Load" : "Download"}
+              </button>
+            )}
+            {(engine === "ready" || engine === "cached") && (
+              <button onClick={removeModel} className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border font-bold" aria-label="Remove on-device model">
+                <Trash2 className="h-3 w-3" /> Remove
+              </button>
+            )}
+          </div>
+          {engine === "not_downloaded" && (
+            <p className="text-(--muted-foreground)">
+              {online
+                ? "One-time download of a few hundred MB, stored in this browser and then usable offline. Without it, answers come from the deterministic engine, which uses the same verified data."
+                : "Needs a connection for the one-time download. The deterministic engine is answering in the meantime."}
+            </p>
+          )}
+          {engine === "loading" && progress && (
+            <div>
+              <div className="h-1.5 rounded-full bg-elevated-surface overflow-hidden">
+                <div className="h-full bg-(--primary) transition-all" style={{ width: `${Math.round(progress.progress * 100)}%` }} />
+              </div>
+              <p className="text-(--muted-foreground) mt-1 truncate">{progress.text}</p>
+            </div>
+          )}
+          {engineError && <p className="text-amber-600 font-semibold">{engineError} The deterministic engine is still answering.</p>}
+        </div>
+      )}
+
       <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
         {messages.length === 0 && (
           <p className="text-xs text-(--muted-foreground)">
@@ -75,7 +164,12 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
             </div>
             {m.mode && (
               <div className="text-[9px] text-(--muted-foreground) mt-0.5 font-bold uppercase">
-                {m.mode === "LOCAL_LLM" ? "Answered by on-device LLM" : "Answered by deterministic offline engine"}
+                {m.mode === "LOCAL_LLM" ? "Answered by on-device LLM (grounding-checked)" : "Answered by deterministic offline engine"}
+              </div>
+            )}
+            {m.llmRejectedReason && (
+              <div className="text-[9px] text-amber-600 mt-0.5 font-semibold">
+                On-device LLM reply discarded: {m.llmRejectedReason}
               </div>
             )}
           </div>

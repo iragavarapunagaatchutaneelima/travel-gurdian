@@ -8,6 +8,7 @@ import {
   createDefaultCorridorPacks 
 } from "../services/offlineStorageService";
 import { executeToolCall, sanitizeInput } from "../services/geminiToolRouter";
+import { checkLlmReplyGrounded } from "../services/offlineAI";
 import { ToolCallRequest, LiveTravelContext } from "../types/gemini";
 
 function runPhase7Tests() {
@@ -132,7 +133,24 @@ function runPhase7Tests() {
   assert(!cleaned.includes("<script>"), "Script tags stripped in offline engine");
   assert(!cleaned.includes("ignore all instructions"), "Instruction override stripped in offline engine");
 
+  // TEST 8: On-device LLM grounding check. The rejected reply is what the
+  // real Qwen2.5-0.5B model produced in the browser for "route summary".
+  const verified = "Cached route: Optimal Safety Corridor (705.5 km, est. 13h 30m).";
+  const routeData = { available: true, routeName: "Optimal Safety Corridor", distance: "705.5 km", estimatedDuration: "13h 30m", trafficScore: "Moderate", nightSafety: "Medium" };
+  const embellished = "Certainly, here is the route summary: 1. **Optimal Safety Corridor**: minimizes traffic congestion. 2. **Distance**: 705.5 km (approximately 436 miles). 3. **Estimated Duration**: 13 hours and 30 minutes.";
+  assert(!checkLlmReplyGrounded(embellished, verified, routeData).ok, "The real embellished on-device reply is rejected");
+  const r1 = checkLlmReplyGrounded("Optimal Safety Corridor: 705.5 km (about 436 miles), 13h 30m.", verified, routeData);
+  assert(!r1.ok && /436/.test(r1.reason || ""), "LLM reply with an invented unit conversion (436 miles) is rejected");
+  assert(!checkLlmReplyGrounded("Your route is the Optimal Safety Corridor, 705.5 km; expect delays from roadblocks.", verified, routeData).ok,
+    "LLM reply adding an unsupported roadblock/delay claim is rejected");
+  assert(checkLlmReplyGrounded("You're on the Optimal Safety Corridor: 705.5 km, about 13h 30m.", verified, routeData).ok,
+    "Faithful LLM rephrasing of the verified answer is accepted");
+  assert(checkLlmReplyGrounded("Traffic on this route is rated Moderate.", verified, routeData).ok,
+    "Terms present in the verified data (traffic rating) are allowed");
+  assert(!checkLlmReplyGrounded("", verified, routeData).ok, "Empty LLM reply is rejected");
+
   console.log(`\n=== PHASE 7 TEST SUMMARY: ${passed}/${total} TESTS PASSED ===\n`);
+  if (passed !== total) process.exit(1);
 }
 
 runPhase7Tests();

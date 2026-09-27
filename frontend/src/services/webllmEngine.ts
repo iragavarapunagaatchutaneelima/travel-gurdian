@@ -34,6 +34,31 @@ export function isOfflineEngineReady(): boolean {
   return engineReady;
 }
 
+export const OFFLINE_MODEL_LABEL = "Qwen2.5 0.5B Instruct (q4f16, WebLLM)";
+
+/** True if the model weights are already in this browser's Cache Storage. */
+export async function isModelCached(): Promise<boolean> {
+  try {
+    const webllm = await import("@mlc-ai/web-llm");
+    return await webllm.hasModelInCache(MODEL_ID);
+  } catch {
+    return false;
+  }
+}
+
+/** Frees the device storage used by the model. The deterministic engine keeps working. */
+export async function deleteCachedModel(): Promise<void> {
+  const webllm = await import("@mlc-ai/web-llm");
+  if (enginePromise) {
+    try {
+      (await enginePromise).unload();
+    } catch {}
+  }
+  enginePromise = null;
+  engineReady = false;
+  await webllm.deleteModelAllInfoInCache(MODEL_ID);
+}
+
 /**
  * Loads the WebLLM engine. Throws with an honest message on any failure
  * (no WebGPU, model fetch failed, WebGPU context creation failed) --
@@ -70,15 +95,19 @@ export async function loadOfflineEngine(onProgress?: (p: EngineLoadProgress) => 
  * real, verified data the model is allowed to reference. The model is
  * instructed never to state a fact not present in that data.
  */
-export async function generateOfflineCompletion(systemPrompt: string, userPrompt: string): Promise<string> {
+export async function generateOfflineCompletion(
+  systemPrompt: string,
+  userPrompt: string,
+  opts: { maxTokens?: number; temperature?: number } = {}
+): Promise<string> {
   const engine = await loadOfflineEngine();
   const result = await engine.chat.completions.create({
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.3,
-    max_tokens: 256,
+    temperature: opts.temperature ?? 0.3,
+    max_tokens: opts.maxTokens ?? 256,
   });
   const text = result.choices?.[0]?.message?.content;
   if (!text) {

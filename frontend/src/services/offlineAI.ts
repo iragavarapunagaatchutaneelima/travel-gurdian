@@ -28,6 +28,39 @@ export interface OfflineAnswer {
   mode: OfflineAnswerMode;
   toolUsed: string;
   groundedData: any;
+  /** Set when the on-device LLM answered but failed the grounding check. */
+  llmRejectedReason?: string;
+}
+
+// Claims a small model tends to add on its own. Each may appear in an LLM
+// reply only if the verified answer/data already mentions it.
+const UNSUPPORTED_CLAIM_TERMS = [
+  "traffic", "congestion", "delay", "roadblock", "closure", "closed", "accident", "construction",
+  "weather", "rain", "flood", "storm", "fog", "visibility", "crime", "danger", "unsafe", "risk",
+  "police", "hospital", "fuel", "petrol", "pharmacy", "open 24", "miles", "toll",
+];
+
+/**
+ * Deterministic guard on on-device LLM output. Rejects a reply that:
+ *  - contains a number not present in the verified answer or data
+ *    (catches invented distances, times, scores, unit conversions)
+ *  - mentions a risk/service term the verified data doesn't
+ *  - is far longer than the verified answer (padding = embellishment)
+ */
+export function checkLlmReplyGrounded(reply: string, verifiedReply: string, data: unknown): { ok: boolean; reason?: string } {
+  if (!reply) return { ok: false, reason: "empty reply" };
+  const allowed = `${verifiedReply} ${JSON.stringify(data ?? {})}`.toLowerCase();
+  const lower = reply.toLowerCase();
+  // Whole-number tokens, so "1" doesn't pass just because "13" is present.
+  const allowedNumbers = new Set(allowed.match(/\d+(?:\.\d+)?/g) || []);
+  for (const n of lower.match(/\d+(?:\.\d+)?/g) || []) {
+    if (!allowedNumbers.has(n)) return { ok: false, reason: `number "${n}" is not in the verified data` };
+  }
+  for (const term of UNSUPPORTED_CLAIM_TERMS) {
+    if (lower.includes(term) && !allowed.includes(term)) return { ok: false, reason: `mentions "${term}", which the verified data doesn't` };
+  }
+  if (reply.length > Math.max(160, verifiedReply.length * 2 + 60)) return { ok: false, reason: "reply adds content beyond the verified answer" };
+  return { ok: true };
 }
 
 /** Builds the same LiveTravelContext shape the online assistant uses, sourced entirely from the downloaded pack + live GPS. */
@@ -144,18 +177,28 @@ export async function answerOffline(
 
   const fallbackReply = deterministicReply(tool, groundedData);
 
-  if (!isWebGPUSupported()) {
+  // Only use the local LLM once the user has loaded it. Otherwise the first
+  // question would silently start a multi-hundred-MB download and hold a
+  // safety-relevant answer hostage until it finished.
+  if (!isWebGPUSupported() || !isOfflineEngineReady()) {
     return { reply: fallbackReply, mode: "DETERMINISTIC", toolUsed: tool, groundedData };
   }
 
   try {
+    // The small on-device model only REPHRASES the verified answer. Asked to
+    // "summarise the data" it embellished freely (invented traffic claims,
+    // unit conversions), so its output must also pass checkLlmReplyGrounded.
     const systemPrompt =
-      "You are an offline travel safety assistant. You may ONLY state facts present in the JSON data below. " +
-      "Never invent a place, score, or status not present in this data. If the data says something is unavailable, say so honestly. " +
-      "Be concise (2-3 sentences).\n\nVERIFIED DATA:\n" + JSON.stringify(groundedData);
-    const llmReply = await generateOfflineCompletion(systemPrompt, prompt);
+      "You rephrase a verified travel-safety answer for the user in plain, friendly language. " +
+      "Use ONLY the facts in the VERIFIED ANSWER and DATA. Do not add advice, explanations, conversions, or any fact not present. " +
+      "At most 2 short sentences.\n\nVERIFIED ANSWER:\n" + fallbackReply + "\n\nDATA:\n" + JSON.stringify(groundedData);
+    const llmReply = (await generateOfflineCompletion(systemPrompt, prompt, { maxTokens: 96, temperature: 0 })).trim();
+    const check = checkLlmReplyGrounded(llmReply, fallbackReply, groundedData);
+    if (!check.ok) {
+      return { reply: fallbackReply, mode: "DETERMINISTIC", toolUsed: tool, groundedData, llmRejectedReason: check.reason };
+    }
     return { reply: llmReply, mode: "LOCAL_LLM", toolUsed: tool, groundedData };
-  } catch (err) {
+  } catch {
     // Honest fallback: WebGPU exists but the model failed to load/generate
     // (e.g. first-time download failed, out of memory). Never block the
     // user's safety-relevant question on that -- use the deterministic path.

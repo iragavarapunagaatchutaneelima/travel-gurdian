@@ -100,6 +100,7 @@ function runTests() {
   assert(manResult2.currentManeuver?.stepIndex === 2, "At 2.5km, step index is 2");
 
   console.log(`\n=== TEST SUMMARY: ${passed}/${total} TESTS PASSED ===\n`);
+  if (passed !== total) process.exit(1);
 }
 
 runTests();

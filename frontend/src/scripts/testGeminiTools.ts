@@ -171,6 +171,7 @@ function runPhase6Tests() {
   assert(!sanitized.includes("system prompt"), "System prompt override phrase stripped");
 
   console.log(`\n=== PHASE 6 TEST SUMMARY: ${passed}/${total} TESTS PASSED ===\n`);
+  if (passed !== total) process.exit(1);
 }
 
 runPhase6Tests();
