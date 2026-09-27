@@ -32,8 +32,22 @@ let currentState: SharedLocationState = {
   error: null
 };
 
-// Hydrate from localStorage if in browser
-if (typeof window !== "undefined") {
+// NOTE: localStorage is deliberately NOT read here at module scope. This
+// module is evaluated on both the server (SSR/RSC, no localStorage -- always
+// the neutral defaults above) and the client. Reading localStorage here used
+// to mean the client's module evaluation (which runs before React even
+// mounts) could immediately flip `currentState` to a cached "GPS Active"
+// fix, while the server-rendered HTML always showed the neutral "prompt /
+// no location" state -- a guaranteed hydration mismatch on every page that
+// reads useSharedLocation() after a previous visit had cached a fix (e.g.
+// "GPS: Active" vs "Unavailable" on /safety-check). The cache is instead
+// loaded explicitly, once, from a client-only effect after mount -- see
+// hydrateSharedLocationFromStorage() and useSharedLocation.ts.
+let hydratedFromStorage = false;
+
+export function hydrateSharedLocationFromStorage(): void {
+  if (hydratedFromStorage || typeof window === "undefined") return;
+  hydratedFromStorage = true;
   try {
     const cached = localStorage.getItem(STORAGE_KEY);
     if (cached) {
@@ -44,6 +58,7 @@ if (typeof window !== "undefined") {
           ...parsed,
           isLoading: false
         };
+        notifyListeners();
       }
     }
   } catch {

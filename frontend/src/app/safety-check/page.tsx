@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
@@ -15,11 +15,24 @@ import { ShieldCheck, Users, MapPin, Clock } from "lucide-react";
 export default function SafetyCheckPage() {
   const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
 
-  const { latitude, longitude, hasLocation } = useSharedLocation();
+  const { latitude, longitude, accuracy, timestamp, hasLocation } = useSharedLocation();
   const [journey, setJourney] = useState<ActiveJourney | null>(null);
   useEffect(() => {
     setJourney(loadActiveJourney());
   }, []);
+
+  // Built from the real GPS fix's own accuracy/timestamp (never a fabricated
+  // "now"), and memoized so the reference is stable across re-renders that
+  // don't reflect a real position change (e.g. the countdown ticking) --
+  // otherwise a fresh object on every render defeats staleness checking and
+  // causes an effect-driven re-render loop downstream (useSafetyCheckIn).
+  const currentPosition = useMemo(
+    () =>
+      hasLocation && latitude && longitude
+        ? { latitude, longitude, accuracy: accuracy ?? 0, altitude: null, heading: null, speed: null, timestamp: timestamp ?? Date.now() }
+        : null,
+    [hasLocation, latitude, longitude, accuracy, timestamp]
+  );
 
   const {
     status,
@@ -37,9 +50,7 @@ export default function SafetyCheckPage() {
   } = useSafetyCheckIn({
     // Real destination or nothing: this text ends up in escalation messages.
     destinationName: journey?.destinationName ?? undefined,
-    currentPosition: hasLocation && latitude && longitude
-      ? { latitude, longitude, accuracy: 15, altitude: null, heading: null, speed: null, timestamp: Date.now() }
-      : null
+    currentPosition
   });
 
   useEffect(() => {

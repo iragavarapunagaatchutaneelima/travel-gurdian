@@ -1,18 +1,25 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { 
-  SharedLocationState, 
-  getSharedLocation, 
-  subscribeToLocation, 
-  requestCurrentLocation, 
-  updateSharedLocation 
+import {
+  SharedLocationState,
+  getSharedLocation,
+  subscribeToLocation,
+  requestCurrentLocation,
+  updateSharedLocation,
+  hydrateSharedLocationFromStorage
 } from "../services/locationContext";
 
 export function useSharedLocation() {
+  // Initial render (both server and the client's first pass) always sees the
+  // neutral default state -- getSharedLocation() only returns cached data
+  // once hydrateSharedLocationFromStorage() has run, which happens in the
+  // effect below, after mount/hydration. This keeps server and client output
+  // identical on the first render.
   const [location, setLocation] = useState<SharedLocationState>(getSharedLocation);
 
   useEffect(() => {
+    hydrateSharedLocationFromStorage();
     const unsubscribe = subscribeToLocation(setLocation);
     return () => {
       unsubscribe();

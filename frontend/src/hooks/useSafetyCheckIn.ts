@@ -77,7 +77,15 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
     positionRef.current = currentPosition || null;
   }, [activeCycle, status, config, currentPosition]);
 
-  // Keep snapshot updated with latest valid position
+  // Keep snapshot updated with latest valid position.
+  // Depend on the real primitive fields, not the `currentPosition` object
+  // reference: callers construct that object inline on every render (see
+  // safety-check/page.tsx), so keying on the object itself re-fires this
+  // effect on every render regardless of whether the position actually
+  // changed -- setLastKnownSnapshot then triggers the next render, which
+  // reconstructs a new object, which re-fires the effect again, forever
+  // ("Maximum update depth exceeded"). Timestamp is included (not just
+  // lat/lng) so a genuinely refreshed fix still updates the staleness check.
   useEffect(() => {
     if (currentPosition) {
       const snap = createLocationSnapshot(currentPosition);
@@ -85,7 +93,7 @@ export function useSafetyCheckIn(options: UseSafetyCheckInOptions = {}) {
         setLastKnownSnapshot(snap);
       }
     }
-  }, [currentPosition]);
+  }, [currentPosition?.latitude, currentPosition?.longitude, currentPosition?.timestamp]);
 
   // Notify parent on status change
   useEffect(() => {
