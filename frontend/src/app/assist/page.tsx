@@ -8,6 +8,7 @@ import GuardianMapSync, { PinnedPlace } from "../components/GuardianMapSync";
 import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
 import { useSafetyCheckIn } from "../../hooks/useSafetyCheckIn";
 import { useSharedLocation } from "../../hooks/useSharedLocation";
+import { loadActiveJourney, ActiveJourney } from "../../services/activeJourney";
 import { getTrustedContacts, refreshTrustedContactsFromBackend } from "../../services/trustedContactService";
 import { searchNearbyPlaces } from "../../services/googlePlaces";
 import { TrustedContact } from "../../types/safetyCheckIn";
@@ -35,6 +36,12 @@ export default function AssistHub() {
   // Shared Location Hook
   const { latitude, longitude, accuracy, timestamp, address, locate, hasLocation, permissionStatus } = useSharedLocation();
 
+  // The journey selected on Live Map (if any). Never a placeholder route.
+  const [journey, setJourney] = useState<ActiveJourney | null>(null);
+  useEffect(() => {
+    setJourney(loadActiveJourney());
+  }, []);
+
   // Safety Check-In Controller
   const {
     status: checkInStatus,
@@ -49,7 +56,8 @@ export default function AssistHub() {
     requestHelp,
     cancelCheckIn
   } = useSafetyCheckIn({
-    destinationName: "Regional Destination Corridor"
+    // Real destination or nothing: this text ends up in escalation messages.
+    destinationName: journey?.destinationName ?? undefined
   });
 
   useEffect(() => {
@@ -84,13 +92,18 @@ export default function AssistHub() {
   }, [latitude, longitude]);
 
   // Aggregated live context for Gemini Tool Router
+  // Aggregated live context for the grounded tool router. Every value is
+  // real or absent: no invented safety score, destination, or travel mode.
   const liveContext: LiveTravelContext = useMemo(() => ({
     navStatus: "READY",
-    safetyScore: 89,
+    activeRoute: journey?.route ?? null,
+    safetyScore: journey?.route.safetyScore,
+    safetyAssessment: journey?.route.safetyAssessment ?? null,
     currentPosition: latitude && longitude ? {
       latitude,
       longitude,
-      accuracy: accuracy || 15,
+      // 0 = unknown; the tool router treats a falsy accuracy as unavailable.
+      accuracy: accuracy ?? 0,
       altitude: null,
       heading: null,
       speed: null,
@@ -99,7 +112,7 @@ export default function AssistHub() {
     locationSnapshot: latitude && longitude ? {
       latitude,
       longitude,
-      accuracy: accuracy || 15,
+      accuracy: accuracy ?? 0,
       timestamp: timestamp || 0,
       isStale: false,
       formattedText: address
@@ -108,9 +121,11 @@ export default function AssistHub() {
     activeCheckInCycle: checkInCycle,
     checkInSecondsRemaining,
     trustedContactsCount: trustedContacts.filter(c => c.enabled).length,
-    destinationName: "Destination Corridor",
-    travelMode: "Car"
+    originName: journey?.originName ?? undefined,
+    destinationName: journey?.destinationName ?? undefined,
+    travelMode: journey?.travelMode ?? undefined
   }), [
+    journey,
     latitude,
     longitude,
     accuracy,

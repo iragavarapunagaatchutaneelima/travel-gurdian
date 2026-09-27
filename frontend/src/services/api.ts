@@ -69,7 +69,7 @@ export const TravelGuardianAPI = {
       return await res.json() as T;
     } catch (e: any) {
       if (fallbackData !== undefined) {
-        console.warn(`Backend unreachable on ${API_BASE_URL}${endpoint}. Falling back to mock data.`, e);
+        console.warn(`Backend unreachable on ${API_BASE_URL}${endpoint}. Returning an explicit failure result.`, e);
         if (typeof fallbackData === "object" && fallbackData !== null) {
           const detail = e?.detail || e?.message;
           if (detail && !detail.includes("abort")) {
@@ -228,12 +228,12 @@ export const TravelGuardianAPI = {
   },
 
   async triggerSOS(request: SOSRequest): Promise<SOSResponse> {
-    const contacts = await this.getEmergencyContacts();
-    const broadcastList = contacts.map(c => `${c.name} (${c.relation}) via ${c.phone}`);
+    // The SOS POST must not depend on any other request succeeding first.
+    // On failure nobody was notified, so broadcasted_contacts is empty.
     const fallbackResponse: SOSResponse = {
       success: false,
       message: "Emergency broadcast network offline. Live telemetry could not be dispatched via Twilio. Please call 112 directly if in immediate danger.",
-      broadcasted_contacts: broadcastList.length > 0 ? broadcastList : ["Emergency Dispatch Hotline (112)"],
+      broadcasted_contacts: [],
       latitude: request.latitude,
       longitude: request.longitude,
       nearest_havens: [

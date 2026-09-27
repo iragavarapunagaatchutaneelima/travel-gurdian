@@ -82,6 +82,15 @@ def twin_state(req: TwinStateRequest) -> Dict[str, Any]:
     return {"state": state, "impacts": model.propagate(state)}
 
 
+@router.get("/weather")
+def point_weather(lat: float, lng: float) -> Dict[str, Any]:
+    """Live weather at a single point (e.g. the traveler's GPS position)."""
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        raise HTTPException(status_code=422, detail="lat/lng out of range")
+    res = weather.fetch_route_weather([(lat, lng)])
+    return {k: v for k, v in res.items() if k != "points"} | {"point": (res.get("points") or [None])[0]}
+
+
 @router.post("/simulate")
 def twin_simulate(req: TwinSimulateRequest) -> Dict[str, Any]:
     st = req.state

@@ -42,7 +42,7 @@ export default function Header() {
     { name: "Safety Check", href: "/safety-check", icon: ShieldCheck },
     { name: "Emergency SOS", href: "/emergency", icon: AlertTriangle, highlight: true },
     { name: "My Journeys", href: "/history", icon: History },
-    { name: "Review Session", href: "/guide", icon: BookOpen },
+    { name: "Safety Guide", href: "/guide", icon: BookOpen },
     { name: "Profile", href: "/profile", icon: User },
     { name: "Settings", href: "/settings", icon: Settings },
   ];

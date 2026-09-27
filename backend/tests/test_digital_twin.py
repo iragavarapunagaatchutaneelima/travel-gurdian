@@ -254,6 +254,26 @@ class TestTwinApi(unittest.TestCase):
         self.assertEqual(self.client.post("/api/twin/simulate", json={"state": body["state"], "rainfall_mm_h": 10}).status_code, 400)
         self.assertEqual(self.client.post("/api/twin/simulate", json={"state": {"x": 1}, "rainfall_mm_h": 10}).status_code, 400)
 
+    def test_point_weather_endpoint(self):
+        live = {"status": "LIVE", "source": weather.SOURCE, "fetched_at": "t",
+                "points": [{"precip_rate_mm_h": 3.2, "condition": "Moderate rain"}]}
+        with patch.object(weather, "fetch_route_weather", return_value=live) as f:
+            res = self.client.get("/api/twin/weather", params={"lat": 17.385, "lng": 78.4867})
+        self.assertEqual(res.status_code, 200)
+        f.assert_called_once_with([(17.385, 78.4867)])
+        body = res.json()
+        self.assertEqual(body["status"], "LIVE")
+        self.assertEqual(body["point"]["precip_rate_mm_h"], 3.2)
+        self.assertNotIn("points", body)
+
+    def test_point_weather_unavailable_and_bounds(self):
+        down = {"status": "UNAVAILABLE", "reason": "HTTP 503", "points": []}
+        with patch.object(weather, "fetch_route_weather", return_value=down):
+            body = self.client.get("/api/twin/weather", params={"lat": 17.4, "lng": 78.5}).json()
+        self.assertEqual((body["status"], body["point"]), ("UNAVAILABLE", None))
+        self.assertEqual(self.client.get("/api/twin/weather", params={"lat": 95, "lng": 78.5}).status_code, 422)
+        self.assertEqual(self.client.get("/api/twin/weather", params={"lat": 17.4}).status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

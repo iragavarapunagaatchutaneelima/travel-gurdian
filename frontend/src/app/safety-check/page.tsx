@@ -7,6 +7,7 @@ import SafetyCheckInWidget from "../components/SafetyCheckInWidget";
 import SafetyCheckDemoMode from "../components/SafetyCheckDemoMode";
 import { useSafetyCheckIn } from "../../hooks/useSafetyCheckIn";
 import { useSharedLocation } from "../../hooks/useSharedLocation";
+import { loadActiveJourney, ActiveJourney } from "../../services/activeJourney";
 import { getTrustedContacts, refreshTrustedContactsFromBackend } from "../../services/trustedContactService";
 import { TrustedContact } from "../../types/safetyCheckIn";
 import { ShieldCheck, Users, MapPin, Clock } from "lucide-react";
@@ -15,6 +16,10 @@ export default function SafetyCheckPage() {
   const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
 
   const { latitude, longitude, hasLocation } = useSharedLocation();
+  const [journey, setJourney] = useState<ActiveJourney | null>(null);
+  useEffect(() => {
+    setJourney(loadActiveJourney());
+  }, []);
 
   const {
     status,
@@ -30,7 +35,8 @@ export default function SafetyCheckPage() {
     requestHelp,
     cancelCheckIn
   } = useSafetyCheckIn({
-    destinationName: "Current Journey",
+    // Real destination or nothing: this text ends up in escalation messages.
+    destinationName: journey?.destinationName ?? undefined,
     currentPosition: hasLocation && latitude && longitude
       ? { latitude, longitude, accuracy: 15, altitude: null, heading: null, speed: null, timestamp: Date.now() }
       : null

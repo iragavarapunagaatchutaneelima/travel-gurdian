@@ -13,6 +13,7 @@ import {
   LiveTravelContext
 } from "../../../types/gemini";
 import { serverEnv } from "../../../config/serverEnv";
+import { isWeatherQuestion, isTrustedContactQuestion, answerWeather, answerTrustedContact } from "../../../services/groundedAnswers";
 
 // This endpoint spends real Gemini/Places quota on every call, so it needs
 // the same baseline hardening as /api/routes/compute: reject requests that
@@ -47,6 +48,25 @@ export async function POST(req: Request) {
     // Only needed when falling back to the shared, referrer-restricted
     // browser key -- see fetchLiveNearbyPlaces for why.
     const placesRefererOrigin = dedicatedPlacesKey ? undefined : new URL(req.url).origin;
+
+    // Weather / flooding and trusted-contact questions are answered from
+    // application data (Digital Twin, backend contact store) BEFORE any LLM
+    // sees them, so the facts can never be invented. See groundedAnswers.ts.
+    if (isWeatherQuestion(sanitizedPrompt) || isTrustedContactQuestion(sanitizedPrompt)) {
+      const grounded = isWeatherQuestion(sanitizedPrompt)
+        ? await answerWeather(sanitizedPrompt, context, serverEnv.backendApiUrl)
+        : await answerTrustedContact(req.headers.get("cookie"), serverEnv.backendApiUrl);
+      const callId = `call_${Date.now()}`;
+      return NextResponse.json({
+        reply: grounded.reply,
+        toolCalls: [{ id: callId, name: grounded.tool, arguments: {} }],
+        toolResults: [{ toolCallId: callId, toolName: grounded.tool, category: "READ_ONLY", success: true, data: grounded.data }],
+        proposals: [],
+        mode: "DEMO",
+        model: "guardian-grounded-tools",
+        llmUnavailableReason: null,
+      });
+    }
 
     // "Where am I?" is intercepted HERE, before Gemini ever sees the prompt.
     // Gemini has no dedicated location tool declared, so left to its own

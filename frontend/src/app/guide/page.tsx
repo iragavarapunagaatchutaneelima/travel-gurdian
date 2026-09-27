@@ -1,414 +1,180 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import Header from "../components/Header";
 import BottomNav from "../components/BottomNav";
-import { 
-  BookOpen, Search, Phone, ShieldAlert, ListTodo, 
-  Plus, Trash2, CheckCircle2, ChevronRight, Star, ShieldCheck, MapPin
-} from "lucide-react";
+import { BookOpen, PhoneCall, CheckCircle2, Circle, Bot, MapPin, Plus, ShieldCheck, Loader2 } from "lucide-react";
+import { listOfflinePacks } from "../../services/offlineStorageService";
+import { refreshTrustedContactsFromBackend } from "../../services/trustedContactService";
 
-interface CityGuide {
-  id: string;
-  name: string;
-  state: string;
-  safetyScore: number;
-  emergencyPhone: string;
-  policeStation: string;
-  hospital: string;
-  travelTips: string[];
-  highwayWarnings: string[];
-  reviews: { author: string; rating: number; date: string; comment: string }[];
-}
+/**
+ * Safety Guide. Contains only verifiable information:
+ *  - India's official national helpline numbers
+ *  - a pre-trip checklist whose app-related items are checked against real
+ *    app state (never pre-ticked)
+ *  - pointers to LIVE Google Places search for hospitals/police
+ * The previous version showed invented per-city safety scores, unverified
+ * local police/hospital phone numbers, and fabricated user reviews; all of
+ * that was removed. Local facilities come from live search, not a hardcoded
+ * directory that can silently go stale.
+ */
 
-const CITY_GUIDES: Record<string, CityGuide> = {
-  chennai: {
-    id: "chennai",
-    name: "Chennai",
-    state: "Tamil Nadu",
-    safetyScore: 94,
-    emergencyPhone: "112 / 100",
-    policeStation: "Chennai Central Police Control: 044-23452359",
-    hospital: "Apollo Hospitals Greams Road: 044-28290200",
-    travelTips: [
-      "NH 48 corridor to Bangalore has continuous 24/7 fuel plazas with well-lit restrooms.",
-      "Women travelers can access pink auto stands and dedicated women's transit coaches.",
-      "Carry water during summer months; coastal humidity is high."
-    ],
-    highwayWarnings: [
-      "Heavy container truck movement along Ennore port expressway between 22:00 and 05:00.",
-      "Speed radars active along East Coast Road (ECR)."
-    ],
-    reviews: [
-      { author: "Kavitha R.", rating: 5, date: "Aug 2026", comment: "The NH 48 safety corridor from Chennai to Bangalore is extremely safe and well-patrolled." },
-      { author: "Rajesh S.", rating: 4, date: "Jul 2026", comment: "Excellent highway infrastructure. Multiple food plazas at 50km intervals." }
-    ]
-  },
-  mumbai: {
-    id: "mumbai",
-    name: "Mumbai",
-    state: "Maharashtra",
-    safetyScore: 91,
-    emergencyPhone: "112 / 100",
-    policeStation: "Mumbai Police HQ: 022-22620111",
-    hospital: "Lilavati Hospital: 022-26751000",
-    travelTips: [
-      "Mumbai-Pune Expressway is fully CCTV monitored with dedicated emergency trauma vans.",
-      "Local suburban trains have dedicated 24-hour women's compartments.",
-      "Keep digital passes ready for fastag toll lanes."
-    ],
-    highwayWarnings: [
-      "Ghat section near Khandala experiences heavy monsoon fog and wet road conditions.",
-      "Strict lane discipline enforced on expressways."
-    ],
-    reviews: [
-      { author: "Vikram M.", rating: 5, date: "Aug 2026", comment: "Great connectivity towards Pune and Hyderabad. Fastag lanes were seamless." }
-    ]
-  },
-  bangalore: {
-    id: "bangalore",
-    name: "Bangalore",
-    state: "Karnataka",
-    safetyScore: 92,
-    emergencyPhone: "112 / 100",
-    policeStation: "Bangalore City Police: 080-22942222",
-    hospital: "Manipal Hospital Old Airport Rd: 080-25024444",
-    travelTips: [
-      "NICE road provides a smooth bypass around city core traffic bottlenecks.",
-      "Extensive EV fast-charging network along NH 44 and NH 48 exit corridors.",
-      "Helpline 1091 dedicated for women traveler assistance."
-    ],
-    highwayWarnings: [
-      "Peak hour congestion near Electronic City and Silk Board junctions (08:30 - 11:00).",
-      "Intermittent road work near Hosur border bypass."
-    ],
-    reviews: [
-      { author: "Ananya B.", rating: 5, date: "Jul 2026", comment: "Travel Guardian helped identify safe rest stops along the highway." }
-    ]
-  },
-  hyderabad: {
-    id: "hyderabad",
-    name: "Hyderabad",
-    state: "Telangana",
-    safetyScore: 89,
-    emergencyPhone: "112 / 100",
-    policeStation: "Hyderabad Police Control: 040-27852435",
-    hospital: "Yashoda Hospitals Somajiguda: 040-45674567",
-    travelTips: [
-      "Nehru Outer Ring Road (ORR) has a 120 km/h design speed with continuous lighting.",
-      "She Shuttle services available across IT corridor nodes."
-    ],
-    highwayWarnings: [
-      "Two-wheelers prohibited on the main 8-lane expressway sections of Nehru ORR."
-    ],
-    reviews: [
-      { author: "Praveen K.", rating: 4, date: "Jun 2026", comment: "Smooth transit on NH 65 towards Vijayawada and Vizag." }
-    ]
-  },
-  delhi: {
-    id: "delhi",
-    name: "Delhi",
-    state: "Delhi NCR",
-    safetyScore: 85,
-    emergencyPhone: "112 / 100",
-    policeStation: "Delhi Police HQ: 011-23490010",
-    hospital: "AIIMS Emergency Trauma: 011-26588500",
-    travelTips: [
-      "Yamuna Expressway and Eastern Peripheral Expressway offer swift multi-lane bypasses.",
-      "Use verified app-based prepaid cabs at railway stations and airports."
-    ],
-    highwayWarnings: [
-      "Winter morning fog can reduce visibility to under 50 meters on NH 44.",
-      "Heavy traffic near Gurugram and Noida border entry points."
-    ],
-    reviews: [
-      { author: "Meera D.", rating: 4, date: "Aug 2026", comment: "Very helpful safety checklist and consular numbers." }
-    ]
-  },
-  vizag: {
-    id: "vizag",
-    name: "Visakhapatnam",
-    state: "Andhra Pradesh",
-    safetyScore: 90,
-    emergencyPhone: "112 / 100",
-    policeStation: "Visakhapatnam City Police: 0891-2565454",
-    hospital: "Care Hospitals Ramnagar: 0891-3041000",
-    travelTips: [
-      "NH 16 coastal corridor is well-maintained with frequent highway patrol check-posts.",
-      "Beach road is family friendly and well-lit until midnight."
-    ],
-    highwayWarnings: [
-      "Occasional crosswinds along coastal highway sections."
-    ],
-    reviews: [
-      { author: "Suresh P.", rating: 5, date: "Jul 2026", comment: "Safe city with hospitable locals and smooth highway access." }
-    ]
-  }
-};
+const HELPLINES = [
+  { number: "112", label: "National Emergency Response (police, fire, ambulance)" },
+  { number: "100", label: "Police" },
+  { number: "101", label: "Fire" },
+  { number: "108", label: "Ambulance / medical emergency" },
+  { number: "1091", label: "Women's helpline" },
+  { number: "1033", label: "NHAI national highway emergency" },
+];
 
-export default function SafetyGuideAndReviews() {
-  const [selectedCity, setSelectedCity] = useState("chennai");
-  const [checklist, setChecklist] = useState<{ id: string; text: string; done: boolean }[]>([
-    { id: "1", text: "Download offline route intelligence pack", done: true },
-    { id: "2", text: "Configure emergency guardian contacts in Assist Hub", done: true },
-    { id: "3", text: "Test GPS location sharing telemetry link", done: false },
-    { id: "4", text: "Validate fastag / toll balance for interstate highway transit", done: false },
-    { id: "5", text: "Verify vehicle tire pressure & spare wheel before departure", done: false }
-  ]);
-  const [newCheckItem, setNewCheckItem] = useState("");
+type AutoStatus = "checking" | "done" | "not_done" | "unknown";
 
-  const activeGuide = CITY_GUIDES[selectedCity] || CITY_GUIDES["chennai"];
+interface ManualItem { id: string; text: string; done: boolean }
 
-  const toggleCheck = (id: string) => {
-    setChecklist(prev => prev.map(c => c.id === id ? { ...c, done: !c.done } : c));
+const MANUAL_KEY = "tg_manual_checklist";
+const DEFAULT_MANUAL: ManualItem[] = [
+  { id: "tyres", text: "Check tyre pressure and spare wheel", done: false },
+  { id: "fuel", text: "Start with enough fuel / charge for the first leg", done: false },
+  { id: "toll", text: "Check FASTag / toll balance for interstate travel", done: false },
+  { id: "share", text: "Tell someone your route and expected arrival time", done: false },
+];
+
+export default function SafetyGuidePage() {
+  const [packStatus, setPackStatus] = useState<AutoStatus>("checking");
+  const [contactStatus, setContactStatus] = useState<AutoStatus>("checking");
+  const [gpsStatus, setGpsStatus] = useState<AutoStatus>("checking");
+  const [manual, setManual] = useState<ManualItem[]>(DEFAULT_MANUAL);
+  const [newItem, setNewItem] = useState("");
+
+  useEffect(() => {
+    listOfflinePacks()
+      .then((packs) => setPackStatus(packs.length > 0 ? "done" : "not_done"))
+      .catch(() => setPackStatus("unknown"));
+    refreshTrustedContactsFromBackend()
+      .then((cs) => setContactStatus(cs.some((c) => c.enabled) ? "done" : "not_done"))
+      .catch(() => setContactStatus("unknown"));
+    if (typeof navigator !== "undefined" && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: "geolocation" as PermissionName })
+        .then((p) => setGpsStatus(p.state === "granted" ? "done" : "not_done"))
+        .catch(() => setGpsStatus("unknown"));
+    } else {
+      setGpsStatus("unknown");
+    }
+    try {
+      const saved = localStorage.getItem(MANUAL_KEY);
+      if (saved) setManual(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const saveManual = (items: ManualItem[]) => {
+    setManual(items);
+    try {
+      localStorage.setItem(MANUAL_KEY, JSON.stringify(items));
+    } catch {}
   };
 
-  const addCheck = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCheckItem.trim()) return;
-    setChecklist(prev => [...prev, { id: Date.now().toString(), text: newCheckItem.trim(), done: false }]);
-    setNewCheckItem("");
-  };
+  const autoItems: { label: string; status: AutoStatus; href: string; action: string }[] = [
+    { label: "Journey Safety Pack downloaded for offline use", status: packStatus, href: "/plan", action: "Plan & download" },
+    { label: "Trusted contact configured", status: contactStatus, href: "/emergency", action: "Add contact" },
+    { label: "Location permission granted", status: gpsStatus, href: "/map", action: "Open Live Map" },
+  ];
 
   return (
-    <div className="min-h-screen pb-20 md:pb-8 flex flex-col items-center" style={{ backgroundColor: "#F8FAFC", fontFamily: "'Poppins',sans-serif" }}>
+    <div className="min-h-screen bg-background flex flex-col text-foreground">
       <Header />
-
-      <div className="w-full max-w-7xl px-4 md:px-8 py-6 space-y-6 text-left animate-slideUp">
-        
-        {/* Header */}
-        <div className="pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
-          <div>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em", display: "block" }}>
-              GUIDE &amp; REVIEW SESSIONS
-            </span>
-            <h1 style={{ fontWeight: 800, fontSize: "clamp(22px,4vw,30px)", color: "#0F172A", marginTop: "4px" }}>
-              Safety Guides &amp; Corridor Reviews
-            </h1>
-            <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "2px" }}>
-              Consular emergency directories, highway safety notes, and simulated reviews across primary Indian hubs.
-            </p>
-          </div>
-
-          {/* City Selector */}
-          <div className="relative">
-            <select
-              value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
-              className="rounded-2xl px-4 py-2.5 shadow-sm cursor-pointer"
-              style={{
-                backgroundColor: "#FFFFFF",
-                border: "1px solid rgba(15,23,42,0.12)",
-                fontSize: "13px",
-                fontWeight: 700,
-                color: "#0F172A",
-                fontFamily: "'Poppins',sans-serif",
-                outline: "none",
-              }}
-            >
-              {Object.values(CITY_GUIDES).map(c => (
-                <option key={c.id} value={c.id}>{c.name} Safety Guide ({c.state})</option>
-              ))}
-            </select>
-          </div>
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 md:px-6 py-8 pb-28 md:pb-10 space-y-6">
+        <div>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full bg-(--primary)/10 text-(--primary) border border-(--primary)/30 mb-3">
+            <BookOpen className="h-3 w-3" /> Before you go
+          </span>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Safety Guide</h1>
+          <p className="text-sm text-(--muted-foreground) mt-1">
+            Official helplines, a pre-trip checklist checked against your actual setup, and live search for help nearby.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
-          {/* Main Guide Column */}
-          <div className="lg:col-span-8 space-y-6">
-            
-            {/* City Banner */}
-            <div className="rounded-3xl p-6 md:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
-              <div>
-                <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", textTransform: "uppercase", letterSpacing: "0.12em" }}>
-                  Municipal Safety Dossier
-                </span>
-                <h2 style={{ fontWeight: 800, fontSize: "28px", color: "#0F172A", marginTop: "4px" }}>{activeGuide.name}, {activeGuide.state}</h2>
-                <p style={{ fontSize: "13px", color: "#64748B", fontWeight: 400, marginTop: "4px", lineHeight: 1.6 }}>
-                  Verified emergency infrastructure, recommended highway protocols, and regional safety telemetry.
-                </p>
+        <section className="rounded-3xl border border-border bg-surface p-5">
+          <h2 className="flex items-center gap-2 text-sm font-extrabold mb-3"><PhoneCall className="h-4 w-4 text-rose-600" /> Official national helplines (India)</h2>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {HELPLINES.map((h) => (
+              <div key={h.number} className="flex items-center gap-3 p-3 rounded-2xl bg-elevated-surface border border-border">
+                <span className="text-lg font-black text-rose-600 w-14">{h.number}</span>
+                <span className="text-xs font-semibold">{h.label}</span>
               </div>
-              
-              <div className="p-4 rounded-2xl text-center min-w-32" style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)" }}>
-                <span style={{ fontSize: "32px", fontWeight: 900, color: "#2563FF", display: "block", lineHeight: 1 }}>{activeGuide.safetyScore}</span>
-                <p style={{ fontSize: "9px", fontWeight: 800, color: "#1E40AF", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: "4px" }}>SAFETY SCORE</p>
-              </div>
-            </div>
-
-            {/* Emergency Contacts */}
-            <div className="rounded-3xl p-6 shadow-sm space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
-              <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
-                <Phone className="h-4 w-4 text-red-500" />
-                Emergency &amp; Public Dispatch Contacts
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-2xl" style={{ backgroundColor: "#FEF2F2", border: "1px solid #FECACA" }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#DC2626", textTransform: "uppercase", display: "block" }}>National Emergency</span>
-                  <p style={{ fontSize: "16px", fontWeight: 900, color: "#B91C1C", marginTop: "4px" }}>{activeGuide.emergencyPhone}</p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", display: "block" }}>Police Control HQ</span>
-                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginTop: "4px" }} className="truncate">{activeGuide.policeStation}</p>
-                </div>
-
-                <div className="p-3.5 rounded-2xl" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, color: "#64748B", textTransform: "uppercase", display: "block" }}>Trauma Hospital</span>
-                  <p style={{ fontSize: "12px", fontWeight: 700, color: "#0F172A", marginTop: "4px" }} className="truncate">{activeGuide.hospital}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Safety Tips & Warnings */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* Tips */}
-              <div className="rounded-3xl p-6 shadow-sm space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
-                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                  Corridor Best Practices
-                </h3>
-                <div className="space-y-2.5">
-                  {activeGuide.travelTips.map((tip, i) => (
-                    <div key={i} className="flex items-start gap-2 leading-relaxed" style={{ fontSize: "12px", color: "#475569", fontWeight: 500 }}>
-                      <ChevronRight className="h-4 w-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      <span>{tip}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Warnings */}
-              <div className="rounded-3xl p-6 shadow-sm space-y-3" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
-                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <ShieldAlert className="h-4 w-4 text-amber-600" />
-                  Highway Advisories &amp; Radar
-                </h3>
-                <div className="space-y-2.5">
-                  {activeGuide.highwayWarnings.map((warn, i) => (
-                    <div key={i} className="flex items-start gap-2 leading-relaxed" style={{ fontSize: "12px", color: "#475569", fontWeight: 500 }}>
-                      <ChevronRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <span>{warn}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Reviews Section */}
-            <div className="rounded-3xl p-6 shadow-sm space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
-              <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
-                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Star className="h-4 w-4 text-amber-400 fill-amber-400" />
-                  Traveler Reviews &amp; Experience Log
-                </h3>
-                <span style={{ fontSize: "10px", fontWeight: 700, color: "#2563FF", backgroundColor: "#EFF6FF", padding: "3px 8px", borderRadius: "8px" }}>
-                  Simulated Reviews
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {activeGuide.reviews.map((rev, i) => (
-                  <div key={i} className="p-4 rounded-2xl space-y-1.5" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)" }}>
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: "13px", fontWeight: 700, color: "#0F172A" }}>{rev.author}</span>
-                      <div className="flex items-center gap-1 text-amber-400">
-                        {Array.from({ length: rev.rating }).map((_, rIdx) => (
-                          <Star key={rIdx} className="h-3.5 w-3.5 fill-amber-400" />
-                        ))}
-                        <span style={{ fontSize: "11px", color: "#64748B", marginLeft: "4px", fontWeight: 600 }}>{rev.date}</span>
-                      </div>
-                    </div>
-                    <p style={{ fontSize: "12px", color: "#475569", fontWeight: 400, lineHeight: 1.6 }}>{rev.comment}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+            ))}
           </div>
+          <p className="text-[11px] text-(--muted-foreground) mt-3">
+            Government of India national numbers. Dial them from your phone's own dialer. For emergency calling from
+            this app, use the Emergency page, where 112 stays locked until you deliberately enable it.
+          </p>
+        </section>
 
-          {/* Right Column: Pre-Travel Checklist */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="rounded-3xl p-6 shadow-sm space-y-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.08)", boxShadow: "0 2px 8px rgba(37,99,255,0.06)" }}>
-              <div className="flex items-center justify-between pb-3" style={{ borderBottom: "1px solid rgba(15,23,42,0.06)" }}>
-                <h3 style={{ fontSize: "12px", fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <ListTodo className="h-4 w-4" style={{ color: "#2563FF" }} />
-                  Pre-Journey Checklist
-                </h3>
-                <span style={{ fontSize: "11px", fontWeight: 700, color: "#2563FF", backgroundColor: "#EFF6FF", padding: "3px 8px", borderRadius: "8px" }}>
-                  {checklist.filter(c => c.done).length}/{checklist.length} Done
+        <section className="rounded-3xl border border-border bg-surface p-5 space-y-4">
+          <h2 className="flex items-center gap-2 text-sm font-extrabold"><ShieldCheck className="h-4 w-4 text-(--primary)" /> Pre-trip checklist</h2>
+          <ul className="space-y-2">
+            {autoItems.map((it) => (
+              <li key={it.label} className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-elevated-surface border border-border text-xs">
+                <span className="flex items-center gap-2 font-semibold">
+                  {it.status === "checking" ? <Loader2 className="h-4 w-4 animate-spin text-(--muted-foreground)" />
+                    : it.status === "done" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    : <Circle className="h-4 w-4 text-(--muted-foreground)" />}
+                  {it.label}
+                  <span className="text-[10px] font-bold text-(--muted-foreground)">
+                    {it.status === "unknown" ? "(couldn't check)" : "(checked automatically)"}
+                  </span>
                 </span>
-              </div>
-
-              {/* Add form */}
-              <form onSubmit={addCheck} className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add item..."
-                  value={newCheckItem}
-                  onChange={(e) => setNewCheckItem(e.target.value)}
-                  className="flex-1 rounded-xl px-3 py-2 text-xs focus:outline-none"
-                  style={{
-                    backgroundColor: "#F8FAFC",
-                    border: "1px solid rgba(15,23,42,0.12)",
-                    color: "#0F172A",
-                    fontWeight: 600,
-                    fontFamily: "'Poppins',sans-serif",
-                  }}
-                />
+                {it.status !== "done" && it.status !== "checking" && (
+                  <Link href={it.href} className="text-(--primary) font-bold whitespace-nowrap">{it.action}</Link>
+                )}
+              </li>
+            ))}
+            {manual.map((m) => (
+              <li key={m.id}>
                 <button
-                  type="submit"
-                  className="rounded-xl px-3 py-2 text-white text-xs font-bold transition-all"
-                  style={{ backgroundColor: "#2563FF" }}
+                  onClick={() => saveManual(manual.map((x) => (x.id === m.id ? { ...x, done: !x.done } : x)))}
+                  className="w-full flex items-center gap-2 p-3 rounded-2xl bg-elevated-surface border border-border text-xs font-semibold text-left"
                 >
-                  <Plus className="h-4 w-4" />
+                  {m.done ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Circle className="h-4 w-4 text-(--muted-foreground)" />}
+                  <span className={m.done ? "line-through text-(--muted-foreground)" : ""}>{m.text}</span>
                 </button>
-              </form>
+              </li>
+            ))}
+          </ul>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newItem.trim()) return;
+              saveManual([...manual, { id: Date.now().toString(), text: newItem.trim(), done: false }]);
+              setNewItem("");
+            }}
+            className="flex gap-2"
+          >
+            <input
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              placeholder="Add your own item"
+              className="flex-1 rounded-xl px-3 py-2 text-xs bg-elevated-surface border border-border outline-none"
+            />
+            <button className="px-3 py-2 rounded-xl bg-(--primary) text-white" aria-label="Add checklist item"><Plus className="h-4 w-4" /></button>
+          </form>
+        </section>
 
-              {/* List */}
-              <div className="space-y-2">
-                {checklist.map(item => (
-                  <div
-                    key={item.id}
-                    onClick={() => toggleCheck(item.id)}
-                    className="flex items-center gap-2.5 p-3 rounded-xl cursor-pointer select-none transition-all"
-                    style={{
-                      backgroundColor: item.done ? "#F8FAFC" : "#FFFFFF",
-                      border: "1px solid rgba(15,23,42,0.08)",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.done}
-                      onChange={() => {}}
-                      className="rounded h-4 w-4 accent-blue-600"
-                    />
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        fontWeight: item.done ? 500 : 600,
-                        textDecoration: item.done ? "line-through" : "none",
-                        color: item.done ? "#94A3B8" : "#0F172A",
-                      }}
-                    >
-                      {item.text}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <section className="rounded-3xl border border-border bg-surface p-5">
+          <h2 className="text-sm font-extrabold mb-2">Find help near you</h2>
+          <p className="text-xs text-(--muted-foreground) mb-3">
+            Hospitals, police stations and fuel are looked up live (Google Places) for where you actually are, rather
+            than from a fixed directory that can go out of date.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/assist" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-(--primary) text-white text-xs font-bold"><Bot className="h-4 w-4" /> Ask AI Guardian: "hospital near me"</Link>
+            <Link href="/map" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border text-xs font-bold"><MapPin className="h-4 w-4" /> Live Map safety layers</Link>
           </div>
-
-        </div>
-
-      </div>
-
-      <div className="md:hidden">
-        <BottomNav />
-      </div>
+        </section>
+      </main>
+      <div className="md:hidden"><BottomNav /></div>
     </div>
   );
 }

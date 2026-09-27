@@ -182,7 +182,7 @@ export function executeToolCall(
           speedKmh: context.currentPosition?.speed ? Math.round(context.currentPosition.speed * 3.6) : null,
           heading: context.currentPosition?.heading ? Math.round(context.currentPosition.heading) : null,
           destination: context.destinationName || context.activeRoute?.name || "Not specified",
-          travelMode: context.travelMode || "Car",
+          travelMode: context.travelMode ?? null,
           gpsAccuracyMeters: context.currentPosition?.accuracy ? Math.round(context.currentPosition.accuracy) : null
         };
         return {

@@ -24,4 +24,6 @@ export const serverEnv = {
   // public referrer-restricted Maps key, which then needs a Referer header.
   googleRoutesApiKey: readKey("GOOGLE_ROUTES_API_KEY"),
   googleMapsPublicKey: readKey("NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"),
+  // FastAPI origin; route handlers call it directly (server-to-server).
+  backendApiUrl: (process.env.BACKEND_API_URL || "http://127.0.0.1:8000/api").replace(/\/$/, ""),
 } as const;

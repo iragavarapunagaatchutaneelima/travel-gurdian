@@ -24,6 +24,7 @@ import {
   Plus, X, AlertTriangle, Menu, ArrowLeft, PlusSquare, ChevronDown, ChevronUp, Waves
 } from "lucide-react";
 import DigitalTwinPanel, { TwinOverlay } from "../components/DigitalTwinPanel";
+import { saveActiveJourney } from "@/services/activeJourney";
 import jsPDF from "jspdf";
 
 export const dynamic = "force-dynamic";
@@ -693,6 +694,11 @@ function LivingMapContent() {
       }));
     });
   }, [twinOverlay, mapLoaded]);
+
+  // Share the real selected journey with AI Guardian (same tab).
+  useEffect(() => {
+    if (selectedRoute) saveActiveJourney(selectedRoute, fromName, destName, travelMode);
+  }, [selectedRoute, fromName, destName, travelMode]);
 
   // Close the twin (and clear its overlay) if the route changes underneath it.
   useEffect(() => {
