@@ -70,6 +70,17 @@ test("Live Map switches to an honest offline state and back, with SOS reachable"
   await expect(page.getByText("You're offline", { exact: true })).toHaveCount(0, { timeout: 10_000 });
 });
 
+// Official helplines must be readable offline (Safety Guide is precached).
+test("Safety Guide with official helplines opens offline from the precache", async ({ page, context }) => {
+  await page.goto("/dashboard");
+  await waitForServiceWorkerActive(page);
+  await context.setOffline(true);
+  await page.goto("/guide", { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("Official national helplines (India)")).toBeVisible();
+  await expect(page.getByText("NHAI national highway emergency")).toBeVisible();
+  await context.setOffline(false);
+});
+
 // Scenario 31: PWA reload
 test("Hard reload does not freeze the browser or lose the service worker", async ({ page }) => {
   await page.goto("/dashboard");

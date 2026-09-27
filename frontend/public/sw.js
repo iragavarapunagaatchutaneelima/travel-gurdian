@@ -1,7 +1,7 @@
 // TRAVEL GUARDIAN SERVICE WORKER (PHASE 8 & 14)
-// Cache Version: travel-guardian-v12 -- adds dashboard/safety-check to the
-// pre-cached app shell (new primary nav pages since v11).
-const CACHE_VERSION = 'travel-guardian-v12';
+// Cache Version: travel-guardian-v13 -- adds /guide (official helplines,
+// useful offline) and /history to the pre-cached app shell.
+const CACHE_VERSION = 'travel-guardian-v13';
 const STATIC_CACHE = `travel-guardian-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `travel-guardian-runtime-${CACHE_VERSION}`;
 
@@ -17,6 +17,8 @@ const APP_SHELL = [
   '/offline-mode',
   '/assist',
   '/settings',
+  '/guide',
+  '/history',
   '/manifest.json',
   '/icons/icon-192x192.svg',
   '/icons/icon-512x512.svg',
