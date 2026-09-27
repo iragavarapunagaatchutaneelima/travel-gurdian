@@ -1,17 +1,21 @@
 // TESTS: Offline Vector Corridor download endpoint contract.
 //
-// Investigation finding (Vercel connectivity task): "Download Vector
-// Corridor Pack" does NOT call our backend at all. It fetches real MVT
-// tiles directly from the public Protomaps PMTiles archive
-// (services/realVectorTiles.ts) via the browser -- there is no
-// /backend-api/* call anywhere in this path, by design, so it keeps
-// working even if the FastAPI backend is completely unreachable. The
-// reported production "Download failed: Failed to fetch" is therefore NOT
-// a /backend-api/BACKEND_API_URL routing problem; it is the browser failing
-// to reach build.protomaps.com, most likely because a stale Vercel
-// deployment predates this CSP connect-src entry. These tests lock down the
-// actual contract so a future change can't silently reintroduce a fake/
-// local stub, and so the CSP allow-list can't silently regress.
+// Investigation finding #1 (Vercel connectivity task): "Download Vector
+// Corridor Pack" does NOT call our own backend at all -- there is no
+// /backend-api/* call anywhere in this path, by design, so it keeps working
+// even if the FastAPI backend is completely unreachable.
+//
+// Investigation finding #2 (root-caused live, on the deployed judges' URL):
+// the ORIGINAL direct fetch to build.protomaps.com was CORS-blocked for
+// every real origin -- verified with curl that Protomaps' CORS allowlist
+// only echoes Access-Control-Allow-Origin for http://localhost:3000, never
+// any other origin. That is exactly why it "worked every time I tested
+// locally" and failed for judges. Fixed by routing through our own
+// same-origin proxy (app/api/pmtiles-proxy/route.ts), which forwards the
+// real range request server-side (no CORS applies between servers) and
+// streams back the identical real bytes. These tests lock down that
+// contract so it can't silently regress back to a direct cross-origin
+// fetch, and that the CSP/proxy pieces stay in sync.
 import * as fs from "fs";
 import * as path from "path";
 
@@ -35,9 +39,17 @@ const read = (p: string) => fs.readFileSync(path.resolve(process.cwd(), p), "utf
 const realVectorTiles = read("src/services/realVectorTiles.ts");
 const offlineTileService = read("src/services/offlineTileService.ts");
 const nextConfig = read("next.config.ts");
+const proxyRoute = read("src/app/api/pmtiles-proxy/route.ts");
+const swSource = read("public/sw.js");
 
-assert(realVectorTiles.includes('"https://build.protomaps.com/'),
-  "Offline tiles are fetched from the real public Protomaps PMTiles archive");
+assert(realVectorTiles.includes('PUBLIC_PMTILES_URL = "/api/pmtiles-proxy"'),
+  "Offline tiles are fetched through the same-origin proxy, never build.protomaps.com directly from the browser (CORS-blocked for any real deployed origin)");
+assert(proxyRoute.includes('"https://build.protomaps.com/'),
+  "The proxy itself forwards to the real public Protomaps PMTiles archive -- real map data, not a stub");
+assert(/headers\["Range"\]\s*=\s*range/.test(proxyRoute) || /Range.*=.*range/.test(proxyRoute),
+  "The proxy forwards the caller's real Range header (byte-serving), never buffers/serves the whole ~114GB archive");
+assert(swSource.includes("/api/pmtiles-proxy") && /if \(url\.pathname === '\/api\/pmtiles-proxy'\) \{\s*return;/.test(swSource),
+  "The service worker bypasses the proxy entirely -- re-issuing a Range request via fetch(event.request) inside a SW does not reliably replay Range semantics (verified live)");
 assert(!/backend-api|BACKEND_API_URL/.test(realVectorTiles),
   "Tile fetch has no dependency on our backend -- keeps working if the FastAPI backend is down");
 assert(!/backend-api|BACKEND_API_URL/.test(offlineTileService),

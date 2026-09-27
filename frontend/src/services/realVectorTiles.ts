@@ -7,14 +7,23 @@ import { VectorTileCoordinate } from "../types/offline";
  * is a single-file archive queried via HTTP range requests, so fetching one
  * z/x/y tile only downloads that tile's few KB, never the whole ~114GB file.
  *
+ * Fetched through our own same-origin proxy (app/api/pmtiles-proxy), not
+ * directly -- build.protomaps.com's CORS allowlist only includes
+ * http://localhost:3000 (verified directly with curl), so a real deployed
+ * domain's browser gets silently CORS-blocked fetching it directly. That
+ * exactly matched "downloads work when I test locally, fail for judges."
+ * The proxy forwards the same range requests server-side (no CORS applies
+ * between servers) and streams back the identical real bytes -- see that
+ * file for the full explanation.
+ *
  * This is real, non-fabricated map data (the actual OSM road/building/water
- * network) -- the opposite of the previous implementation, which stored a
+ * network) -- the opposite of an earlier implementation, which stored a
  * synthetic `{z,x,y,packId,cachedAt}` JSON blob and called it a downloaded
  * map tile. If this archive is unreachable, callers must report that
  * honestly (skip the tile / mark the pack PARTIAL) rather than substitute
  * anything fake.
  */
-export const PUBLIC_PMTILES_URL = "https://build.protomaps.com/20230925.pmtiles";
+export const PUBLIC_PMTILES_URL = "/api/pmtiles-proxy";
 
 let pmtilesInstance: PMTiles | null = null;
 

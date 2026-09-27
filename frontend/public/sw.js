@@ -1,7 +1,8 @@
 // TRAVEL GUARDIAN SERVICE WORKER (PHASE 8 & 14)
-// Cache Version: travel-guardian-v13 -- adds /guide (official helplines,
-// useful offline) and /history to the pre-cached app shell.
-const CACHE_VERSION = 'travel-guardian-v13';
+// Cache Version: travel-guardian-v14 -- bypasses /api/pmtiles-proxy entirely
+// (Range requests don't replay reliably when re-issued via fetch(event.request)
+// inside a service worker; this endpoint has nothing to offline-cache anyway).
+const CACHE_VERSION = 'travel-guardian-v14';
 const STATIC_CACHE = `travel-guardian-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `travel-guardian-runtime-${CACHE_VERSION}`;
 
@@ -87,6 +88,19 @@ self.addEventListener('fetch', (event) => {
   const isLocalDev = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
   if (isLocalDev && url.pathname.startsWith('/_next/')) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Bypass entirely for the PMTiles proxy: it exists only to make Range
+  // (byte-serving) requests same-origin for the offline map tile archive
+  // (see app/api/pmtiles-proxy/route.ts). Re-issuing an intercepted Range
+  // request via `fetch(event.request)` inside a service worker does not
+  // reliably replay Range semantics in Chromium -- observed directly here as
+  // every request failing with a generic network error even though the
+  // exact same request succeeds outside the service worker. This endpoint
+  // has nothing to offline-cache (tiles are cached separately, by our own
+  // app logic, in IndexedDB) so bypassing it loses nothing.
+  if (url.pathname === '/api/pmtiles-proxy') {
     return;
   }
 
