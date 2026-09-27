@@ -54,6 +54,7 @@ export function usePwaManager(isNavigating: boolean = false, isEmergencyOpen: bo
     window.addEventListener("appinstalled", handleAppInstalled);
 
     // Register Service Worker in production / supported environments
+    let handleControllerChange: (() => void) | null = null;
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
@@ -86,19 +87,30 @@ export function usePwaManager(isNavigating: boolean = false, isEmergencyOpen: bo
           console.warn("[PWA] Service Worker registration failed:", err);
         });
 
-      // Reload smoothly when new Service Worker assumes control
+      // Reload when an UPDATED Service Worker takes over, so the page and
+      // its cached assets match. On a first visit there is no previous
+      // controller: the new worker claiming the page (skipWaiting +
+      // clients.claim) must not reload it, or whatever the user just started
+      // (a route, an open Digital Twin, a form) is wiped seconds after load.
+      let hadController = !!navigator.serviceWorker.controller;
       let refreshing = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
+      handleControllerChange = () => {
+        if (!hadController) {
+          hadController = true;
+          return;
+        }
         if (!refreshing) {
           refreshing = true;
           window.location.reload();
         }
-      });
+      };
+      navigator.serviceWorker.addEventListener("controllerchange", handleControllerChange);
     }
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
+      if (handleControllerChange) navigator.serviceWorker.removeEventListener("controllerchange", handleControllerChange);
     };
   }, []);
 

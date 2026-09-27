@@ -1,13 +1,12 @@
 import { test, expect } from "@playwright/test";
 
+// Waits until the service worker CONTROLS the page -- the actual precondition
+// for serving an offline reload. The worker only activates (and claims the
+// page) after its install step has finished pre-caching the app shell.
+// The predicate is synchronous on purpose: waitForFunction treats a returned
+// Promise as truthy and would resolve immediately, before install finished.
 async function waitForServiceWorkerActive(page: import("@playwright/test").Page) {
-  await page.waitForFunction(
-    async () => {
-      const reg = await navigator.serviceWorker.getRegistration();
-      return !!reg?.active && reg.active.state === "activated";
-    },
-    { timeout: 15_000 }
-  );
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 20_000 });
 }
 
 // Scenario 29: Network disconnect

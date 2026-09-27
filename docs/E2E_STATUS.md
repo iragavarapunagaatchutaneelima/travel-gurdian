@@ -1,4 +1,4 @@
-# E2E Test Status — 32 Mentor Scenarios
+# E2E Test Status: 32 Mentor Scenarios + Digital Twin / Grounding
 
 Run with:
 ```bash
@@ -11,7 +11,8 @@ cd frontend && npm run test:e2e
 ```
 
 Real browser E2E tests (Playwright + Chromium) live in `frontend/e2e/`. This
-table maps each of the 32 mentor-specified scenarios to its actual status —
+table maps each of the 32 mentor-specified scenarios (plus 33-38 for the
+Digital Twin and AI grounding) to its actual status —
 `PASS`, `BLOCKED` (feature doesn't exist yet), or `NOT TESTED` (real
 infrastructure this repo can't provide). Nothing here is claimed done that
 wasn't actually run.
@@ -51,15 +52,44 @@ wasn't actually run.
 | 31 | PWA reload | **PASS** | SW survives hard reload |
 | 32 | Production build | **PASS** | `npm run build` succeeds — run manually, not part of the Playwright suite (see below) |
 
-## Known flakiness
+### Midnight Task 1 + AI grounding (`e2e/07-digital-twin-and-grounding.spec.ts`)
 
-Two tests (two-wheeler routing, network-disconnect) occasionally fail on
-the first attempt when run as part of the full suite but pass reliably
-(3/3) in isolation. Root-caused to real Google Routes API latency and
-service-worker activation timing under sequential full-browser-process load
-— not application bugs. `playwright.config.ts` sets `retries: 2` to absorb
-this, matching how any suite exercising live third-party APIs and a real
-SW lifecycle behaves under CI-style load.
+These call the real keyless providers (Open-Meteo, GloFAS, GDACS) through the
+backend. Each assertion accepts real data **with** a source/timestamp, or an
+explicit "unavailable". A bare number with no provenance fails the test.
+
+| # | Scenario | Status | Notes |
+|---|---|---|---|
+| 33 | AI weather answer | **PASS** | No route/GPS → "can't check", no call. GPS → point weather + "No route is planned". Route → twin-backed reply citing source, `fetched HH:MM UTC`, risk level |
+| 34 | AI flood answer | **PASS** | GloFAS answer says "not an official flood warning", or reports river data unavailable |
+| 35 | AI trusted contact | **PASS** | From backend store; phone never shown unmasked; contact location never claimed |
+| 36 | Twin API guards | **PASS** | Bad lat → 422; 500 mm/h → 400; chained simulation → 400; 70 mm/h → HIGH with delay `null` (not quantified); social media `NOT_INTEGRATED` |
+| 37 | Digital Twin panel + what-if | **PASS** | Opens on Live Map for a real Google route, shows sourced state and propagation chain, runs 70 mm/h simulation (violent-rain advisory shown), returns to Live. Asserts **zero** `/emergency/`, `/assist/sos` or check-in confirm requests during simulation |
+| 38 | Journey shared with AI / My Journeys | **PASS** | Live Map publishes the real selected route (destination, waypoints, score); My Journeys shows it instead of invented trips |
+
+## Flakiness: root causes found and fixed (2026-09-27)
+
+The suite used to lean on `retries: 2`. Running it with `--retries=0` and
+`--repeat-each=3` (which spreads copies across parallel workers) exposed
+causes that had previously been blamed on "timing":
+
+- **Network disconnect (29) was a test bug.** The helper passed an `async`
+  predicate to `page.waitForFunction`. It returns a Promise, which counts as
+  truthy, so the helper resolved immediately, before the service worker had
+  finished pre-caching and taken control. The `{timeout}` was also passed as
+  the predicate's argument, not as options. The helper now waits
+  synchronously for `navigator.serviceWorker.controller`, the real
+  precondition for serving an offline reload.
+- **First-visit reload was an app bug.** `usePwaManager` reloaded the page
+  on every `controllerchange`, including the very first install, when the
+  new worker claims the page. That wiped whatever the user had just started
+  (an open Digital Twin panel, a what-if result) and interrupted navigations.
+  It now reloads only when an existing worker is replaced by an update.
+
+Result: full suite **33 passed, 2 skipped, 0 failed with `--retries=0`** on 7
+parallel workers. New specs: 6/6 over 3 repeats. `retries: 2` stays in
+`playwright.config.ts` only for real Google Routes latency; it is no longer
+hiding a known failure.
 
 ## Offline map engine (scenarios 24-26)
 
