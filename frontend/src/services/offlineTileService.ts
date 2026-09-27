@@ -332,20 +332,24 @@ export async function getTileStorageStats(): Promise<{
     return new Promise((resolve) => {
       const tx = db.transaction(TILE_STORE, "readonly");
       const store = tx.objectStore(TILE_STORE);
-      const countReq = store.count();
-      
-      countReq.onsuccess = () => {
-        const count = countReq.result || 0;
-        // Average tile footprint is approx 2.5 KB
-        const estBytes = count * 2500;
-        resolve({
-          totalTiles: count,
-          totalSizeBytes: estBytes,
-          totalSizeMb: (estBytes / (1024 * 1024)).toFixed(2),
-        });
+      // Sum the real stored byte sizes. (This used to multiply the count by
+      // an assumed 2.5 KB; real Protomaps MVT tiles average ~15 KB, so the
+      // reported footprint was ~6x too small.)
+      let count = 0;
+      let bytes = 0;
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (cursor) {
+          const v = cursor.value as { sizeBytes?: number; data?: ArrayBuffer };
+          count++;
+          bytes += v.sizeBytes ?? v.data?.byteLength ?? 0;
+          cursor.continue();
+        } else {
+          resolve({ totalTiles: count, totalSizeBytes: bytes, totalSizeMb: (bytes / (1024 * 1024)).toFixed(2) });
+        }
       };
-
-      countReq.onerror = () => {
+      cursorReq.onerror = () => {
         resolve({ totalTiles: 0, totalSizeBytes: 0, totalSizeMb: "0.00" });
       };
     });

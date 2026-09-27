@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { OfflineCorridorPack, CacheFreshness } from "../../types/offline";
+import { TrustedContact } from "../../types/safetyCheckIn";
 import { getPackFreshness } from "../../services/offlineStorageService";
+import { getTrustedContacts } from "../../services/trustedContactService";
 import { generateSurvivalKitPDF } from "../../services/survivalPdfGenerator";
 import { 
   ShieldCheck, 
@@ -39,6 +41,12 @@ export default function OfflineSurvivalCard({
   const [activeTab, setActiveTab] = useState<"overview" | "turns" | "havens" | "emergency">("overview");
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  // Device-local copy of the trusted contacts (synced while online), so it
+  // is available with no connection. Read after mount (localStorage).
+  const [contacts, setContacts] = useState<TrustedContact[]>([]);
+  useEffect(() => {
+    setContacts(getTrustedContacts().filter((c) => c.enabled));
+  }, []);
 
   const freshness: CacheFreshness = getPackFreshness(pack);
   const cachedTimeStr = new Date(pack.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -194,14 +202,19 @@ export default function OfflineSurvivalCard({
             </p>
           </div>
 
-          <Link
-            href={`/map?from=${pack.origin.name.toLowerCase()}&dest=${pack.destination.name.toLowerCase()}&mode=${pack.travelMode}&routeId=${pack.route.id}`}
-            className="w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all text-center"
-            style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", color: "#2563FF" }}
-          >
-            <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
-            <span>Open in Cached Living Map</span>
-          </Link>
+          {/* The offline (MapLibre) map is rendered right above this card on
+              /offline-mode. The old link went to the online Google map, which
+              can't load without a connection. */}
+          {pack.mapPack && pack.mapPack.tileCount > 0 && (
+            <a
+              href="#offline-map"
+              className="w-full py-3.5 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all text-center"
+              style={{ backgroundColor: "#EFF6FF", border: "1px solid rgba(37,99,255,0.2)", color: "#2563FF" }}
+            >
+              <MapPin className="h-4 w-4" style={{ color: "#2563FF" }} />
+              <span>Show on offline map</span>
+            </a>
+          )}
         </div>
       )}
 
@@ -306,6 +319,32 @@ export default function OfflineSurvivalCard({
               <PhoneCall className="h-4 w-4" style={{ color: "#2563FF" }} />
               <span>Women Helpline 1091</span>
             </a>
+          </div>
+
+          <div className="p-3.5 rounded-2xl space-y-2" style={{ backgroundColor: "#F8FAFC", border: "1px solid rgba(15,23,42,0.06)", fontSize: "12px" }}>
+            <div style={{ fontSize: "10px", fontWeight: 800, textTransform: "uppercase", color: "#64748B" }}>Trusted contact (saved on this device)</div>
+            {contacts.length === 0 ? (
+              <p style={{ color: "#64748B" }}>No trusted contact is saved on this device. Add one on the Emergency page while online.</p>
+            ) : (
+              contacts.map((c) => (
+                <div key={c.id} className="flex items-center justify-between gap-2">
+                  <div>
+                    <div style={{ fontWeight: 700, color: "#0F172A" }}>{c.name}{c.relationship ? ` (${c.relationship})` : ""}</div>
+                    <div style={{ color: "#64748B" }}>{c.phone}</div>
+                  </div>
+                  <a
+                    href={`tel:${c.phone}`}
+                    className="py-1.5 px-3 rounded-xl font-bold text-[11px] shrink-0"
+                    style={{ backgroundColor: "#FFFFFF", border: "1px solid rgba(15,23,42,0.12)", color: "#0F172A" }}
+                  >
+                    Call
+                  </a>
+                </div>
+              ))
+            )}
+            <p style={{ fontSize: "10px", color: "#94A3B8" }}>
+              Offline, Travel Guardian can't send automatic alerts or SMS; Safety Check escalation resumes when the backend is reachable. A normal phone call works wherever there is voice signal.
+            </p>
           </div>
         </div>
       )}

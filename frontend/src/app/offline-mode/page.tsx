@@ -111,7 +111,7 @@ function OfflineModeContent() {
             {activePack ? (
               <>
                 {activePack.mapPack && activePack.mapPack.tileCount > 0 && (
-                  <div className="rounded-3xl overflow-hidden border border-border shadow-sm">
+                  <div id="offline-map" className="rounded-3xl overflow-hidden border border-border shadow-sm scroll-mt-24">
                     <div className="px-4 py-2 bg-elevated-surface border-b border-border flex items-center justify-between">
                       <span className="text-[10px] font-extrabold uppercase tracking-wider text-(--muted-foreground)">
                         Offline Vector Map — {activePack.mapPack.tileCount} real tiles cached
@@ -121,6 +121,9 @@ function OfflineModeContent() {
                     <OfflineMapView pack={activePack} className="w-full h-80" />
                     <div className="px-4 py-2 bg-elevated-surface border-t border-border text-[10px] text-(--muted-foreground) font-semibold">
                       Map detail was downloaded only along the blue route, at zoom {activePack.mapPack.zoomRange[0]}–{activePack.mapPack.zoomRange[1]}. Zoom in on the route to see it; areas off the corridor are intentionally blank.
+                      <span className="block mt-1 text-amber-600">
+                        Route recalculation is unavailable offline. Follow the cached turn list below; if you leave the route, head back to it, or reconnect to plan a new one.
+                      </span>
                     </div>
                   </div>
                 )}

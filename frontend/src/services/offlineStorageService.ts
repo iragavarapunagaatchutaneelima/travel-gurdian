@@ -334,7 +334,10 @@ export function setActiveOfflinePackId(packId: string): void {
  */
 export async function getStorageUsage(): Promise<OfflineStorageUsage> {
   const packs = await listOfflinePacks();
-  const totalKb = packs.reduce((acc, p) => acc + (p.approxSizeKb || 50), 0);
+  // Measured size of the pack records themselves (route, turns, havens).
+  // approxSizeKb already includes the tile bytes, so adding it to the tile
+  // total below double-counted every tile.
+  const totalKb = packs.reduce((acc, p) => acc + Math.round(JSON.stringify(p).length / 1024), 0);
   const tileStats = await getTileStorageStats();
 
   return {

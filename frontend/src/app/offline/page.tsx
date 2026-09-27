@@ -8,7 +8,7 @@ import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { saveOfflinePack, deleteOfflinePack } from "../../services/offlineStorageService";
 import { downloadCorridorMapPack } from "../../services/offlineTileService";
 import { OfflineCorridorPack, CacheFreshness } from "../../types/offline";
-import { CITIES, generateRoutes, City } from "../../data/routeData";
+import { CITIES, City } from "../../data/routeData";
 import { generateSurvivalKitPDF } from "../../services/survivalPdfGenerator";
 import { 
   Download, 
@@ -49,8 +49,11 @@ function OfflinePacksManagerContent() {
     switchActivePack
   } = useOfflineStatus();
 
-  const fromParam = searchParams.get("from") || "chennai";
-  const destParam = searchParams.get("dest") || "bangalore";
+  // No default journey: this page used to fall back to "chennai -> bangalore"
+  // with hardcoded coordinates and a synthetic route. A pack is only built
+  // from a real route handed off by Plan Journey / Live Map.
+  const fromParam = searchParams.get("from") || "";
+  const destParam = searchParams.get("dest") || "";
   const modeParam = (searchParams.get("mode") as any) || "Car";
   const fromLat = parseFloat(searchParams.get("fromLat") || "");
   const fromLng = parseFloat(searchParams.get("fromLng") || "");
@@ -58,6 +61,14 @@ function OfflinePacksManagerContent() {
   const destLng = parseFloat(searchParams.get("destLng") || "");
   const fromName = searchParams.get("fromName") || fromParam;
   const destName = searchParams.get("destName") || destParam;
+
+  const [sourceRoute, setSourceRoute] = useState<any | null>(null);
+  useEffect(() => {
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem("tg_offline_source_route") || "null");
+      if (parsed?.waypoints?.length > 1 && parsed.provider === "google") setSourceRoute(parsed);
+    } catch {}
+  }, []);
 
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{
@@ -71,6 +82,14 @@ function OfflinePacksManagerContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDownloadNewPack = async () => {
+    // Only a real, already-computed Google route (waypoints, steps, Places
+    // POIs) handed off from Plan Journey / Live Map. No synthetic fallback.
+    const activeRoute = sourceRoute;
+    if (!activeRoute) {
+      setErrorMessage("Plan a journey first. A pack is built from the real route you planned, never a placeholder.");
+      return;
+    }
+    const isRealRoute = true;
     setDownloading(true);
     setDownloadProgress({
       phase: "PREPARING",
@@ -80,46 +99,22 @@ function OfflinePacksManagerContent() {
       total: 100,
     });
 
-    const origin: City = CITIES[fromParam.toLowerCase()] || {
-      id: fromParam.toLowerCase().replace(/[^a-z0-9]/g, "_") || "origin",
-      name: fromName,
-      state: "Regional",
-      latitude: !isNaN(fromLat) ? fromLat : 13.0827,
-      longitude: !isNaN(fromLng) ? fromLng : 80.2707,
-      region: "Local Corridor",
-      highways: ["National Highway"]
-    };
-    const dest: City = CITIES[destParam.toLowerCase()] || {
-      id: destParam.toLowerCase().replace(/[^a-z0-9]/g, "_") || "destination",
-      name: destName,
-      state: "Regional",
-      latitude: !isNaN(destLat) ? destLat : 12.9716,
-      longitude: !isNaN(destLng) ? destLng : 77.5946,
-      region: "Local Corridor",
-      highways: ["National Highway"]
-    };
-
-    // Prefer the REAL, already-computed route (real Google waypoints, steps,
-    // and Places-sourced POIs) handed off from the Plan Journey page. Only
-    // fall back to the synthetic generateRoutes() placeholder if the user
-    // reached this page directly without a real route in hand -- and label
-    // that fallback honestly rather than presenting it as real.
-    let activeRoute = null as ReturnType<typeof generateRoutes>[number] | null;
-    let isRealRoute = false;
-    try {
-      const stored = sessionStorage.getItem("tg_offline_source_route");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed?.waypoints?.length > 0) {
-          activeRoute = parsed;
-          isRealRoute = parsed.provider === "google";
-        }
-      }
-    } catch {}
-    if (!activeRoute) {
-      activeRoute = generateRoutes(origin.id, dest.id, modeParam)[0];
-      isRealRoute = false;
-    }
+    // Endpoints: known city record, else the URL's coordinates, else the
+    // route's own first/last waypoint ([lng, lat]). Never invented coordinates.
+    const first = activeRoute.waypoints[0];
+    const last = activeRoute.waypoints[activeRoute.waypoints.length - 1];
+    const endpoint = (key: string, name: string, lat: number, lng: number, wp: number[], fallbackId: string): City =>
+      CITIES[key.toLowerCase()] || {
+        id: key.toLowerCase().replace(/[^a-z0-9]/g, "_") || fallbackId,
+        name: name || (fallbackId === "origin" ? "Origin" : "Destination"),
+        state: "",
+        latitude: !isNaN(lat) ? lat : wp[1],
+        longitude: !isNaN(lng) ? lng : wp[0],
+        region: "",
+        highways: [],
+      };
+    const origin = endpoint(fromParam, fromName, fromLat, fromLng, first, "origin");
+    const dest = endpoint(destParam, destName, destLat, destLng, last, "destination");
     const packId = `pack_${origin.id}_${dest.id}_${Date.now()}`;
 
     try {
@@ -211,8 +206,7 @@ function OfflinePacksManagerContent() {
         const statusNote = mapPackMetadata.status === "PARTIAL"
           ? ` (partial: ${mapPackMetadata.lastError || "some tiles were unavailable"})`
           : "";
-        const routeNote = isRealRoute ? "" : " — using a placeholder route; plan a real journey first for accurate turn-by-turn and safe havens.";
-        setSuccessMessage(`Downloaded ${mapPackMetadata.tileCount} real map tiles for ${origin.name} ➔ ${dest.name}${statusNote}.${routeNote}`);
+        setSuccessMessage(`Downloaded ${mapPackMetadata.tileCount} real map tiles (${(mapPackMetadata.totalSizeBytes / (1024 * 1024)).toFixed(1)} MB) for ${origin.name} ➔ ${dest.name}${statusNote}.`);
         await refreshStorage();
         setTimeout(() => setSuccessMessage(null), 7000);
       } else {
@@ -338,8 +332,11 @@ function OfflinePacksManagerContent() {
               {allPacks.map((pack) => {
                 const isActive = activePack?.packId === pack.packId;
                 const cachedDate = new Date(pack.updatedAt).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
-                const tileCount = pack.mapPack?.tileCount || 420;
-                const mapStatus = pack.mapPack?.status || "READY";
+                // Real values or an explicit "none" -- never a made-up count/status.
+                const tileCount = pack.mapPack?.tileCount ?? 0;
+                const mapStatus = pack.mapPack?.status ?? "NO MAP";
+                const zoom = pack.mapPack?.zoomRange;
+                const sizeMb = pack.mapPack ? (pack.mapPack.totalSizeBytes / (1024 * 1024)).toFixed(1) : null;
 
                 return (
                   <div
@@ -392,7 +389,7 @@ function OfflinePacksManagerContent() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2" style={{ borderTop: "1px solid rgba(15,23,42,0.06)", fontSize: "11px", color: "#64748B", fontWeight: 500 }}>
                       <div>Turns: <strong style={{ color: "#0F172A" }}>{pack.turnInstructions.length}</strong></div>
                       <div>Safe Havens: <strong style={{ color: "#0F172A" }}>{pack.safeHavens.length}</strong></div>
-                      <div>Vector Tiles: <strong style={{ color: "#0F172A" }}>{tileCount} (Z10-13)</strong></div>
+                      <div>Vector Tiles: <strong style={{ color: "#0F172A" }}>{tileCount}{zoom ? ` (Z${zoom[0]}-${zoom[1]})` : ""}{sizeMb ? `, ${sizeMb} MB` : ""}</strong></div>
                       <div>Updated: <strong style={{ color: "#0F172A" }}>{cachedDate}</strong></div>
                     </div>
 
@@ -436,13 +433,17 @@ function OfflinePacksManagerContent() {
               <div className="space-y-1">
                 <h3 style={{ fontSize: "14px", fontWeight: 800, color: "#0F172A" }}>Cache Vector Corridor</h3>
                 <p style={{ fontSize: "12px", color: "#64748B", fontWeight: 400, lineHeight: 1.5 }}>
-                  Prepare bounded vector map tiles &amp; safety intelligence for <strong style={{ color: "#0F172A" }}>{fromParam} ➔ {destParam}</strong>.
+                  {sourceRoute ? (
+                    <>Prepare bounded vector map tiles &amp; safety intelligence for <strong style={{ color: "#0F172A" }}>{fromName || "your origin"} ➔ {destName || "your destination"}</strong> ({sourceRoute.name}, {sourceRoute.distance}).</>
+                  ) : (
+                    <>No planned journey to download. Plan one first, then use <strong style={{ color: "#0F172A" }}>Download Offline Pack</strong> from its route card.</>
+                  )}
                 </p>
               </div>
 
               <button
                 onClick={handleDownloadNewPack}
-                disabled={downloading}
+                disabled={downloading || !sourceRoute}
                 className="w-full py-3.5 rounded-2xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
                 style={{ backgroundColor: "#2563FF", fontFamily: "'Poppins',sans-serif" }}
               >
@@ -469,8 +470,8 @@ function OfflinePacksManagerContent() {
                   <span style={{ color: "#0F172A", fontWeight: 700 }}>±8 km along route</span>
                 </div>
                 <div className="flex justify-between font-medium">
-                  <span>Est. Tile Footprint:</span>
-                  <span style={{ color: "#0F172A", fontWeight: 700 }}>~400 - 1,200 tiles</span>
+                  <span>Tile Budget:</span>
+                  <span style={{ color: "#0F172A", fontWeight: 700 }}>Up to 1,200 tiles (route-following)</span>
                 </div>
               </div>
             </div>
@@ -489,11 +490,11 @@ function OfflinePacksManagerContent() {
                 </div>
                 <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
                   <span>Stored Vector Tiles:</span>
-                  <strong style={{ color: "#0F172A" }}>{storageUsage.totalTilesCount || 420}</strong>
+                  <strong style={{ color: "#0F172A" }}>{storageUsage.totalTilesCount ?? 0}</strong>
                 </div>
                 <div className="flex justify-between font-medium" style={{ color: "#64748B" }}>
                   <span>IndexedDB Footprint:</span>
-                  <strong style={{ color: "#0F172A" }}>~{storageUsage.estimatedSizeKb || 1100} KB</strong>
+                  <strong style={{ color: "#0F172A" }}>{(storageUsage.estimatedSizeKb / 1024).toFixed(1)} MB</strong>
                 </div>
               </div>
 
