@@ -26,14 +26,21 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://maps.googleapis.com",
+      // blob: is required for MapLibre GL JS's tile-parsing web worker,
+      // which it wraps in a blob: URL that internally imports the actual
+      // worker script as an ES module.
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://maps.googleapis.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com",
       "font-src 'self' data: https://fonts.gstatic.com https://protomaps.github.io",
       // build.protomaps.com: the public OpenStreetMap PMTiles archive used
       // for the real offline vector map engine (range-request tile fetches).
       // protomaps.github.io: text-label glyphs for that same offline map style.
-      "connect-src 'self' https://maps.googleapis.com https://generativelanguage.googleapis.com https://build.protomaps.com https://protomaps.github.io",
+      // huggingface.co / *.hf.co / raw.githubusercontent.com: WebLLM on-device
+      // model config, weights (HF redirects to its LFS/Xet CDNs), and the
+      // compiled model WASM library -- only fetched when the user asks the
+      // offline AI a question on a WebGPU-capable browser.
+      "connect-src 'self' https://maps.googleapis.com https://generativelanguage.googleapis.com https://build.protomaps.com https://protomaps.github.io https://huggingface.co https://*.huggingface.co https://*.hf.co https://raw.githubusercontent.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
     ].join("; "),

@@ -71,9 +71,14 @@ export default function OfflineMapView({ pack, className = "" }: OfflineMapViewP
       });
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
+      const routeCoords = pack.route?.waypoints || [];
+      if (routeCoords.length > 1) {
+        map.fitBounds([[bounds.minLng, bounds.minLat], [bounds.maxLng, bounds.maxLat]], { padding: 24, duration: 0 });
+      }
+
       // Route corridor line, from the real downloaded route's waypoints.
       map.on("load", () => {
-        if (!pack.route?.waypoints?.length) return;
+        if (routeCoords.length < 2) return;
         map.addSource("tg-route-line", {
           type: "geojson",
           data: {

@@ -42,7 +42,7 @@ wasn't actually run.
 | 22 | Twilio trial error | **NOT TESTED** | Requires a real Twilio trial account and an unverified recipient number, which this repo cannot provide. `TwilioProvider`'s HTTP 21608 error mapping is covered by `backend/tests/test_sos_audit_scenarios.py::test_scenario_07_twilio_api_failure` instead |
 | 23 | 112 safety lock | **PASS** | Confirmed locked by default (zero `tel:112` links in the DOM until explicit multi-step activation). Test deliberately stops short of the app's own "DO NOT dial 112 during automated tests" confirmation step |
 | 24 | Offline pack download | **PASS** | Verified manually end-to-end: downloads 1200 real MVT vector tiles (~17MB) from Protomaps' public OSM PMTiles archive via HTTP range requests, plus real turn instructions (135) and real Google Places safe havens (26) from the actual planned route — not the previous fabricated placeholder data. See "Offline map engine" note below |
-| 25 | Offline map | **PARTIAL** | Real tiles download and store correctly (scenario 24). MapLibre GL JS renders the map container and controls, but vector layers don't paint — MapLibre's tile-parsing web worker fails to load under Next.js/Turbopack's bundler even after pointing `workerUrl`/`config.WORKER_URL` at a self-hosted static copy. Root-caused to the bundler integration, not the data pipeline; not resolved in this pass |
+| 25 | Offline map | **PASS** (manual) | MapLibre GL JS renders real downloaded OSM vector tiles from IndexedDB plus the route line, independent of Google Maps. Tiles now follow the route corridor (1145 tiles covering zoom 10-13 end to end for Hyderabad->Mumbai) instead of filling the route's bounding box and running out of budget. Verified manually in the browser; not yet in the Playwright suite |
 | 26 | Offline POIs | **PASS** | Real Google Places POIs from the actual route are now stored as safe havens (see scenario 24) — no longer the fabricated "Apollo Emergency Care" placeholder |
 | 27 | Offline Survival Card | **PASS** (smoke only) | Page reachable and marks itself as offline data |
 | 28 | Offline AI | **PARTIAL** | Full grounded architecture built and verified: intent detection → `executeToolCall()` against real offline pack data → deterministic reply, with WebLLM (WebGPU) attempted first and falling back honestly. Verified live: "give me the route summary" correctly answered "Cached route: Optimal Safety Corridor (705.5 km, est. 13h 30m)" from real downloaded data, labeled "Answered by deterministic offline engine". WebGPU reports present in this environment but actual on-device model download/inference wasn't verified to complete (large model download, no way to confirm real GPU acceleration in this sandbox) — falls through safely to the deterministic engine either way, which is the correct, safety-preserving behavior |
@@ -84,14 +84,10 @@ This is now real:
   synthetic route.
 - **Rendering**: `OfflineMapView.tsx` (MapLibre GL JS + a custom
   `tg-offline://` protocol reading tiles straight out of IndexedDB) is
-  wired into `/offline-mode`. The map initializes and its controls render,
-  but the vector layers don't currently paint: MapLibre's tile-parsing web
-  worker fails to load under this Next.js/Turbopack bundler setup, even
-  after pointing `maplibregl.config.WORKER_URL` at a self-hosted static
-  copy of the worker script. This is a bundler-integration issue, not a
-  data problem — real tiles are confirmed present and byte-correct in
-  IndexedDB — and is left as a known, documented gap rather than papered
-  over.
+  wired into `/offline-mode` and renders the real basemap and route. The
+  earlier "worker failed to load" was because MapLibre's worker module
+  imports a sibling `maplibre-gl-shared.mjs` that hadn't been copied into
+  `public/`; both files are now self-hosted there.
 - **No Google tile caching, no Mapbox**: confirmed — this system is fully
   independent of `googleRoutes.ts`/the Google Maps JS SDK.
 

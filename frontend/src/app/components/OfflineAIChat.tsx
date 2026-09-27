@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Bot, Send, Cpu, CircleAlert } from "lucide-react";
 import { answerOffline, isWebGPUSupported, OfflineAnswer } from "../../services/offlineAI";
 import { OfflineCorridorPack } from "../../types/offline";
@@ -26,7 +26,12 @@ export default function OfflineAIChat({ pack, currentPosition }: OfflineAIChatPr
   const [messages, setMessages] = useState<ChatEntry[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const webgpu = isWebGPUSupported();
+  // Detected after mount: navigator.gpu doesn't exist during SSR, so reading
+  // it at render time made server and client disagree (hydration mismatch).
+  const [webgpu, setWebgpu] = useState(false);
+  useEffect(() => {
+    setWebgpu(isWebGPUSupported());
+  }, []);
 
   const handleSend = async () => {
     const prompt = input.trim();

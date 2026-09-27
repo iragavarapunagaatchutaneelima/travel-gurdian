@@ -119,6 +119,9 @@ function OfflineModeContent() {
                       <span className="text-[10px] font-bold text-emerald-600">Independent of Google Maps</span>
                     </div>
                     <OfflineMapView pack={activePack} className="w-full h-80" />
+                    <div className="px-4 py-2 bg-elevated-surface border-t border-border text-[10px] text-(--muted-foreground) font-semibold">
+                      Map detail was downloaded only along the blue route, at zoom {activePack.mapPack.zoomRange[0]}–{activePack.mapPack.zoomRange[1]}. Zoom in on the route to see it; areas off the corridor are intentionally blank.
+                    </div>
                   </div>
                 )}
                 <OfflineSurvivalCard pack={activePack} onRefreshPack={refreshStorage} />

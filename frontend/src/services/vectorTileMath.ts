@@ -85,6 +85,29 @@ export function calculateCorridorBounds(
 }
 
 /**
+ * Inserts intermediate points so consecutive samples are at most maxStepKm
+ * apart -- a long straight polyline segment would otherwise leave gaps in
+ * the corridor between its two endpoints' tiles.
+ */
+function densifyWaypoints(waypoints: [number, number][], maxStepKm: number): [number, number][] {
+  if (!waypoints || waypoints.length === 0) return [];
+  const out: [number, number][] = [waypoints[0]];
+  for (let i = 1; i < waypoints.length; i++) {
+    const [lng1, lat1] = waypoints[i - 1];
+    const [lng2, lat2] = waypoints[i];
+    const dLatKm = (lat2 - lat1) * 111;
+    const dLngKm = (lng2 - lng1) * 111 * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
+    const distKm = Math.sqrt(dLatKm * dLatKm + dLngKm * dLngKm);
+    const steps = Math.max(1, Math.ceil(distKm / Math.max(0.1, maxStepKm)));
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps;
+      out.push([lng1 + (lng2 - lng1) * t, lat1 + (lat2 - lat1) * t]);
+    }
+  }
+  return out;
+}
+
+/**
  * Calculates a deduplicated list of vector tile coordinates along route corridor
  * Enforces maximum tile count to protect device memory and storage limits
  */
@@ -98,28 +121,32 @@ export function calculateCorridorTiles(
   const bounds = calculateCorridorBounds(waypoints, lateralPaddingKm, minZoom, maxZoom);
   const tileMap = new Map<string, VectorTileCoordinate>();
 
-  // Iterate over constrained zoom levels
+  // Follow the route line itself rather than filling its whole bounding
+  // rectangle: a diagonal 700km route's bounding box is mostly land nowhere
+  // near the road, and filling it exhausted the tile cap before the actual
+  // corridor was covered at useful zooms. Here each waypoint contributes the
+  // tiles within lateralPaddingKm of it, so tile count grows with route
+  // length, not with route bounding-box area.
+  const latPadDeg = lateralPaddingKm * 0.009;
+  const samples = densifyWaypoints(waypoints, lateralPaddingKm / 2);
+
   for (let z = minZoom; z <= maxZoom; z++) {
-    // Convert bounding envelope to tile limits
-    const nwTile = lonLatToTile(bounds.minLng, bounds.maxLat, z);
-    const seTile = lonLatToTile(bounds.maxLng, bounds.minLat, z);
-
-    const minX = Math.min(nwTile.x, seTile.x);
-    const maxX = Math.max(nwTile.x, seTile.x);
-    const minY = Math.min(nwTile.y, seTile.y);
-    const maxY = Math.max(nwTile.y, seTile.y);
-
-    for (let x = minX; x <= maxX; x++) {
-      for (let y = minY; y <= maxY; y++) {
-        const key = `${z}/${x}/${y}`;
-        if (!tileMap.has(key)) {
-          tileMap.set(key, { z, x, y });
-          if (tileMap.size >= maxTileLimit) {
-            return {
-              tiles: Array.from(tileMap.values()),
-              isTruncated: true,
-              bounds,
-            };
+    for (const [lng, lat] of samples) {
+      const lngPadDeg = latPadDeg / Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+      const nw = lonLatToTile(lng - lngPadDeg, lat + latPadDeg, z);
+      const se = lonLatToTile(lng + lngPadDeg, lat - latPadDeg, z);
+      for (let x = Math.min(nw.x, se.x); x <= Math.max(nw.x, se.x); x++) {
+        for (let y = Math.min(nw.y, se.y); y <= Math.max(nw.y, se.y); y++) {
+          const key = `${z}/${x}/${y}`;
+          if (!tileMap.has(key)) {
+            tileMap.set(key, { z, x, y });
+            if (tileMap.size >= maxTileLimit) {
+              return {
+                tiles: Array.from(tileMap.values()),
+                isTruncated: true,
+                bounds,
+              };
+            }
           }
         }
       }

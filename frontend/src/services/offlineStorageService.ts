@@ -37,9 +37,10 @@ export function getPackFreshness(pack: OfflineCorridorPack): CacheFreshness {
 
 /**
  * Test-fixture-only sample corridor pack with invented turn instructions and
- * safe havens. NEVER call this to seed a real user's IndexedDB -- it is not
- * wired into any app page and exists solely for the tile-math/PDF-generator
- * unit tests in src/scripts/. A real pack must always come from
+ * safe havens. NEVER call this to seed a real user's IndexedDB. It exists
+ * solely for the tile-math/PDF-generator unit tests in src/scripts/, and
+ * listOfflinePacks() actively filters out its packId in case a stale copy
+ * was seeded by an older build. A real pack must always come from
  * downloadCorridorMapPack() (real PMTiles data) and a real planned route's
  * actual Google-sourced POIs/steps (see app/offline/page.tsx).
  */
@@ -217,6 +218,9 @@ export async function saveOfflinePack(
  * Loads a single offline corridor pack by ID
  */
 export async function loadOfflinePack(packId: string): Promise<OfflineCorridorPack | null> {
+  // A stale copy of the test fixture may still sit in IndexedDB from older
+  // builds that auto-seeded it; never surface it as a real pack.
+  if (packId === "pack_chennai_bangalore_nh48") return null;
   try {
     const db = await openIndexedDB();
     const pack = await new Promise<OfflineCorridorPack | null>((resolve, reject) => {
@@ -235,11 +239,7 @@ export async function loadOfflinePack(packId: string): Promise<OfflineCorridorPa
   // Check fallback
   const fallbackList = listFallbackPacks();
   const found = fallbackList.find(p => p.packId === packId);
-  if (found) return found;
-
-  // Check default packs
-  const defaults = createDefaultCorridorPacks();
-  return defaults.find(p => p.packId === packId) || null;
+  return found || null;
 }
 
 /**
@@ -265,16 +265,11 @@ export async function listOfflinePacks(): Promise<OfflineCorridorPack[]> {
     list = listFallbackPacks();
   }
 
-  if (list.length === 0) {
-    const defaults = createDefaultCorridorPacks();
-    // Auto-populate default pack
-    if (typeof window !== "undefined") {
-      saveOfflinePack(defaults[0]).catch(() => {});
-    }
-    return defaults;
-  }
-
-  return list;
+  // No packs means no packs. This used to auto-save createDefaultCorridorPacks()'s
+  // invented Chennai->Bangalore pack (fake hospitals, fake phone numbers, a
+  // claimed 420 "downloaded" tiles) into every new user's real IndexedDB.
+  // The fixture stays available to unit tests only.
+  return list.filter((p) => p.packId !== "pack_chennai_bangalore_nh48");
 }
 
 /**
